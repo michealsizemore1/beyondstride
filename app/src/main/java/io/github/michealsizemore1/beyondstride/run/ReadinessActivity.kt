@@ -208,7 +208,7 @@ class ReadinessActivity : Activity() {
         val col = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(16), dp(40), dp(16), dp(32)) }
         col.addView(RunUi.text(this, "Readiness", Color.WHITE, 26f, true))
         val runs = PhoneRuns.list(this).take(120).mapNotNull { PhoneRuns.read(it) }
-        val r = Readiness.compute(ReadinessSync.checks(this), ReadinessSync.nights(this), runs, Readiness.today())
+        val r = Readiness.compute(ReadinessSync.checks(this), ReadinessSync.nights(this), runs, Readiness.today(), fuelYesterday = io.github.michealsizemore1.beyondstride.NutritionStore.yesterday(this))
         col.addView(RunUi.card(this).apply {
             if (r == null) addView(RunUi.text(ctx, "No data yet. Do the 2½-minute morning check on the watch (BeyondStride → Readiness).", RunUi.MUTED, 14f))
             else {

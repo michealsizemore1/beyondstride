@@ -84,6 +84,11 @@ object RunSync {
                 tr.map { DataMapItem.fromDataItem(it).dataMap }.forEach { io.github.michealsizemore1.beyondstride.TrailSync.apply(app, "watch", it) }
                 tr.release()
                 io.github.michealsizemore1.beyondstride.Courses.pullAll(app, "watch")
+                try {
+                    val nr = com.google.android.gms.tasks.Tasks.await(dc.getDataItems(Uri.parse("wear://*" + io.github.michealsizemore1.beyondstride.NutritionStore.PATH)))
+                    nr.map { DataMapItem.fromDataItem(it).dataMap }.maxByOrNull { it.getLong("at") }?.let { io.github.michealsizemore1.beyondstride.NutritionStore.apply(app, it) }
+                    nr.release()
+                } catch (e: Exception) { }
                 for (path in listOf(io.github.michealsizemore1.beyondstride.ReadinessSync.NIGHTS, io.github.michealsizemore1.beyondstride.ReadinessSync.CHECKS)) {
                     val r = com.google.android.gms.tasks.Tasks.await(dc.getDataItems(Uri.parse("wear://*$path")))
                     r.map { DataMapItem.fromDataItem(it).dataMap }.forEach { io.github.michealsizemore1.beyondstride.ReadinessSync.apply(app, path, it) }
@@ -209,6 +214,11 @@ class RunSettingsListener : WearableListenerService() {
             if (e.type == DataEvent.TYPE_CHANGED && (e.dataItem.uri.path == io.github.michealsizemore1.beyondstride.ReadinessSync.NIGHTS ||
                     e.dataItem.uri.path == io.github.michealsizemore1.beyondstride.ReadinessSync.CHECKS)) {
                 io.github.michealsizemore1.beyondstride.ReadinessSync.apply(this, e.dataItem.uri.path ?: "", DataMapItem.fromDataItem(e.dataItem).dataMap)
+                return@forEach
+            }
+            // Nutrition totals from the phone (Command Center).
+            if (e.type == DataEvent.TYPE_CHANGED && e.dataItem.uri.path == io.github.michealsizemore1.beyondstride.NutritionStore.PATH) {
+                io.github.michealsizemore1.beyondstride.NutritionStore.apply(this, DataMapItem.fromDataItem(e.dataItem).dataMap)
                 return@forEach
             }
             // Runs copied from the phone (after a restore): keep any the watch doesn't already have.

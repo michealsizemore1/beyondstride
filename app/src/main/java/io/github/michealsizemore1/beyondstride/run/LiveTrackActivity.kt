@@ -28,6 +28,9 @@ import java.security.SecureRandom
 
 /** LiveTrack settings and the phone's part: texting your link when a run starts, and stop alerts. */
 object Live {
+    /** Firebase rules: LiveTrack (anyone with the link can watch) + nutrition shared from the Command Center (private code). */
+    const val RULES = "{\n  \"rules\": {\n    \"live\": {\n      \"\$id\": {\n        \".read\": true,\n        \".write\": \"\$id.length >= 16\"\n      }\n    },\n" +
+        "    \"nutrition\": {\n      \"\$id\": {\n        \".read\": \"\$id.length >= 16\",\n        \".write\": \"\$id.length >= 16\"\n      }\n    }\n  }\n}"
     const val VIEWER = "https://michealsizemore1.github.io/ChatGPT-The-Master-App/livetrack.html"
     private fun p(ctx: Context) = ctx.getSharedPreferences("runsettings", 0)
 
@@ -173,7 +176,7 @@ class LiveTrackActivity : Activity() {
                 "5. Copy the database address shown at the top of the Data tab (ends in firebaseio.com or firebasedatabase.app) and paste it here.",
                 RunUi.MUTED, 13f).apply { setPadding(0, dp(6), 0, 0) })
         })
-        val rules = "{\n  \"rules\": {\n    \"live\": {\n      \"\$id\": {\n        \".read\": true,\n        \".write\": \"\$id.length >= 16\"\n      }\n    }\n  }\n}"
+        val rules = Live.RULES
         col.addView(RunUi.text(this, if (ready) "Rules (already set up? skip this)  ›  tap to copy" else "Rules — tap to copy", RunUi.ACCENT, 13f, true).apply {
             setPadding(dp(4), dp(10), 0, 0)
             setOnClickListener {

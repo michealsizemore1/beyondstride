@@ -108,7 +108,8 @@ object Readiness {
      * @param today local date "yyyy-MM-dd"
      * @param runs BeyondStride runs (any order)
      */
-    fun compute(checks: List<Check>, nights: List<Night>, runs: List<JSONObject>, today: String, now: Long = System.currentTimeMillis()): Result? {
+    fun compute(checks: List<Check>, nights: List<Night>, runs: List<JSONObject>, today: String, now: Long = System.currentTimeMillis(),
+                fuelYesterday: Nutrition.Day? = null): Result? {
         val parts = ArrayList<Part>()
         val todayCheck = checks.lastOrNull { it.day == today }
         val prior = checks.filter { it.day < today && daysBetween(it.day, today) in 1..60 }
@@ -189,6 +190,10 @@ object Readiness {
                 else if (h < 48) { pts = minOf(pts, 70); note = "hard run yesterday" }
             }
             parts += Part("Training", ld.ratio?.let { String.format(Locale.US, "%.2f ratio", it) } ?: "${ld.acute} stress/7d", pts, note, 15)
+        }
+        // Fuel: yesterday's eating vs its target (from the Command Center's Nutrition tab).
+        Nutrition.fuelScore(fuelYesterday)?.let { (pts, note) ->
+            parts += Part("Fuel", "${Nutrition.kcal(fuelYesterday!!.cal)} kcal", pts, note, 10)
         }
         // Legs.
         if (todayCheck != null && todayCheck.legs >= 0)

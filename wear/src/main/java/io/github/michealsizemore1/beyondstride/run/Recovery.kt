@@ -27,7 +27,7 @@ import io.github.michealsizemore1.beyondstride.ReadinessSync
 object Recovery {
     fun result(ctx: Context): Readiness.Result? {
         val runs = RunStore.list(ctx).take(120).mapNotNull { RunStore.read(it) }
-        return Readiness.compute(ReadinessSync.checks(ctx), ReadinessSync.nights(ctx), runs, Readiness.today())
+        return Readiness.compute(ReadinessSync.checks(ctx), ReadinessSync.nights(ctx), runs, Readiness.today(), fuelYesterday = io.github.michealsizemore1.beyondstride.NutritionStore.yesterday(ctx))
     }
     fun checkedToday(ctx: Context) = ReadinessSync.checks(ctx).any { it.day == Readiness.today() }
 }

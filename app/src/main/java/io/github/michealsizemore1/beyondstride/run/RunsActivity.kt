@@ -48,6 +48,8 @@ open class RunsActivity : Activity() {
         if (wrongDevice) return
         WorkoutStore.pushToWatch(this)   // keeps the watch's "today" plan current
         render()
+        // Today's nutrition from the Command Center.
+        Thread { if (NutritionSync.refreshIfStale(this)) runOnUiThread { if (!isFinishing) render() } }.start()
         // Last night's sleep from Samsung Health (via Health Connect), for the readiness score.
         Thread {
             if (System.currentTimeMillis() - io.github.michealsizemore1.beyondstride.ReadinessSync.nightsAt(this) > 30 * 60_000L && SleepData.granted(this)) {
@@ -118,7 +120,7 @@ open class RunsActivity : Activity() {
 
         // 1. TODAY: readiness + today's workout (+ trail).
         val rd = R.compute(io.github.michealsizemore1.beyondstride.ReadinessSync.checks(this),
-            io.github.michealsizemore1.beyondstride.ReadinessSync.nights(this), runs.take(120), R.today())
+            io.github.michealsizemore1.beyondstride.ReadinessSync.nights(this), runs.take(120), R.today(), fuelYesterday = io.github.michealsizemore1.beyondstride.NutritionStore.yesterday(this))
         val todayW = WorkoutStore.plan(this).optJSONObject(WorkoutStore.dayFmt.format(Date()))
         col.addView(RunUi.section(this, "TODAY"))
         col.addView(RunUi.card(this).apply {
@@ -148,6 +150,31 @@ open class RunsActivity : Activity() {
                         (if (oab) " out & back" else ""), 0xFF46C46E.toInt(), 13f, true).apply { setPadding(0, dp(6), 0, 0) })
                 }
                 setOnClickListener { startActivity(Intent(ctx, WorkoutsActivity::class.java)) }
+            })
+            // Fuel: today's eating from the Command Center's Nutrition tab.
+            addView(divider())
+            addView(LinearLayout(ctx).apply {
+                orientation = LinearLayout.VERTICAL
+                val N = io.github.michealsizemore1.beyondstride.Nutrition
+                val nd = N.today(io.github.michealsizemore1.beyondstride.NutritionStore.days(ctx))
+                addView(RunUi.text(ctx, "FUEL", RunUi.ACCENT, 11f, true))
+                when {
+                    !NutritionSync.ready(ctx) -> addView(RunUi.text(ctx, "Set up LiveTrack first — nutrition is shared through the same database.", RunUi.MUTED, 12f))
+                    NutritionSync.lastError(ctx) == "rules" -> addView(RunUi.text(ctx, "Update your Firebase rules to share nutrition (Settings → LiveTrack → copy rules).", 0xFFF2C94C.toInt(), 12f))
+                    nd == null || nd.count == 0 -> addView(RunUi.text(ctx, "Nothing logged today · tap to open 🍎 Nutrition", RunUi.MUTED, 13f))
+                    else -> {
+                        val over = nd.target > 0 && nd.left < 0
+                        addView(RunUi.text(ctx, N.line(nd), if (over) 0xFFF2C94C.toInt() else Color.WHITE, 16f, true))
+                        if (nd.target > 0) addView(android.widget.ProgressBar(ctx, null, android.R.attr.progressBarStyleHorizontal).apply {
+                            max = nd.target; progress = nd.cal.coerceAtMost(nd.target)
+                            progressTintList = android.content.res.ColorStateList.valueOf(if (over) 0xFFF2C94C.toInt() else 0xFF5FD38D.toInt())
+                            layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, dp(8)).apply { topMargin = dp(4); bottomMargin = dp(4) }
+                        })
+                        val (pp, cp, fp) = nd.ratios()
+                        addView(RunUi.text(ctx, N.macros(nd) + "  ($pp / $cp / $fp %)", RunUi.MUTED, 12f))
+                    }
+                }
+                setOnClickListener { RunUi.openNutrition(this@RunsActivity) }
             })
         })
 

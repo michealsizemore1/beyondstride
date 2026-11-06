@@ -62,7 +62,7 @@ object RunUi {
      * phone browser's storage, so it's the same food log, targets and saved meals as the Command Center.
      */
     fun openNutrition(act: android.app.Activity) {
-        val url = android.net.Uri.parse(RunSettings.ccUrl(act).substringBefore("#") + "#tab=nutrition")
+        val url = android.net.Uri.parse(RunSettings.ccUrl(act).substringBefore("#") + "#tab=nutrition" + NutritionSync.linkPart(act))
         try {
             androidx.browser.customtabs.CustomTabsIntent.Builder()
                 .setDefaultColorSchemeParams(androidx.browser.customtabs.CustomTabColorSchemeParams.Builder().setToolbarColor(0xFF0E1412.toInt()).build())

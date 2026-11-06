@@ -347,6 +347,10 @@ class RunActivity : Activity() {
             addView(label("", Color.WHITE, 15f, true).also { startValues["workout"] = it; it.setOnClickListener { openW() } })
             addView(label("", C.MUTED, 10f).apply { startValues["workoutOutline"] = this; visibility = View.GONE; setOnClickListener { openW() } })
             addView(label("", 0xFF46C46E.toInt(), 11f, true).apply { startValues["trailLine"] = this; visibility = View.GONE })
+            io.github.michealsizemore1.beyondstride.Nutrition.today(io.github.michealsizemore1.beyondstride.NutritionStore.days(this@RunActivity))
+                ?.takeIf { it.count > 0 }?.let { nd ->
+                    addView(label("Fuel " + io.github.michealsizemore1.beyondstride.Nutrition.line(nd), C.MUTED, 10f).apply { setOnClickListener { showNutrition() } })
+                }
             Thread {
                 val r = try { Recovery.result(this@RunActivity) } catch (e: Exception) { null }
                 val checked = Recovery.checkedToday(this@RunActivity)
@@ -1100,13 +1104,59 @@ class RunActivity : Activity() {
         root.addView(ScrollView(this).apply { isVerticalScrollBarEnabled = false; addView(col); requestFocus() })
     }
 
-    /** Same four tabs as the phone. [selected]: 0 Today, 1 Fitness, 2 Plan, 3 Runs. */
+    /** Nutrition (from the Command Center via the phone): today's calories vs target, macros, meals, last few days. */
+    private fun showNutrition() {
+        overlayOpen = true; startBuilt = false
+        val N = io.github.michealsizemore1.beyondstride.Nutrition
+        val days = io.github.michealsizemore1.beyondstride.NutritionStore.days(this)
+        val w = resources.displayMetrics.widthPixels
+        val col = column().apply { setPadding(w / 9, w / 8, w / 9, w / 5) }
+        fun box(build: LinearLayout.() -> Unit) = col.addView(LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL; setPadding(dp(12), dp(8), dp(12), dp(8)); background = rounded(C.CARD, 16)
+            layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(6) }; build()
+        })
+        col.addView(label("Nutrition", Color.WHITE, 20f, true))
+        val t = N.today(days)
+        box {
+            addView(label("TODAY", C.ACCENT, 11f, true))
+            if (t == null || t.count == 0) addView(label("Nothing logged yet.\nLog food in Nutrition on the phone.", C.MUTED, 11f))
+            else {
+                addView(label(N.kcal(t.cal) + " kcal", Color.WHITE, 20f, true))
+                if (t.target > 0) addView(label(if (t.left >= 0) "${N.kcal(t.left)} left of ${N.kcal(t.target)}" else "${N.kcal(-t.left)} over ${N.kcal(t.target)}",
+                    if (t.left >= 0) 0xFF5FD38D.toInt() else 0xFFF2C94C.toInt(), 12f, true))
+                addView(label(N.macros(t), C.MUTED, 11f))
+                if (t.waterOz > 0) addView(label("Water ${t.waterOz} oz", C.MUTED, 11f))
+            }
+        }
+        if (t != null && t.meals.isNotEmpty()) box {
+            addView(label("MEALS", C.ACCENT, 11f, true))
+            N.MEAL_ORDER.filter { (t.meals[it] ?: 0) > 0 }.forEach { m ->
+                addView(label("${N.MEAL_NAMES[m] ?: m}  ${N.kcal(t.meals[m] ?: 0)}", Color.WHITE, 12f))
+            }
+        }
+        val recent = days.filter { it.count > 0 && it.date != t?.date }.takeLast(3).reversed()
+        if (recent.isNotEmpty()) box {
+            addView(label("RECENT DAYS", C.ACCENT, 11f, true))
+            recent.forEach { d ->
+                val dd = java.time.LocalDate.parse(d.date)
+                addView(label(dd.dayOfWeek.name.take(3).lowercase().replaceFirstChar { it.uppercase() } + "  " + N.kcal(d.cal) +
+                    (if (d.target > 0) " / ${N.kcal(d.target)}" else "") + " kcal", Color.WHITE, 12f))
+            }
+        }
+        col.addView(View(this).apply { setBackgroundColor(0x22FFFFFF) }, LinearLayout.LayoutParams(MATCH_PARENT, dp(1)).apply { topMargin = dp(10) })
+        col.addView(menuRow(2))
+        root.removeAllViews()
+        root.addView(ScrollView(this).apply { isVerticalScrollBarEnabled = false; addView(col); requestFocus() })
+    }
+
+    /** Same tabs as the phone. [selected]: 0 Today, 1 Fitness, 2 Nutrition, 3 Plan, 4 Runs. */
     private fun menuRow(selected: Int) = LinearLayout(this).apply {
         orientation = LinearLayout.HORIZONTAL
         layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(8) }
         listOf<Triple<String, String, () -> Unit>>(
             Triple("☀", "Today", { overlayOpen = false; startBuilt = false; renderStart() }),
             Triple("♥", "Fitness", { showFitness() }),
+            Triple("🍎", "Nutrition", { showNutrition() }),
             Triple("▦", "Plan", { showWorkoutPicker() }),
             Triple("≡", "Runs", { startActivity(Intent(this@RunActivity, RunHistoryActivity::class.java)) }),
         ).forEachIndexed { idx, (glyph, name, go) ->
@@ -1115,8 +1165,8 @@ class RunActivity : Activity() {
                 gravity = Gravity.CENTER
                 addView(label(glyph, if (on) Color.BLACK else Color.WHITE, 17f, true).apply {
                     background = rounded(if (on) C.ACCENT else C.CARD, 18); setPadding(0, dp(5), 0, dp(5)) },
-                    LinearLayout.LayoutParams(dp(42), WRAP_CONTENT))
-                addView(label(name, if (on) Color.WHITE else 0xFFC9D1CE.toInt(), 11f, true).apply { setPadding(0, dp(2), 0, 0) })
+                    LinearLayout.LayoutParams(dp(34), WRAP_CONTENT))
+                addView(label(name, if (on) Color.WHITE else 0xFFC9D1CE.toInt(), 9f, true).apply { setPadding(0, dp(2), 0, 0) })
                 if (!on) setOnClickListener { go() }
             }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
         }
@@ -1246,7 +1296,7 @@ class RunActivity : Activity() {
         if (WatchWorkouts.library(this).isEmpty())
             col.addView(label("Build workouts in BeyondStride on the phone — they show up here.", C.DIM, 11f).apply { setPadding(0, dp(10), 0, 0) })
         col.addView(View(this).apply { setBackgroundColor(0x22FFFFFF) }, LinearLayout.LayoutParams(MATCH_PARENT, dp(1)).apply { topMargin = dp(10) })
-        col.addView(menuRow(2))
+        col.addView(menuRow(3))
         root.removeAllViews()
         root.addView(ScrollView(this).apply { isVerticalScrollBarEnabled = false; addView(col); requestFocus() })
     }
