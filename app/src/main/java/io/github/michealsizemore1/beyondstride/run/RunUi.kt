@@ -63,7 +63,7 @@ object RunUi {
      */
     fun openNutrition(act: android.app.Activity) {
         NutritionSync.justOpened = true
-        val url = android.net.Uri.parse(RunSettings.ccUrl(act).substringBefore("#") + "#tab=nutrition" + NutritionSync.linkPart(act))
+        val url = android.net.Uri.parse(RunSettings.ccUrl(act).substringBefore("#") + "#tab=nutrition&app=bs" + NutritionSync.linkPart(act))
         try {
             androidx.browser.customtabs.CustomTabsIntent.Builder()
                 .setDefaultColorSchemeParams(androidx.browser.customtabs.CustomTabColorSchemeParams.Builder().setToolbarColor(0xFF0E1412.toInt()).build())
