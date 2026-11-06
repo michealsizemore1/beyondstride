@@ -173,6 +173,28 @@ open class RunsActivity : Activity() {
                         })
                         val (pp, cp, fp) = nd.ratios()
                         addView(RunUi.text(ctx, N.macros(nd) + "  ($pp / $cp / $fp %)", RunUi.MUTED, 12f))
+                        // Micronutrients: score + every nutrient as a small tile (lowest first), colored by status.
+                        if (nd.micros.isNotEmpty()) {
+                            addView(RunUi.text(ctx, "MICRONUTRIENTS  " + String.format(Locale.US, "%.1f", nd.microScore) + "/10 · " + nd.microLabel(),
+                                N.statusColor(when { nd.microScore >= 7 -> "Met"; nd.microScore >= 5 -> "Close"; else -> "Low" }), 12f, true).apply { setPadding(0, dp(10), 0, dp(2)) })
+                            nd.microsByNeed().chunked(3).forEach { row ->
+                                addView(LinearLayout(ctx).apply {
+                                    orientation = LinearLayout.HORIZONTAL
+                                    layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(4) }
+                                    row.forEachIndexed { i, m ->
+                                        addView(LinearLayout(ctx).apply {
+                                            orientation = LinearLayout.VERTICAL
+                                            background = RunUi.rounded(0xFF26302C.toInt(), dp(8).toFloat())
+                                            setPadding(dp(6), dp(4), dp(6), dp(4))
+                                            addView(RunUi.text(ctx, m.name.replace("Vitamin ", "Vit "), RunUi.MUTED, 10f))
+                                            addView(RunUi.text(ctx, m.shown(), Color.WHITE, 12f, true))
+                                            addView(RunUi.text(ctx, "${m.pct.toInt()}% · ${m.status}", N.statusColor(m.status), 10f, true))
+                                        }, LinearLayout.LayoutParams(0, MATCH_PARENT, 1f).apply { if (i < 2) marginEnd = dp(4) })
+                                    }
+                                    repeat(3 - row.size) { addView(android.view.View(ctx), LinearLayout.LayoutParams(0, 1, 1f)) }
+                                })
+                            }
+                        }
                     }
                 }
                 setOnClickListener { RunUi.openNutrition(this@RunsActivity) }

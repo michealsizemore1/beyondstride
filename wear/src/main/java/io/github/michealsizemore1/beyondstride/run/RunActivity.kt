@@ -1128,6 +1128,13 @@ class RunActivity : Activity() {
                 if (t.waterOz > 0) addView(label("Water ${t.waterOz} oz", C.MUTED, 11f))
             }
         }
+        if (t != null && t.micros.isNotEmpty()) box {
+            addView(label("MICRONUTRIENTS", C.ACCENT, 11f, true))
+            addView(label(String.format(java.util.Locale.US, "%.1f", t.microScore) + "/10 · " + t.microLabel(), Color.WHITE, 13f, true))
+            t.microsByNeed().forEach { m ->
+                addView(label("${m.name.replace("Vitamin ", "Vit ")}  ${m.shown()} · ${m.pct.toInt()}%", N.statusColor(m.status), 11f))
+            }
+        }
         if (t != null && t.meals.isNotEmpty()) box {
             addView(label("MEALS", C.ACCENT, 11f, true))
             N.MEAL_ORDER.filter { (t.meals[it] ?: 0) > 0 }.forEach { m ->

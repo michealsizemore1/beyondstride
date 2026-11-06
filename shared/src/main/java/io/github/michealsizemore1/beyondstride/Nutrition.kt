@@ -10,11 +10,26 @@ import kotlin.math.roundToInt
  */
 object Nutrition {
     data class Item(val meal: String, val name: String, val cal: Int, val prot: Double, val carbs: Double, val fat: Double)
+    /** A micronutrient: value vs target (and a ceiling for sodium / sugar / caffeine). */
+    data class Micro(val name: String, val field: String, val value: Double, val target: Double, val max: Double, val unit: String) {
+        val pct get() = if (target > 0) value / target * 100 else 0.0
+        /** Low / Close / Met / High — same as the Command Center. */
+        val status get() = when { max > 0 && value > max -> "High"; pct >= 100 -> "Met"; pct >= 75 -> "Close"; else -> "Low" }
+        fun shown(): String {
+            val v = if (unit == "mg" && value >= 100) String.format(java.util.Locale.US, "%,d", value.roundToInt())
+                else if (value >= 10) value.roundToInt().toString() else String.format(java.util.Locale.US, "%.1f", value)
+            return "$v$unit"
+        }
+    }
     data class Day(
         val date: String, val cal: Int, val prot: Double, val carbs: Double, val fat: Double,
         val fiber: Double, val sodium: Int, val waterOz: Int, val target: Int, val range: Int, val active: Int,
         val meals: Map<String, Int>, val items: List<Item>, val count: Int, val updated: Long,
+        val micros: List<Micro> = emptyList(), val microScore: Double = 0.0,
     ) {
+        fun microLabel() = when { microScore >= 9 -> "Excellent"; microScore >= 7 -> "Good"; microScore >= 5 -> "Fair"; microScore >= 3 -> "Low"; else -> "Poor" }
+        /** Lowest first (Low, then High, Close, Met), like the Command Center's breakdown. */
+        fun microsByNeed() = micros.sortedWith(compareBy({ mapOf("Low" to 0, "High" to 1, "Close" to 2, "Met" to 3)[it.status] }, { it.pct }))
         val left get() = if (target > 0) target - cal else 0
         /** Share of the day's calories from protein / carbs / fat (%). */
         fun ratios(): Triple<Int, Int, Int> {
@@ -36,9 +51,15 @@ object Nutrition {
                 items += Item(it.optString("meal"), it.optString("name"), it.optInt("cal"), it.optDouble("prot", 0.0), it.optDouble("carbs", 0.0), it.optDouble("fat", 0.0))
             }
         }
+        val micros = ArrayList<Micro>()
+        o.optJSONArray("micros")?.let { a ->
+            for (i in 0 until a.length()) a.optJSONObject(i)?.let {
+                micros += Micro(it.optString("n"), it.optString("f"), it.optDouble("v", 0.0), it.optDouble("t", 0.0), it.optDouble("mx", 0.0), it.optString("u"))
+            }
+        }
         return Day(date, o.optInt("cal"), o.optDouble("prot", 0.0), o.optDouble("carbs", 0.0), o.optDouble("fat", 0.0),
             o.optDouble("fiber", 0.0), o.optInt("sodium"), o.optInt("waterOz"), o.optInt("target"), o.optInt("range"), o.optInt("active"),
-            meals, items, o.optInt("count", items.size), o.optLong("updated"))
+            meals, items, o.optInt("count", items.size), o.optLong("updated"), micros, o.optDouble("microScore", 0.0))
     }
 
     /** Firebase's {"2026-11-06": {...}, ...} (or null) → days, oldest first. */
@@ -53,13 +74,18 @@ object Nutrition {
                 .put("sodium", d.sodium).put("waterOz", d.waterOz).put("target", d.target).put("range", d.range).put("active", d.active)
                 .put("count", d.count).put("updated", d.updated)
                 .put("meals", JSONObject().apply { d.meals.forEach { (k, v) -> put(k, v) } })
-                .put("items", JSONArray().apply { d.items.forEach { put(JSONObject().put("meal", it.meal).put("name", it.name).put("cal", it.cal).put("prot", it.prot).put("carbs", it.carbs).put("fat", it.fat)) } }))
+                .put("items", JSONArray().apply { d.items.forEach { put(JSONObject().put("meal", it.meal).put("name", it.name).put("cal", it.cal).put("prot", it.prot).put("carbs", it.carbs).put("fat", it.fat)) } })
+                .put("microScore", d.microScore)
+                .put("micros", JSONArray().apply { d.micros.forEach { put(JSONObject().put("n", it.name).put("f", it.field).put("v", it.value).put("t", it.target).put("mx", it.max).put("u", it.unit)) } }))
         }
     }.toString()
 
     fun today(days: List<Day>, date: String = Readiness.today()) = days.lastOrNull { it.date == date }
     fun yesterday(days: List<Day>, date: String = Readiness.today()) =
         days.lastOrNull { it.date == java.time.LocalDate.parse(date).minusDays(1).toString() }
+
+    const val MET = 0xFF5FD38D.toInt(); const val CLOSE = 0xFFF2C94C.toInt(); const val LOW = 0xFFFF8A80.toInt(); const val HIGH = 0xFFEF4444.toInt()
+    fun statusColor(s: String) = when (s) { "Met" -> MET; "Close" -> CLOSE; "High" -> HIGH; else -> LOW }
 
     fun kcal(v: Int) = String.format(java.util.Locale.US, "%,d", v)
 
