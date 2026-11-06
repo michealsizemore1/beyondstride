@@ -55,13 +55,29 @@ object RunUi {
             setOnClickListener { onClick() }
         }
 
-    const val TAB_TODAY = 0; const val TAB_FITNESS = 1; const val TAB_PLAN = 2; const val TAB_RUNS = 3
+    const val TAB_TODAY = 0; const val TAB_FITNESS = 1; const val TAB_NUTRITION = 2; const val TAB_PLAN = 3; const val TAB_RUNS = 4
+
+    /**
+     * Nutrition = the Command Center's own Nutrition tab, opened in a browser tab inside the app. It shares the
+     * phone browser's storage, so it's the same food log, targets and saved meals as the Command Center.
+     */
+    fun openNutrition(act: android.app.Activity) {
+        val url = android.net.Uri.parse(RunSettings.ccUrl(act).substringBefore("#") + "#tab=nutrition")
+        try {
+            androidx.browser.customtabs.CustomTabsIntent.Builder()
+                .setDefaultColorSchemeParams(androidx.browser.customtabs.CustomTabColorSchemeParams.Builder().setToolbarColor(0xFF0E1412.toInt()).build())
+                .setShowTitle(true).build().launchUrl(act, url)
+        } catch (e: Exception) {
+            try { act.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, url)) } catch (e2: Exception) { }
+        }
+    }
 
     /** Page content with the bottom tab bar (Today · Fitness · Plan · Runs). */
     fun tabbed(act: android.app.Activity, content: View, selected: Int): View {
-        val tabs = listOf(
+        val tabs = listOf<Triple<String, String, Class<*>?>>(
             Triple("Today", "☀", RunsActivity::class.java),
             Triple("Fitness", "♥", FitnessActivity::class.java),
+            Triple("Nutrition", "🍎", null),
             Triple("Plan", "▦", WorkoutsActivity::class.java),
             Triple("Runs", "≡", AllRunsActivity::class.java),
         )
@@ -77,9 +93,10 @@ object RunUi {
                         gravity = Gravity.CENTER
                         if (on) background = rounded(ACCENT, dp(act, 16).toFloat())
                         setPadding(0, dp(act, 3), 0, dp(act, 3))
-                    }, LinearLayout.LayoutParams(dp(act, 64), WRAP_CONTENT))
-                    addView(text(act, name, if (on) Color.WHITE else MUTED, 12f, on).apply { gravity = Gravity.CENTER; setPadding(0, dp(act, 2), 0, 0) })
+                    }, LinearLayout.LayoutParams(dp(act, 54), WRAP_CONTENT))
+                    addView(text(act, name, if (on) Color.WHITE else MUTED, 11f, on).apply { gravity = Gravity.CENTER; setPadding(0, dp(act, 2), 0, 0) })
                     if (!on) setOnClickListener {
+                        if (cls == null) { openNutrition(act); return@setOnClickListener }
                         act.startActivity(android.content.Intent(act, cls).addFlags(android.content.Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or android.content.Intent.FLAG_ACTIVITY_NO_ANIMATION))
                         @Suppress("DEPRECATION") act.overridePendingTransition(0, 0)
                     }
