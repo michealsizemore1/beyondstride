@@ -535,7 +535,7 @@ class RunActivity : Activity() {
         })
         col.addView(row("screensRow", "Data screens (during a run)") { showScreensEditor() })
         col.addView(row("voiceRow", "Audio prompts") { showVoiceSettings() })
-        col.addView(row("bottomBtn", "Bottom button: start · lap · double-press finish") {
+        col.addView(row("bottomBtn", "Bottom button in a run: lap · double-press finish") {
             prefs.edit().putBoolean("bottomBtn", !prefs.getBoolean("bottomBtn", true)).apply()
         })
         col.addView(row("keepOn", "Keep screen on in BeyondStride") {
@@ -1254,7 +1254,7 @@ class RunActivity : Activity() {
     @Deprecated("Deprecated in Java")
     /**
      * The bottom (back) button. With swipe-to-close turned off for Running, this is only ever the button:
-     * home screen = start, during a run = lap / double-press finish, elsewhere = go back.
+     * during a run = lap / double-press finish, elsewhere = go back (it never starts a run).
      */
     private fun handleBack() {
         if (wrongDevice) { finish(); return }
@@ -1263,7 +1263,6 @@ class RunActivity : Activity() {
             editorRotary != null || overlayOpen -> { editorRotary = null; overlayOpen = false; startBuilt = false; renderStart() }
             screen == Screen.START && showSettings -> { showSettings = false; startBuilt = false; renderStart() }
             screen == Screen.SUMMARY -> backToHome()
-            screen == Screen.START && !Run.isActive && prefs.getBoolean("bottomBtn", true) -> { pulse(longArrayOf(0, 400)); startRun() }
             else -> finish()
         }
     }
@@ -1287,7 +1286,7 @@ class RunActivity : Activity() {
     }
 
     /**
-     * Bottom button: on the Running home screen, start; during a run, one press = lap (next step in a
+     * Bottom button: during a run, one press = lap (next step in a
      * workout), a quick double press = finish and save. Elsewhere (settings, lists) it's a normal back.
      */
     override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
@@ -1295,11 +1294,9 @@ class RunActivity : Activity() {
         if (event.action == android.view.KeyEvent.ACTION_DOWN && event.repeatCount == 0)
             logKey("${android.view.KeyEvent.keyCodeToString(event.keyCode)} · focus=${hasWindowFocus()} · screen=$screen")
         if (event.keyCode != android.view.KeyEvent.KEYCODE_BACK || !prefs.getBoolean("bottomBtn", true)) return super.dispatchKeyEvent(event)
-        val home = screen == Screen.START && !Run.isActive && !showSettings && !overlayOpen && editorRotary == null
-        if (screen != Screen.LIVE && !home) return super.dispatchKeyEvent(event)
-        if (event.action == android.view.KeyEvent.ACTION_UP && !event.isCanceled) {
-            if (home) { pulse(longArrayOf(0, 400)); startRun() } else bottomInRun()
-        }
+        // Only during a run. Runs start from the START button only — never from the bottom button.
+        if (screen != Screen.LIVE) return super.dispatchKeyEvent(event)
+        if (event.action == android.view.KeyEvent.ACTION_UP && !event.isCanceled) bottomInRun()
         return true   // consume down and up so the system doesn't also go back
     }
 
