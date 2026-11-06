@@ -233,7 +233,7 @@ class RunSettingsActivity : Activity() {
         switch("Update the backup after every run", "Keeps the saved backup file current automatically", Backup.auto(this)) { Backup.setAuto(ctx, it) }
         col.addView(RunUi.button(this, "Send all runs to the watch", RunUi.CARD, Color.WHITE) {
             Thread {
-                val n = PhoneRuns.sendAllToWatch(ctx, force = true)
+                val n = RunSettings.sendAllToWatch(ctx, force = true)
                 runOnUiThread { Toast.makeText(ctx, if (n > 0) "Sending $n runs — they'll appear in the watch's History" else "Couldn't reach the watch", Toast.LENGTH_LONG).show() }
             }.start()
         }.apply { layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(10) } })

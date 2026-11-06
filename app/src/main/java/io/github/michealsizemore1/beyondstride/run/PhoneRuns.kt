@@ -118,7 +118,7 @@ object RunSettings {
         val app = ctx.applicationContext
         val sent = app.getSharedPreferences("torunsent", 0)
         var n = 0
-        list(app).forEach { f ->
+        PhoneRuns.list(app).forEach { f: java.io.File ->
             val start = f.nameWithoutExtension
             if (!force && sent.getBoolean(start, false)) return@forEach
             try {

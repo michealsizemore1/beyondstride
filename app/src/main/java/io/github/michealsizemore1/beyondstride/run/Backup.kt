@@ -152,7 +152,7 @@ object Backup {
         WorkoutStore.pushToWatch(ctx)
         io.github.michealsizemore1.beyondstride.Courses.list(ctx).forEach { io.github.michealsizemore1.beyondstride.Courses.save(ctx, it, "phone") }
         ReadinessSync.pushAll(ctx)
-        PhoneRuns.sendAllToWatch(ctx, force = true)
+        RunSettings.sendAllToWatch(ctx, force = true)
         return "$runs runs · $courses courses restored"
     }
 }
