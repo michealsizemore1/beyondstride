@@ -56,6 +56,23 @@ object NutritionSync {
         } catch (e: Exception) { sp.edit().putString("err", "offline").apply(); false }
     }
 
+    /** Set when the Nutrition tab is opened: the next screen refresh re-reads a few times while the page shares. */
+    @Volatile var justOpened = false
+
+    /**
+     * After coming back from the Nutrition tab the Command Center may still be sending, so read now and again
+     * at 5, 15 and 40 seconds. [onChange] runs (on a background thread) whenever new data arrives.
+     */
+    fun refreshAfterNutrition(ctx: Context, onChange: () -> Unit) {
+        justOpened = false
+        Thread {
+            for (wait in longArrayOf(0, 5_000, 10_000, 25_000)) {
+                try { Thread.sleep(wait) } catch (e: InterruptedException) { return@Thread }
+                if (fetch(ctx)) onChange()
+            }
+        }.start()
+    }
+
     /** Fetch if the last read is older than [maxAgeMs]. */
     fun refreshIfStale(ctx: Context, maxAgeMs: Long = 2 * 60_000L) =
         if (System.currentTimeMillis() - NutritionStore.fetchedAt(ctx) > maxAgeMs) fetch(ctx) else false

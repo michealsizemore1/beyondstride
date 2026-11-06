@@ -49,7 +49,8 @@ open class RunsActivity : Activity() {
         WorkoutStore.pushToWatch(this)   // keeps the watch's "today" plan current
         render()
         // Today's nutrition from the Command Center.
-        Thread { if (NutritionSync.refreshIfStale(this)) runOnUiThread { if (!isFinishing) render() } }.start()
+        if (NutritionSync.justOpened) NutritionSync.refreshAfterNutrition(this) { runOnUiThread { if (!isFinishing) render() } }
+        else Thread { if (NutritionSync.refreshIfStale(this, 60_000L)) runOnUiThread { if (!isFinishing) render() } }.start()
         // Last night's sleep from Samsung Health (via Health Connect), for the readiness score.
         Thread {
             if (System.currentTimeMillis() - io.github.michealsizemore1.beyondstride.ReadinessSync.nightsAt(this) > 30 * 60_000L && SleepData.granted(this)) {

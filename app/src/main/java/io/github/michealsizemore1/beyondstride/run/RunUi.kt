@@ -62,6 +62,7 @@ object RunUi {
      * phone browser's storage, so it's the same food log, targets and saved meals as the Command Center.
      */
     fun openNutrition(act: android.app.Activity) {
+        NutritionSync.justOpened = true
         val url = android.net.Uri.parse(RunSettings.ccUrl(act).substringBefore("#") + "#tab=nutrition" + NutritionSync.linkPart(act))
         try {
             androidx.browser.customtabs.CustomTabsIntent.Builder()

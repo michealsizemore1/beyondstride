@@ -17,7 +17,8 @@ import io.github.michealsizemore1.beyondstride.RunMath
 class FitnessActivity : Activity() {
     override fun onResume() {
         super.onResume(); render()
-        Thread { if (NutritionSync.refreshIfStale(this)) runOnUiThread { if (!isFinishing) render() } }.start()
+        if (NutritionSync.justOpened) NutritionSync.refreshAfterNutrition(this) { runOnUiThread { if (!isFinishing) render() } }
+        else Thread { if (NutritionSync.refreshIfStale(this, 60_000L)) runOnUiThread { if (!isFinishing) render() } }.start()
     }
 
     private fun render() {
