@@ -109,6 +109,30 @@ object RunSettings {
         val app = ctx.applicationContext
         io.github.michealsizemore1.beyondstride.SettingsSync.push(app, "runsettings", "phone")
     }
+
+    /**
+     * Copies the phone's runs to the watch (after a restore, or a new watch app), so History, personal
+     * bests and trends show there too. The watch keeps its own copy of any run it already has.
+     */
+    fun sendAllToWatch(ctx: Context, force: Boolean = false): Int {
+        val app = ctx.applicationContext
+        val sent = app.getSharedPreferences("torunsent", 0)
+        var n = 0
+        list(app).forEach { f ->
+            val start = f.nameWithoutExtension
+            if (!force && sent.getBoolean(start, false)) return@forEach
+            try {
+                val bytes = java.io.ByteArrayOutputStream().also { bo -> java.util.zip.GZIPOutputStream(bo).use { it.write(f.readBytes()) } }.toByteArray()
+                val req = com.google.android.gms.wearable.PutDataMapRequest.create("/torun/$start").apply {
+                    dataMap.putAsset("run", com.google.android.gms.wearable.Asset.createFromBytes(bytes))
+                    dataMap.putLong("at", System.currentTimeMillis())
+                }.asPutDataRequest().setUrgent()
+                Tasks.await(Wearable.getDataClient(app).putDataItem(req))
+                sent.edit().putBoolean(start, true).apply(); n++
+            } catch (e: Exception) { }
+        }
+        return n
+    }
 }
 
 /** Receives finished runs from the watch. */

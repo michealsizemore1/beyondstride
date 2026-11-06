@@ -20,7 +20,7 @@ import java.util.zip.GZIPOutputStream
  *  - The phone's zone settings arrive as /settings.
  */
 object RunSync {
-    private const val PREFS = "runsync"
+    const val PREFS = "runsync"
 
     /** Tells the phone which watch build is installed (shown in the phone's Run settings). */
     fun reportVersion(ctx: Context) {
@@ -209,6 +209,23 @@ class RunSettingsListener : WearableListenerService() {
             if (e.type == DataEvent.TYPE_CHANGED && (e.dataItem.uri.path == io.github.michealsizemore1.beyondstride.ReadinessSync.NIGHTS ||
                     e.dataItem.uri.path == io.github.michealsizemore1.beyondstride.ReadinessSync.CHECKS)) {
                 io.github.michealsizemore1.beyondstride.ReadinessSync.apply(this, e.dataItem.uri.path ?: "", DataMapItem.fromDataItem(e.dataItem).dataMap)
+                return@forEach
+            }
+            // Runs copied from the phone (after a restore): keep any the watch doesn't already have.
+            if (e.type == DataEvent.TYPE_CHANGED && e.dataItem.uri.path?.startsWith("/torun/") == true) {
+                try {
+                    val item = e.dataItem.freeze()
+                    val asset = DataMapItem.fromDataItem(item).dataMap.getAsset("run") ?: return@forEach
+                    val input = com.google.android.gms.tasks.Tasks.await(Wearable.getDataClient(this).getFdForAsset(asset)).inputStream
+                    val json = org.json.JSONObject(java.util.zip.GZIPInputStream(input).use { it.readBytes().toString(Charsets.UTF_8) })
+                    val start = json.optLong("start")
+                    if (start > 0 && RunStore.list(this).none { it.nameWithoutExtension == "$start" }) {
+                        RunStore.save(this, json)
+                        // Already on the phone: don't send it back.
+                        getSharedPreferences(RunSync.PREFS, 0).edit().putBoolean("$start", true).apply()
+                    }
+                    com.google.android.gms.tasks.Tasks.await(Wearable.getDataClient(this).deleteDataItems(item.uri))
+                } catch (ex: Exception) { }
                 return@forEach
             }
             // Trail chosen on the phone.

@@ -73,6 +73,7 @@
                 <data android:scheme="wear" android:host="*" android:path="/runsettings" />
                 <data android:scheme="wear" android:host="*" android:path="/trail" />
                 <data android:scheme="wear" android:host="*" android:path="/nights" />
+                <data android:scheme="wear" android:host="*" android:pathPrefix="/torun/" />
                 <data android:scheme="wear" android:host="*" android:path="/checks" />
                 <data android:scheme="wear" android:host="*" android:pathPrefix="/course/" />
                 <data android:scheme="wear" android:host="*" android:pathPrefix="/deleted/" />
