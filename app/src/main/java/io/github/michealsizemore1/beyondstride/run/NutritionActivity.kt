@@ -14,6 +14,7 @@ import java.util.Locale
 /** The Nutrition tab: today, fluids, micronutrients, meals and the week, shown here (like the watch). */
 class NutritionActivity : Activity() {
     private var dbTab = "recent"
+    private var dbShown = 6
     private var dbQuery = ""
     private var dbSort = "saved"
     private var dbMeal = FoodUi.mealNow()
@@ -21,11 +22,12 @@ class NutritionActivity : Activity() {
     private fun dbRow(title: String, sub: String, kcal: Int, add: () -> Unit) = LinearLayout(this).apply {
         val ctx = this@NutritionActivity
         orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
-        background = RunUi.rounded(0xFF26302C.toInt(), RunUi.dp(ctx, 10).toFloat()); setPadding(RunUi.dp(ctx, 12), RunUi.dp(ctx, 8), RunUi.dp(ctx, 10), RunUi.dp(ctx, 8))
+        background = RunUi.rounded(0xFF26302C.toInt(), RunUi.dp(ctx, 10).toFloat()); setPadding(RunUi.dp(ctx, 12), RunUi.dp(ctx, 6), RunUi.dp(ctx, 10), RunUi.dp(ctx, 6))
         layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = RunUi.dp(ctx, 6) }
         addView(LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
-            addView(RunUi.text(ctx, title, Color.WHITE, 14f, true)); addView(RunUi.text(ctx, sub, RunUi.MUTED, 11f))
+            addView(RunUi.text(ctx, title, Color.WHITE, 14f, true).apply { maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END })
+            addView(RunUi.text(ctx, sub, RunUi.MUTED, 11f).apply { maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END })
         }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
         addView(RunUi.text(ctx, "$kcal", RunUi.MUTED, 12f, true).apply { setPadding(RunUi.dp(ctx, 6), 0, RunUi.dp(ctx, 6), 0) })
         addView(RunUi.text(ctx, "+ Add", Color.WHITE, 12f, true).apply {
@@ -165,7 +167,7 @@ class NutritionActivity : Activity() {
                     row.forEachIndexed { i, (k, n) ->
                         addView(RunUi.text(ctx, n, Color.WHITE, 12f, true).apply {
                             gravity = Gravity.CENTER; background = RunUi.rounded(if (dbTab == k) 0xFF8A5A0E.toInt() else 0xFF26302C.toInt(), dp(10).toFloat())
-                            setPadding(dp(4), dp(9), dp(4), dp(9)); setOnClickListener { dbTab = k; render() }
+                            setPadding(dp(4), dp(9), dp(4), dp(9)); setOnClickListener { dbTab = k; dbShown = 6; render() }
                         }, LinearLayout.LayoutParams(0, MATCH_PARENT, 1f).apply { if (i == 0) marginEnd = dp(6) })
                     }
                 })
@@ -177,7 +179,7 @@ class NutritionActivity : Activity() {
                 if (dbTab == "meals") {
                     val r = meals.filter { hit(it.name) }
                     if (r.isEmpty()) list.addView(RunUi.text(ctx, "No saved meals" + if (dbQuery.isNotBlank()) " match." else " yet — tap 💾 on a meal to save one.", RunUi.MUTED, 12f).apply { setPadding(0, dp(8), 0, 0) })
-                    r.forEach { sm ->
+                    r.take(dbShown).forEach { sm ->
                         val kcal = sm.items.sumOf { (it.cal ?: 0.0) * it.servings }.toInt()
                         list.addView(dbRow(sm.name, sm.items.joinToString(", ") { it.name }.take(80), kcal) {
                             sm.items.forEach { HydrationSync.food(ctx, "foodAdd", it.copy(id = io.github.michealsizemore1.beyondstride.Food.newId(), meal = dbMeal)) }
@@ -188,18 +190,24 @@ class NutritionActivity : Activity() {
                     var r = (when (dbTab) { "fav" -> favs; "recent" -> recent; else -> healthy }).filter { hit(it.name) }
                     r = when (dbSort) { "az" -> r.sortedBy { it.name.lowercase() }; "kcal" -> r.sortedBy { it.cal ?: 0.0 }; "protein" -> r.sortedByDescending { it.prot ?: 0.0 }; else -> r }
                     if (r.isEmpty()) list.addView(RunUi.text(ctx, if (favs.isEmpty() && healthy.isEmpty()) "Your Command Center food database shows here once it's been opened there." else "No match.", RunUi.MUTED, 12f).apply { setPadding(0, dp(8), 0, 0) })
-                    r.take(150).forEach { f ->
+                    r.take(dbShown).forEach { f ->
                         list.addView(dbRow(f.name, f.servingLabel + " · P ${(f.prot ?: 0.0).toInt()} · C ${(f.carbs ?: 0.0).toInt()} · F ${(f.fat ?: 0.0).toInt()} g", ((f.cal ?: 0.0) * f.servings).toInt()) {
                             FoodUi.confirmAdd(this@NutritionActivity, f, dbMeal) { render() }
                         })
                     }
                 }
+                // Short list: a few at a time (search to narrow it down).
+                val total = if (dbTab == "meals") meals.count { hit(it.name) } else (when (dbTab) { "fav" -> favs; "recent" -> recent; else -> healthy }).count { hit(it.name) }
+                if (total > 6) list.addView(RunUi.text(ctx, if (dbShown < total) "Show more ▾  (${total - minOf(dbShown, total)} more)" else "Show less ▴", RunUi.ACCENT, 13f, true).apply {
+                    gravity = Gravity.CENTER; setPadding(0, dp(10), 0, dp(4))
+                    setOnClickListener { dbShown = if (dbShown < total) dbShown + 10 else 6; fill() }
+                })
             }
             addView(android.widget.EditText(ctx).apply {
                 hint = "🔍 Search saved foods…"; setText(dbQuery); setSingleLine(); setTextColor(Color.WHITE); setHintTextColor(RunUi.MUTED); textSize = 15f
                 background = RunUi.rounded(0xFF26302C.toInt(), dp(10).toFloat()); setPadding(dp(12), dp(9), dp(12), dp(9))
                 addTextChangedListener(object : android.text.TextWatcher {
-                    override fun afterTextChanged(e: android.text.Editable?) { dbQuery = e?.toString() ?: ""; fill() }
+                    override fun afterTextChanged(e: android.text.Editable?) { dbQuery = e?.toString() ?: ""; dbShown = 6; fill() }
                     override fun beforeTextChanged(s: CharSequence?, st: Int, c: Int, af: Int) {}
                     override fun onTextChanged(s: CharSequence?, st: Int, b: Int, c: Int) {}
                 })
