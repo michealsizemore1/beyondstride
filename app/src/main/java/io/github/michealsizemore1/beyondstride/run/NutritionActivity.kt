@@ -58,9 +58,12 @@ class NutritionActivity : Activity() {
     }
 
 
+    override fun onCreate(b: android.os.Bundle?) { super.onCreate(b); NutriDay.viewed = null }   // opens on today
+
     override fun onResume() {
         io.github.michealsizemore1.beyondstride.Theme.load(this, "runsettings")
         super.onResume(); render()
+        if (!NutriDay.isToday()) Thread { if (NutriDay.fetch(this, NutriDay.date())) runOnUiThread { if (!isFinishing) render() } }.start()
         if (NutritionSync.justOpened) NutritionSync.refreshAfterNutrition(this) { runOnUiThread { if (!isFinishing) render() } }
         else Thread { if (NutritionSync.refreshIfStale(this, 30_000L)) runOnUiThread { if (!isFinishing) render() } }.start()
     }
@@ -70,14 +73,40 @@ class NutritionActivity : Activity() {
         fun dp(v: Int) = RunUi.dp(ctx, v)
         val N = Nutrition
         val days = NutritionStore.days(this)
-        val t = N.today(days)
+        val t = NutriDay.day(this)
         val col = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(16), dp(40), dp(16), dp(32)) }
         col.addView(RunUi.text(this, "Nutrition", Color.WHITE, 26f, true))
         val at = NutritionStore.fetchedAt(this)
         if (at > 0) col.addView(RunUi.text(this, "Updated " + android.text.format.DateUtils.getRelativeTimeSpanString(at, System.currentTimeMillis(), 60_000L), RunUi.DIM, 11f))
 
+        // Day picker: ‹ previous day · date (tap for a calendar) · next day ›. Everything below is for that day.
+        val vd = java.time.LocalDate.parse(NutriDay.date()); val today0 = java.time.LocalDate.now()
+        fun go(d: java.time.LocalDate) {
+            NutriDay.viewed = if (d >= today0) null else d.toString(); render()
+            if (!NutriDay.isToday()) Thread { if (NutriDay.fetch(ctx, NutriDay.date())) runOnUiThread { if (!isFinishing) render() } }.start()
+        }
+        col.addView(LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+            layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(12) }
+            fun arrow(tx: String, enabled: Boolean, d: java.time.LocalDate) = addView(RunUi.text(ctx, tx, if (enabled) Color.BLACK else RunUi.DIM, 22f, true).apply {
+                gravity = Gravity.CENTER; background = RunUi.rounded(if (enabled) RunUi.ACCENT else RunUi.CARD, dp(10).toFloat())
+                if (enabled) setOnClickListener { go(d) } }, LinearLayout.LayoutParams(dp(48), dp(42)))
+            arrow("‹", true, vd.minusDays(1))
+            addView(RunUi.text(ctx, (if (NutriDay.isToday()) "Today · " else "") + vd.format(java.time.format.DateTimeFormatter.ofPattern("EEE, MMM d, yyyy", Locale.US)) + "  ▾", Color.WHITE, 15f, true).apply {
+                gravity = Gravity.CENTER
+                setOnClickListener { android.app.DatePickerDialog(ctx, { _, y, m, dd -> go(java.time.LocalDate.of(y, m + 1, dd)) }, vd.year, vd.monthValue - 1, vd.dayOfMonth)
+                    .apply { datePicker.maxDate = System.currentTimeMillis() }.show() } }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
+            arrow("›", !NutriDay.isToday(), vd.plusDays(1))
+        })
+        if (!NutriDay.isToday()) {
+            col.addView(RunUi.text(ctx, "Back to today ▸", RunUi.ACCENT, 13f, true).apply { setPadding(0, dp(6), 0, 0); setOnClickListener { go(today0) } })
+            if (t == null && NutriDay.missing(ctx, NutriDay.date()))
+                col.addView(RunUi.text(ctx, if (NutriDay.waiting(ctx, NutriDay.date())) "⏳ Asked the Command Center for this day — open its page (it answers within a minute), then come back."
+                    else "Loading this day…", 0xFFF2C94C.toInt(), 12f).apply { setPadding(0, dp(6), 0, 0) })
+        }
+
         // Today: calories, macros, fluids (and weights).
-        col.addView(RunUi.section(this, "TODAY"))
+        col.addView(RunUi.section(this, if (NutriDay.isToday()) "TODAY" else vd.format(java.time.format.DateTimeFormatter.ofPattern("EEEE", Locale.US)).uppercase()))
         col.addView(RunUi.card(this).apply { NutritionUi.today(this@NutritionActivity, this, withMicros = false, big = true, chips = false) { render() } })
 
         // Macros & Micronutrients: food quality, macro ratio, micronutrient quality and tiles.

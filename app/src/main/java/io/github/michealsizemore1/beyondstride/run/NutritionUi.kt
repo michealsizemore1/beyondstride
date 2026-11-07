@@ -21,12 +21,12 @@ object NutritionUi {
         val ctx = act
         fun dp(v: Int) = RunUi.dp(ctx, v)
         val N = Nutrition
-        val nd = N.today(NutritionStore.days(ctx))
+        val nd = if (big) NutriDay.day(ctx) else N.today(NutritionStore.days(ctx))
         when {
             !NutritionSync.ready(ctx) -> col.addView(RunUi.text(ctx, "Set up LiveTrack first — nutrition is shared through the same database.", RunUi.MUTED, 12f))
             NutritionSync.lastError(ctx) == "rules" -> col.addView(RunUi.text(ctx, "Update your Firebase rules to share nutrition (Settings → LiveTrack → copy rules).", 0xFFF2C94C.toInt(), 12f))
         }
-        if (nd == null || nd.count == 0) col.addView(RunUi.text(ctx, "No food logged today yet", RunUi.MUTED, 13f))
+        if (nd == null || nd.count == 0) col.addView(RunUi.text(ctx, if (!big || NutriDay.isToday()) "No food logged today yet" else "No food logged this day", RunUi.MUTED, 13f))
         else {
             val over = nd.target > 0 && nd.left < 0
             col.addView(RunUi.text(ctx, N.line(nd), if (over) 0xFFF2C94C.toInt() else Color.WHITE, if (big) 18f else 16f, true))
@@ -40,7 +40,8 @@ object NutritionUi {
 
         }
         // One line for the calorie target; tap for the breakdown and settings.
-        if (big) try {
+        if (big && !NutriDay.isToday()) nd?.target?.takeIf { it > 0 }?.let { col.addView(RunUi.text(ctx, "Target ${N.kcal(it)}", RunUi.MUTED, 12f).apply { setPadding(0, dp(4), 0, dp(2)) }) }
+        if (big && NutriDay.isToday()) try {
             val r = CalorieTargets.result(ctx)
             val parts = mutableListOf("Target ${N.kcal(r.target)}")
             r.preset?.let { parts += it.label.substringAfter(": ").substringBefore(" —").let { k -> if (it.label.startsWith("Tomorrow")) "$k tomorrow" else "$k day" } }
@@ -214,7 +215,7 @@ object NutritionUi {
         val ctx = act
         fun dp(v: Int) = RunUi.dp(ctx, v)
         val box = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(20), dp(8), dp(20), 0) }
-        val today = HydrationSync.today(ctx)
+        val today = NutriDay.day(ctx)
         fun field(hint: String, v: Double) = android.widget.EditText(ctx).apply {
             this.hint = hint; inputType = android.text.InputType.TYPE_CLASS_NUMBER or android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL
             if (v > 0) setText(Hydration.lb(v))
@@ -226,7 +227,7 @@ object NutritionUi {
         box.addView(android.widget.TextView(ctx).apply {
             text = "Also goes to the Command Center (its Wellness weight fields). Drinks are in Liquids on the Nutrition tab."; textSize = 12f; setPadding(0, dp(8), 0, 0)
         })
-        android.app.AlertDialog.Builder(ctx).setTitle("Weight · today").setView(ScrollView(ctx).apply { addView(box) })
+        android.app.AlertDialog.Builder(ctx).setTitle("Weight · " + if (NutriDay.isToday()) "today" else java.time.LocalDate.parse(NutriDay.date()).format(java.time.format.DateTimeFormatter.ofPattern("EEE, MMM d", Locale.US))).setView(ScrollView(ctx).apply { addView(box) })
             .setPositiveButton("Save") { _, _ ->
                 fun num(e: android.widget.EditText) = e.text.toString().trim().toDoubleOrNull()?.takeIf { it in 70.0..600.0 } ?: 0.0
                 val w = num(wake); val p = num(post)

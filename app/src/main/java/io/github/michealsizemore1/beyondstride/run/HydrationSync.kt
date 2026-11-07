@@ -15,22 +15,23 @@ import java.net.URL
  */
 object HydrationSync {
     /** A change made here or on the watch. Fluids: [delta] oz. Weights: [value] lb (0 clears). */
-    fun change(ctx: Context, f: String, delta: Int = 0, value: Double = 0.0, date: String = Readiness.today()) {
+    fun change(ctx: Context, f: String, delta: Int = 0, value: Double = 0.0, date: String = NutriDay.date()) {
         val app = ctx.applicationContext
         synchronized(Hydration) {
             val days = NutritionStore.days(app)
-            Hydration.record(app, days.lastOrNull { it.date == date }, date, f, delta, value)
+            Hydration.record(app, NutriDay.raw(app, date), date, f, delta, value)
             NutritionStore.save(app, CalorieTargets.apply(app, Hydration.overlay(app, days)))
         }
         Thread { flush(app) }.start()
     }
 
     /** A food added, changed (servings / meal) or removed — here or on the watch. */
-    fun food(ctx: Context, op: String, item: io.github.michealsizemore1.beyondstride.Food.Item, date: String = Readiness.today()) {
+    fun food(ctx: Context, op: String, item: io.github.michealsizemore1.beyondstride.Food.Item, date: String = NutriDay.date()) {
         val app = ctx.applicationContext
         synchronized(Hydration) {
             val days = NutritionStore.days(app)
-            Hydration.recordFood(app, days.lastOrNull { it.date == date }, date, op, item)
+            // The day on the Nutrition tab (today unless you've gone back); older days come from NutriDay's cache.
+            Hydration.recordFood(app, NutriDay.raw(app, date), date, op, item)
             NutritionStore.save(app, CalorieTargets.apply(app, Hydration.overlay(app, days)))
         }
         Thread { flush(app) }.start()
