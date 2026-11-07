@@ -105,6 +105,12 @@ object Hydration {
             "foodEdit" -> { if (i >= 0) foods[i] = foods[i].copy(servings = item.servings, meal = item.meal); JSONObject().put("id", item.id).put("servings", item.servings).put("meal", item.meal) }
             else -> { if (i >= 0) foods.removeAt(i); JSONObject().put("id", item.id) }
         }
+        // Drinks logged as foods move the Sports / Other drinks counters (the Command Center does the same when it gets the food).
+        val before = (o.optJSONArray("foods")?.let { Food.parseList(it) } ?: base.foods)
+        val dSports = Food.liquidOz(foods, "sports") - Food.liquidOz(before, "sports")
+        val dOther = Food.liquidOz(foods, "liquids") - Food.liquidOz(before, "liquids")
+        if (dSports != 0) o.put("sports", (o.optInt("sports") + dSports).coerceAtLeast(0))
+        if (dOther != 0) o.put("other", (o.optInt("other") + dOther).coerceAtLeast(0))
         o.put("foods", Food.listJson(foods))
         l.put(date, o)
         p(ctx).edit().putString("days", l.toString()).apply()

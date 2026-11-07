@@ -84,4 +84,35 @@ object Food {
         return base.copy(cal = cal, prot = prot, carbs = carbs, fat = fat, fiber = fiber, sodium = sodium, meals = meals, items = shortItems,
             count = items.size, micros = list, microScore = score, foods = items)
     }
+
+    // ── Drinks logged as foods count toward fluids, like the Command Center: Sports Nutrition foods → Sports drinks,
+    //    Liquids foods → Other drinks, using the fluid ounces in the serving (caffeinated drinks don't count). ──
+    private val CAF = Regex("\\b(coffee|espresso|latte|cappuccino|mocha|americano|cold\\s*brew|black\\s*tea|green\\s*tea|energy\\s*drinks?|red\\s*bull|monster(?:\\s*energy)?|celsius|bang\\s*energy|rockstar|reign|ghost\\s*energy|c4\\s*energy|alani\\s*nu)\\b")
+    fun caffeinated(i: Item) = CAF.containsMatchIn(i.name.lowercase()) || (i.micros["caffeine"] ?: 0.0) > 0
+
+    /** Fluid ounces in a serving label: "20 fl oz", "1 Bottle (591 mL)", "2 cups", "500 ml", "8 oz water"…; 0 if none. */
+    fun fluidOz(label: String): Double {
+        val s = label.lowercase()
+        Regex("^\\s*(\\d+(?:\\.\\d+)?)\\s*(fl\\.?\\s*oz|fluid\\s*ounces?|oz|ounces?|milliliters?|millilitres?|ml|liters?|litres?|cups?)\\b").find(s)?.let { m ->
+            val q = m.groupValues[1].toDouble(); val u = m.groupValues[2]
+            return when { u.contains("oz") || u.contains("ounce") -> q; u.contains("cup") -> q * 8; u.contains("ml") || u.contains("milli") -> q / 29.5735; else -> q * 33.814 }
+        }
+        Regex("^\\s*(\\d+(?:\\.\\d+)?)[^()]*\\((\\d+(?:\\.\\d+)?)\\s*(fl\\.?\\s*oz|fluid\\s*ounces?|ml|milliliters?|millilitres?|liters?|litres?)\\)").find(s)?.let { m ->
+            val c = m.groupValues[1].toDouble(); val v = m.groupValues[2].toDouble(); val u = m.groupValues[3]
+            val each = when { u.contains("fl") || u.contains("fluid") -> v; u.contains("ml") || u.contains("milli") -> v / 29.5735; else -> v * 33.814 }
+            if (each > 0) return c * each
+        }
+        Regex("(\\d+(?:\\.\\d+)?)\\s*(fl\\.?\\s*oz|oz|ounces?|milliliters?|millilitres?|ml|liters?|litres?)\\s*(?:of\\s*)?water\\b").find(s)?.let { m ->
+            val q = m.groupValues[1].toDouble(); val u = m.groupValues[2]
+            return when { u.contains("ml") || u.contains("milli") -> q / 29.5735; u.contains("liter") || u.contains("litre") -> q * 33.814; else -> q }
+        }
+        return 0.0
+    }
+
+    /** Ounces of non-caffeinated drinks logged in [meal]. */
+    fun liquidOz(items: List<Item>, meal: String): Int = Math.round(items.filter { it.meal == meal && !caffeinated(it) }.sumOf { i ->
+        var oz = fluidOz(i.servingLabel)
+        if (oz == 0.0) Products.SPORTS.firstOrNull { i.name.lowercase().contains(it.line.lowercase()) }?.let { oz = fluidOz(it.serving) }
+        oz * i.servings
+    }).toInt()
 }
