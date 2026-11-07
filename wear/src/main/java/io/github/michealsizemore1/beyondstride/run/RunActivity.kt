@@ -1211,8 +1211,7 @@ class RunActivity : Activity() {
             postEdit = t?.postWeight?.takeIf { it > 0 } ?: 0.0
             if (lastW > 0) prefs.edit().putFloat("lastWeight", lastW.toFloat()).apply()
         }
-        col.addView(label("Fluids & weight", Color.WHITE, 17f, true))
-        col.addView(label("${t?.waterOz ?: 0} oz today", N.WATER, 13f, true))
+        col.addView(label("⚖ Weight", Color.WHITE, 17f, true))
         fun stepper(name: String, value: String, minus: () -> Unit, plus: () -> Unit) = col.addView(LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
             background = rounded(C.CARD, 16); setPadding(dp(4), dp(4), dp(4), dp(4))
@@ -1223,11 +1222,6 @@ class RunActivity : Activity() {
             }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
             addView(label("+", C.ACCENT, 22f, true).apply { setOnClickListener { plus() } }, LinearLayout.LayoutParams(dp(36), WRAP_CONTENT))
         })
-        val names = mapOf("water" to "Water", "sports" to "Sports drinks", "other" to "Other drinks")
-        H.FLUIDS.forEach { f ->
-            val v = when (f) { "water" -> t?.water; "sports" -> t?.sportsOz; else -> t?.otherOz } ?: 0
-            stepper(names[f]!!, "$v oz", { watchFluid(f, -H.STEP) }, { watchFluid(f, H.STEP) })
-        }
         val start = prefs.getFloat("lastWeight", 170f).toDouble()
         fun step(cur: Double, d: Double) = Math.round(((if (cur > 0) cur else start) + d) * 10) / 10.0
         stepper("Wake-up weight", if (wakeEdit > 0) "${H.lb(wakeEdit)} lb" else "— tap + / −", { wakeEdit = step(wakeEdit, -0.2); showFluids(false) }, { wakeEdit = step(wakeEdit, 0.2); showFluids(false) })
@@ -1239,7 +1233,7 @@ class RunActivity : Activity() {
             setOnClickListener {
                 if (wakeEdit != (t?.weight ?: 0.0)) watchFluid("weight", value = wakeEdit, redraw = false)
                 if (postEdit != (t?.postWeight ?: 0.0)) watchFluid("postWeight", value = postEdit, redraw = false)
-                flash("Weights saved"); showFluids()
+                flash("Weights saved"); showNutrition()
             }
         })
         col.addView(label("Back", C.MUTED, 13f, true).apply {
@@ -1248,7 +1242,7 @@ class RunActivity : Activity() {
     }
 
     /** Shows the change at once and sends it to the phone (which saves it and passes it to the Command Center). */
-    private fun watchFluid(f: String, delta: Int = 0, value: Double = 0.0, redraw: Boolean = true) {
+    private fun watchFluid(f: String, delta: Int = 0, value: Double = 0.0, redraw: Boolean = true, back: () -> Unit = { showFluids(false) }) {
         val H = io.github.michealsizemore1.beyondstride.Hydration
         val S = io.github.michealsizemore1.beyondstride.NutritionStore
         val date = nutDay()
@@ -1265,7 +1259,7 @@ class RunActivity : Activity() {
         if (f in H.FLUIDS && d == 0) return
         S.putLocal(this, (days.filter { it.date != date } + upd).sortedBy { it.date })
         RunSync.tellPhone(this, "/cmd/fluid", H.encode(date, f, d, value).toByteArray()) { ok -> if (!ok) flash("Phone not connected — not saved") }
-        if (redraw) showFluids(false)
+        if (redraw) back()
     }
 
     /** Quick add (watch): a favorite or recent food into a meal; the phone logs it and tells the Command Center. */
@@ -1538,17 +1532,15 @@ class RunActivity : Activity() {
                     setPadding(0, dp(3), 0, 0); setOnClickListener { showCalorieTarget() } })
             }
             // Fluids and post-run rehydration, part of Today. Tap to add a cup or enter weights.
-            addView(label("Fluids ${t?.waterOz ?: 0} oz", Color.WHITE, 12f, true).apply { setPadding(0, dp(4), 0, 0) })
-            if (t != null && t.water + t.sportsOz + t.otherOz > 0) addView(label(N.fluids(t), C.MUTED, 10f))
+            // Weigh-ins and fluids — same lines as the phone's Today card (drinks are in LIQUIDS below).
+            val H0 = io.github.michealsizemore1.beyondstride.Hydration
+            addView(label("⚖ Weight: wake-up ${H0.lb(t?.weight ?: 0.0)} · post-run ${H0.lb(t?.postWeight ?: 0.0)} lb ▸", Color.WHITE, 11f, true).apply {
+                setPadding(0, dp(5), 0, 0); setOnClickListener { showFluids() } })
+            addView(label("Fluids ${t?.waterOz ?: 0} oz" + (if (t != null && t.water + t.sportsOz + t.otherOz > 0) "  (water ${t.water} · sports ${t.sportsOz} · other ${t.otherOz})" else ""), C.MUTED, 10f).apply { setPadding(0, dp(3), 0, 0) })
             N.rehydrate(t)?.let { h ->
                 addView(label("Lost ${String.format(java.util.Locale.US, "%.1f", h.lostLb)} lb → ~${h.targetOz} oz", C.MUTED, 10f))
                 addView(label(if (h.needOz == 0) "Rehydrated ✓" else "Drink ~${h.needOz} oz more", if (h.needOz == 0) 0xFF5FD38D.toInt() else N.WATER, 12f, true))
             }
-            addView(label("💧 Fluids & weight ▸", N.WATER, 11f, true).apply {
-                background = rounded(0xFF26302C.toInt(), 14); setPadding(0, dp(5), 0, dp(5))
-                layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(5) }
-            })
-            setOnClickListener { showFluids() }
         }
         if (t != null && t.count > 0) box {
             addView(label("MACROS & MICRONUTRIENTS", C.ACCENT, 11f, true))
@@ -1585,6 +1577,26 @@ class RunActivity : Activity() {
                 if (t.foods.isNotEmpty()) t.foods.filter { it.meal == m }.forEach { f -> addView(label("${f.name} · ${io.github.michealsizemore1.beyondstride.Food.fmt(f.servings)}× · ${N.kcal(f.kcal)}", C.MUTED, 9f)) }
                 else t.items.filter { it.meal == m }.forEach { i -> addView(label("${i.name} · ${N.kcal(i.cal)}", C.MUTED, 9f)) }
             }
+        }
+        // LIQUIDS — like the phone's: tap − / + for a cup (8 oz), hold for 1 oz.
+        box {
+            addView(label("LIQUIDS", C.ACCENT, 11f, true))
+            val H = io.github.michealsizemore1.beyondstride.Hydration
+            listOf(Triple("💧 Water Intake", "water", t?.water ?: 0), Triple("🏃 Sports Nutrition Drinks", "sports", t?.sportsOz ?: 0), Triple("🥤 Other Drinks", "other", t?.otherOz ?: 0)).forEach { (name, f, oz) ->
+                addView(label("$name:", Color.WHITE, 11f, true).apply { gravity = Gravity.START; setPadding(0, dp(6), 0, dp(2)) })
+                addView(LinearLayout(this@RunActivity).apply {
+                    orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+                    fun btn(tx: String, d: Int) = addView(label(tx, 0xFF8EA2F2.toInt(), 16f, true).apply {
+                        background = android.graphics.drawable.GradientDrawable().apply { setStroke(dp(2), 0xFF6B7FE0.toInt()); cornerRadius = dp(8).toFloat() }
+                        setPadding(0, dp(2), 0, dp(4))
+                        setOnClickListener { watchFluid(f, d * H.STEP, back = { showNutrition() }) }
+                        setOnLongClickListener { watchFluid(f, d, back = { showNutrition() }); true } }, LinearLayout.LayoutParams(dp(36), WRAP_CONTENT))
+                    btn("−", -1)
+                    addView(label("$oz oz (" + String.format(java.util.Locale.US, "%.1f", oz / 8.0) + " cups)", Color.WHITE, 12f, true), LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
+                    btn("+", 1)
+                })
+            }
+            addView(label("Tap − / + for a cup (8 oz); hold for 1 oz.", C.DIM, 8f).apply { setPadding(0, dp(4), 0, 0) })
         }
         val week = days.filter { it.count > 0 }.takeLast(7)
         if (week.isNotEmpty()) box {
