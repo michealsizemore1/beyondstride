@@ -23,6 +23,7 @@ class FoodAddActivity : Activity() {
     private var photoUri: android.net.Uri? = null
     private lateinit var list: LinearLayout
     private var tab = "recent"
+    private var sort = "saved"
 
     override fun onCreate(b: Bundle?) {
         super.onCreate(b)
@@ -85,14 +86,26 @@ class FoodAddActivity : Activity() {
             Triple("✎ Manual", RunUi.CARD) { FoodUi.manual(this@FoodAddActivity, meal) { } })
         btnRow(Triple("✨ AI search", 0xFF3B3172.toInt()) { aiSearch() }, Triple("🔎 Online", RunUi.CARD) { searchOnline() })
 
-        // Tabs: Recent · My foods · Meals.
-        col.addView(LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL; setPadding(0, dp(12), 0, 0)
-            listOf("recent" to "Recent", "mine" to "My foods", "meals" to "Saved meals").forEach { (k, n) ->
-                addView(RunUi.text(ctx, n, if (tab == k) RunUi.ACCENT else RunUi.MUTED, 14f, true).apply {
-                    gravity = Gravity.CENTER; setPadding(0, dp(6), 0, dp(6))
-                    setOnClickListener { tab = k; online = null; build() }
-                }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
+        // Tabs like the Command Center: Recent · Food Database · Healthy 7+ · Saved Meals.
+        val tabs = listOf("recent" to "🕘 Recent", "fav" to "⭐ Food Database (${FoodLibrary.favorites(this).size})",
+            "healthy" to "✅ Healthy 7+ (${FoodLibrary.healthy(this).size})", "meals" to "🍲 Saved Meals (${FoodLibrary.meals(this).size})")
+        tabs.chunked(2).forEach { row ->
+            col.addView(LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL; setPadding(0, dp(8), 0, 0)
+                row.forEachIndexed { i, (k, n) ->
+                    addView(RunUi.text(ctx, n, Color.WHITE, 13f, true).apply {
+                        gravity = Gravity.CENTER; background = RunUi.rounded(if (tab == k) 0xFF8A5A0E.toInt() else RunUi.CARD, dp(10).toFloat())
+                        setPadding(dp(4), dp(9), dp(4), dp(9)); setOnClickListener { tab = k; online = null; build() }
+                    }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f).apply { if (i == 0) marginEnd = dp(6) })
+                }
+            })
+        }
+        if (tab == "fav" || tab == "healthy") col.addView(RunUi.text(this, "Sort: " + mapOf("saved" to "as saved", "az" to "A–Z", "kcal" to "lowest calories", "protein" to "most protein")[sort] + "  ▾", Color.WHITE, 14f).apply {
+            background = RunUi.rounded(RunUi.CARD, dp(10).toFloat()); setPadding(dp(12), dp(9), dp(12), dp(9))
+            layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(8) }
+            setOnClickListener {
+                val keys = listOf("saved", "az", "kcal", "protein")
+                android.app.AlertDialog.Builder(ctx).setTitle("Sort").setItems(arrayOf("As saved", "A–Z", "Lowest calories", "Most protein")) { _, i -> sort = keys[i]; build() }.show()
             }
         })
         list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
@@ -135,8 +148,9 @@ class FoodAddActivity : Activity() {
                 if (r.isEmpty()) note(if (query.isBlank()) "Foods you log show here." else "No recent match — try My foods or 🔎 Online.")
                 r.forEach { list.addView(row(it.copy(servings = it.servings))) }
             }
-            "mine" -> {
-                val r = FoodLibrary.mine(this).filter { matches(it.name) }
+            "fav", "healthy" -> {
+                var r = (if (tab == "fav") FoodLibrary.favorites(this) else FoodLibrary.healthy(this)).filter { matches(it.name) }
+                r = when (sort) { "az" -> r.sortedBy { it.name.lowercase() }; "kcal" -> r.sortedBy { it.cal ?: 0.0 }; "protein" -> r.sortedByDescending { it.prot ?: 0.0 }; else -> r }
                 if (r.isEmpty()) note(if (NutritionSync.ready(this)) "Your Command Center food database shows here once it's been opened there (Nutrition tab)." else "Set up LiveTrack first — your food database comes through the same database.")
                 r.take(150).forEach { list.addView(row(it)) }
             }

@@ -13,10 +13,6 @@ import java.util.Locale
 
 /** The Nutrition tab: today, fluids, micronutrients, meals and the week, shown here (like the watch). */
 class NutritionActivity : Activity() {
-    private var dbTab = "fav"
-    private var dbQuery = ""
-    private var dbSort = "saved"
-    private var dbMeal = FoodUi.mealNow()
 
     companion object {
         val MEAL_ICON = mapOf("breakfast" to "🌅", "lunch" to "🥗", "dinner" to "🍽️", "snack" to "🍎", "liquids" to "💧", "sports" to "💪", "supplements" to "💊")
@@ -26,21 +22,6 @@ class NutritionActivity : Activity() {
             "liquids" to 0xFF0D9488.toInt(), "sports" to 0xFFE67E22.toInt(), "supplements" to 0xFF4B5563.toInt())
     }
 
-    private fun dbRow(title: String, sub: String, kcal: Int, add: () -> Unit) = LinearLayout(this).apply {
-        val ctx = this@NutritionActivity
-        orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
-        background = RunUi.rounded(0xFF26302C.toInt(), RunUi.dp(ctx, 10).toFloat()); setPadding(RunUi.dp(ctx, 12), RunUi.dp(ctx, 8), RunUi.dp(ctx, 10), RunUi.dp(ctx, 8))
-        layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = RunUi.dp(ctx, 6) }
-        addView(LinearLayout(ctx).apply {
-            orientation = LinearLayout.VERTICAL
-            addView(RunUi.text(ctx, title, Color.WHITE, 14f, true)); addView(RunUi.text(ctx, sub, RunUi.MUTED, 11f))
-        }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
-        addView(RunUi.text(ctx, "$kcal", RunUi.MUTED, 12f, true).apply { setPadding(RunUi.dp(ctx, 6), 0, RunUi.dp(ctx, 6), 0) })
-        addView(RunUi.text(ctx, "+ Add", Color.WHITE, 12f, true).apply {
-            background = RunUi.rounded(0xFFE67E22.toInt(), RunUi.dp(ctx, 8).toFloat()); setPadding(RunUi.dp(ctx, 10), RunUi.dp(ctx, 4), RunUi.dp(ctx, 10), RunUi.dp(ctx, 4))
-            setOnClickListener { add() }
-        })
-    }
 
     override fun onResume() {
         io.github.michealsizemore1.beyondstride.Theme.load(this, "runsettings")
@@ -95,7 +76,7 @@ class NutritionActivity : Activity() {
                     }
                 })
             }
-            col.addView(RunUi.text(ctx, "Tap + Add on a meal for search, barcode, label photo, AI or manual — or add from your food database below the meals.", RunUi.DIM, 10f).apply { setPadding(dp(2), dp(4), 0, 0) })
+            col.addView(RunUi.text(ctx, "Tap + Add on a meal to add food: recent foods, your food database, saved meals, search, barcode, label, AI or manual.", RunUi.DIM, 10f).apply { setPadding(dp(2), dp(4), 0, 0) })
         }
 
         // One card per meal, like the Command Center: icon · name · count and kcal · 💾 · colored ＋ Add · ▸ to open/close.
@@ -151,72 +132,6 @@ class NutritionActivity : Activity() {
                 })
             }
         }
-
-        // Food database panel, like the Command Center's: Food Database · Healthy 7+ · Saved Meals, search, sort, "Add to …".
-        col.addView(RunUi.card(this).apply {
-            layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(14) }
-            val favs = FoodLibrary.favorites(ctx); val healthy = FoodLibrary.healthy(ctx); val meals = FoodLibrary.meals(ctx)
-            addView(LinearLayout(ctx).apply {
-                orientation = LinearLayout.HORIZONTAL
-                listOf(Triple("fav", "⭐ Food Database (${favs.size})", 0xFF8A5A0E.toInt()), Triple("healthy", "✅ Healthy 7+ (${healthy.size})", 0xFF8A5A0E.toInt()),
-                    Triple("meals", "🍲 Saved Meals", 0xFF8A5A0E.toInt())).forEachIndexed { i, (k, n, c) ->
-                    addView(RunUi.text(ctx, n, Color.WHITE, 12f, true).apply {
-                        gravity = Gravity.CENTER; background = RunUi.rounded(if (dbTab == k) c else 0xFF26302C.toInt(), dp(10).toFloat())
-                        setPadding(dp(4), dp(9), dp(4), dp(9)); setOnClickListener { dbTab = k; render() }
-                    }, LinearLayout.LayoutParams(0, MATCH_PARENT, 1f).apply { if (i < 2) marginEnd = dp(6) })
-                }
-            })
-            val list = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
-            fun fill() {
-                list.removeAllViews()
-                fun hit(n: String) = dbQuery.isBlank() || dbQuery.trim().split(" ").all { n.contains(it, ignoreCase = true) }
-                if (dbTab == "meals") {
-                    val r = meals.filter { hit(it.name) }
-                    if (r.isEmpty()) list.addView(RunUi.text(ctx, "No saved meals" + if (dbQuery.isNotBlank()) " match." else " yet — tap 💾 on a meal to save one.", RunUi.MUTED, 12f).apply { setPadding(0, dp(8), 0, 0) })
-                    r.forEach { sm ->
-                        val kcal = sm.items.sumOf { (it.cal ?: 0.0) * it.servings }.toInt()
-                        list.addView(dbRow(sm.name, sm.items.joinToString(", ") { it.name }.take(80), kcal) {
-                            sm.items.forEach { HydrationSync.food(ctx, "foodAdd", it.copy(id = io.github.michealsizemore1.beyondstride.Food.newId(), meal = dbMeal)) }
-                            android.widget.Toast.makeText(ctx, "Added ${sm.name} to ${MEAL_LABEL[dbMeal]}", android.widget.Toast.LENGTH_SHORT).show(); render()
-                        })
-                    }
-                } else {
-                    var r = (if (dbTab == "fav") favs else healthy).filter { hit(it.name) }
-                    r = when (dbSort) { "az" -> r.sortedBy { it.name.lowercase() }; "kcal" -> r.sortedBy { it.cal ?: 0.0 }; "protein" -> r.sortedByDescending { it.prot ?: 0.0 }; else -> r }
-                    if (r.isEmpty()) list.addView(RunUi.text(ctx, if (favs.isEmpty() && healthy.isEmpty()) "Your Command Center food database shows here once it's been opened there." else "No match.", RunUi.MUTED, 12f).apply { setPadding(0, dp(8), 0, 0) })
-                    r.take(150).forEach { f ->
-                        list.addView(dbRow(f.name, f.servingLabel + " · P ${(f.prot ?: 0.0).toInt()} · C ${(f.carbs ?: 0.0).toInt()} · F ${(f.fat ?: 0.0).toInt()} g", ((f.cal ?: 0.0) * f.servings).toInt()) {
-                            FoodUi.confirmAdd(this@NutritionActivity, f, dbMeal) { render() }
-                        })
-                    }
-                }
-            }
-            addView(android.widget.EditText(ctx).apply {
-                hint = "🔍 Search saved foods…"; setText(dbQuery); setSingleLine(); setTextColor(Color.WHITE); setHintTextColor(RunUi.MUTED); textSize = 15f
-                background = RunUi.rounded(0xFF26302C.toInt(), dp(10).toFloat()); setPadding(dp(12), dp(9), dp(12), dp(9))
-                addTextChangedListener(object : android.text.TextWatcher {
-                    override fun afterTextChanged(e: android.text.Editable?) { dbQuery = e?.toString() ?: ""; fill() }
-                    override fun beforeTextChanged(s: CharSequence?, st: Int, c: Int, af: Int) {}
-                    override fun onTextChanged(s: CharSequence?, st: Int, b: Int, c: Int) {}
-                })
-            }, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(10) })
-            if (dbTab != "meals") addView(RunUi.text(ctx, "Sort: " + mapOf("saved" to "as saved", "az" to "A–Z", "kcal" to "lowest calories", "protein" to "most protein")[dbSort] + "  ▾", Color.WHITE, 14f).apply {
-                background = RunUi.rounded(0xFF26302C.toInt(), dp(10).toFloat()); setPadding(dp(12), dp(9), dp(12), dp(9))
-                layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(8) }
-                setOnClickListener {
-                    val keys = listOf("saved", "az", "kcal", "protein"); val names = listOf("As saved", "A–Z", "Lowest calories", "Most protein")
-                    android.app.AlertDialog.Builder(ctx).setTitle("Sort").setItems(names.toTypedArray()) { _, i -> dbSort = keys[i]; render() }.show()
-                }
-            })
-            addView(RunUi.text(ctx, (MEAL_ICON[dbMeal] ?: "") + "  Add to " + (MEAL_LABEL[dbMeal] ?: dbMeal) + "  ▾", Color.WHITE, 14f).apply {
-                background = RunUi.rounded(0xFF26302C.toInt(), dp(10).toFloat()); setPadding(dp(12), dp(9), dp(12), dp(9))
-                layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(8) }
-                setOnClickListener {
-                    android.app.AlertDialog.Builder(ctx).setTitle("Add to").setItems(N.MEAL_ORDER.map { (MEAL_ICON[it] ?: "") + "  " + (MEAL_LABEL[it] ?: it) }.toTypedArray()) { _, i -> dbMeal = N.MEAL_ORDER[i]; render() }.show()
-                }
-            })
-            addView(list); fill()
-        })
 
         // The last 7 days.
         val week = days.filter { it.count > 0 }.takeLast(7)
