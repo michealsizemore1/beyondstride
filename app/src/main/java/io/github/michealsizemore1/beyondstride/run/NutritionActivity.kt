@@ -19,7 +19,7 @@ class NutritionActivity : Activity() {
     private var dbSort = "saved"
     private var dbMeal = FoodUi.mealNow()
 
-    private fun dbRow(title: String, sub: String, kcal: Int, add: () -> Unit) = LinearLayout(this).apply {
+    private fun dbRow(title: String, sub: String, kcal: Int, delete: (() -> Unit)? = null, add: () -> Unit) = LinearLayout(this).apply {
         val ctx = this@NutritionActivity
         orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
         background = RunUi.rounded(0xFF26302C.toInt(), RunUi.dp(ctx, 10).toFloat()); setPadding(RunUi.dp(ctx, 12), RunUi.dp(ctx, 6), RunUi.dp(ctx, 10), RunUi.dp(ctx, 6))
@@ -33,6 +33,14 @@ class NutritionActivity : Activity() {
         addView(RunUi.text(ctx, "+ Add", Color.WHITE, 12f, true).apply {
             background = RunUi.rounded(0xFFE67E22.toInt(), RunUi.dp(ctx, 8).toFloat()); setPadding(RunUi.dp(ctx, 10), RunUi.dp(ctx, 4), RunUi.dp(ctx, 10), RunUi.dp(ctx, 4))
             setOnClickListener { add() }
+        })
+        if (delete != null) addView(RunUi.text(ctx, "✕", 0xFFFF8A80.toInt(), 15f, true).apply {
+            gravity = Gravity.CENTER; setPadding(RunUi.dp(ctx, 10), RunUi.dp(ctx, 4), RunUi.dp(ctx, 2), RunUi.dp(ctx, 4))
+            setOnClickListener {
+                android.app.AlertDialog.Builder(ctx).setTitle("Delete “$title”?").setMessage(if (dbTab == "recent") "It won't show in Recent anymore (days you already logged keep it)."
+                    else "Removes it from your " + (if (dbTab == "meals") "Saved Meals" else if (dbTab == "fav") "Food Database" else "Healthy 7+ list") + " here and in the Command Center.")
+                    .setPositiveButton("Delete") { _, _ -> delete(); render() }.setNegativeButton("Cancel", null).show()
+            }
         })
     }
 
@@ -102,7 +110,7 @@ class NutritionActivity : Activity() {
                     }
                 })
             }
-            col.addView(RunUi.text(ctx, "Your foods are below the meals. For something new — search, barcode, label, AI or manual — tap + Add on the meal.", RunUi.DIM, 10f).apply { setPadding(dp(2), dp(4), 0, 0) })
+            col.addView(RunUi.text(ctx, "Your foods are below the meals. For something new, tap + Add on the meal. Tap a food in a meal to change or delete it; hold a meal to clear it.", RunUi.DIM, 10f).apply { setPadding(dp(2), dp(4), 0, 0) })
         }
 
         // One card per meal, like the Command Center: icon · name · count and kcal · 💾 · colored ＋ Add · ▸ to open/close.
@@ -130,6 +138,12 @@ class NutritionActivity : Activity() {
                         })
                         val arrow = RunUi.text(ctx, if (open) "▾" else "▸", RunUi.MUTED, 14f).apply { setPadding(dp(8), 0, 0, 0) }
                         addView(arrow)
+                        setOnLongClickListener {
+                            if (mine.isEmpty()) return@setOnLongClickListener false
+                            android.app.AlertDialog.Builder(ctx).setTitle("Clear ${MEAL_LABEL[m]}?").setMessage("Removes all ${mine.size} food${if (mine.size == 1) "" else "s"} from today's ${MEAL_LABEL[m]}.")
+                                .setPositiveButton("Clear") { _, _ -> mine.forEach { HydrationSync.food(ctx, "foodDel", it) }; render() }.setNegativeButton("Cancel", null).show()
+                            true
+                        }
                         setOnClickListener {
                             if (mine.isEmpty() && !picker) return@setOnClickListener
                             val card = parent as LinearLayout
@@ -186,7 +200,7 @@ class NutritionActivity : Activity() {
                     if (r.isEmpty()) list.addView(RunUi.text(ctx, "No saved meals" + if (dbQuery.isNotBlank()) " match." else " yet — tap 💾 on a meal to save one.", RunUi.MUTED, 12f).apply { setPadding(0, dp(8), 0, 0) })
                     r.forEach { sm ->
                         val kcal = sm.items.sumOf { (it.cal ?: 0.0) * it.servings }.toInt()
-                        list.addView(dbRow(sm.name, sm.items.joinToString(", ") { it.name }.take(80), kcal) {
+                        list.addView(dbRow(sm.name, sm.items.joinToString(", ") { it.name }.take(80), kcal, delete = { FoodLibrary.delete(ctx, "meals", sm.name) }) {
                             sm.items.forEach { HydrationSync.food(ctx, "foodAdd", it.copy(id = io.github.michealsizemore1.beyondstride.Food.newId(), meal = dbMeal)) }
                             android.widget.Toast.makeText(ctx, "Added ${sm.name} to ${MEAL_LABEL[dbMeal]}", android.widget.Toast.LENGTH_SHORT).show(); render()
                         })
@@ -198,7 +212,8 @@ class NutritionActivity : Activity() {
                         "saved" -> r; else -> r.sortedByDescending { it.micros[dbSort] ?: 0.0 } }
                     if (r.isEmpty()) list.addView(RunUi.text(ctx, if (favs.isEmpty() && healthy.isEmpty()) "Your Command Center food database shows here once it's been opened there." else "No match.", RunUi.MUTED, 12f).apply { setPadding(0, dp(8), 0, 0) })
                     r.take(200).forEach { f ->
-                        list.addView(dbRow(f.name, f.servingLabel + " · P ${(f.prot ?: 0.0).toInt()} · C ${(f.carbs ?: 0.0).toInt()} · F ${(f.fat ?: 0.0).toInt()} g", ((f.cal ?: 0.0) * f.servings).toInt()) {
+                        list.addView(dbRow(f.name, f.servingLabel + " · P ${(f.prot ?: 0.0).toInt()} · C ${(f.carbs ?: 0.0).toInt()} · F ${(f.fat ?: 0.0).toInt()} g", ((f.cal ?: 0.0) * f.servings).toInt(),
+                            delete = { FoodLibrary.delete(ctx, dbTab, f.name) }) {
                             FoodUi.confirmAdd(this@NutritionActivity, f, dbMeal) { render() }
                         })
                     }

@@ -25,6 +25,24 @@ object FoodLibrary {
         (0 until a.length()).mapNotNull { a.optJSONObject(it) }.map { Meal(it.optString("name"), it.optString("category"), Food.parseList(it.optJSONArray("items"))) }
     } ?: emptyList()
 
+    /**
+     * Deletes a food or saved meal from your lists: [list] "fav" / "healthy" / "meals" (also in the Command Center),
+     * or "recent" (just hidden from Recent here).
+     */
+    fun delete(ctx: Context, list: String, name: String) {
+        if (list == "recent") {
+            val hid = (p(ctx).getStringSet("hiddenRecent", emptySet()) ?: emptySet()) + name.lowercase().trim()
+            p(ctx).edit().putStringSet("hiddenRecent", hid).apply(); return
+        }
+        val key = if (list == "fav") "favorites" else list
+        val l = lib(ctx); val a = l.optJSONArray(key) ?: return
+        val out = JSONArray(); var removed = false
+        for (i in 0 until a.length()) { val o = a.optJSONObject(i); if (!removed && o?.optString("name") == name) removed = true else out.put(a.get(i)) }
+        l.put(key, out); p(ctx).edit().putString("lib", l.toString()).apply()
+        io.github.michealsizemore1.beyondstride.Hydration.queue(ctx, "libDelete", JSONObject().put("list", list).put("name", name))
+        Thread { HydrationSync.flush(ctx.applicationContext) }.start()
+    }
+
     /** (foods that need enriching, foods with AI estimates) from the Command Center. */
     fun stats(ctx: Context): Pair<Int, Int> = lib(ctx).optJSONObject("stats")?.let { it.optInt("needEnrich") to it.optInt("estimated") } ?: (0 to 0)
 
@@ -58,8 +76,9 @@ object FoodLibrary {
     /** Foods logged in the last 3 weeks, newest first, no repeats (by name). */
     fun recent(ctx: Context, limit: Int = 40): List<Food.Item> {
         val seen = HashSet<String>()
+        val hidden = p(ctx).getStringSet("hiddenRecent", emptySet()) ?: emptySet()
         return NutritionStore.days(ctx).sortedByDescending { it.date }.flatMap { it.foods.reversed() }
-            .filter { it.name.isNotBlank() && seen.add(it.name.lowercase().trim()) }.take(limit)
+            .filter { it.name.isNotBlank() && it.name.lowercase().trim() !in hidden && seen.add(it.name.lowercase().trim()) }.take(limit)
     }
 
     /** Reads the Command Center's food database (every 10 minutes at most). Call off the main thread. */
