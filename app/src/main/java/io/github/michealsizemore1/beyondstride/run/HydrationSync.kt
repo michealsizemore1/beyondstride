@@ -20,7 +20,7 @@ object HydrationSync {
         synchronized(Hydration) {
             val days = NutritionStore.days(app)
             Hydration.record(app, days.lastOrNull { it.date == date }, date, f, delta, value)
-            NutritionStore.save(app, Hydration.overlay(app, days))
+            NutritionStore.save(app, CalorieTargets.apply(app, Hydration.overlay(app, days)))
         }
         Thread { flush(app) }.start()
     }
@@ -31,7 +31,7 @@ object HydrationSync {
         synchronized(Hydration) {
             val days = NutritionStore.days(app)
             Hydration.recordFood(app, days.lastOrNull { it.date == date }, date, op, item)
-            NutritionStore.save(app, Hydration.overlay(app, days))
+            NutritionStore.save(app, CalorieTargets.apply(app, Hydration.overlay(app, days)))
         }
         Thread { flush(app) }.start()
     }

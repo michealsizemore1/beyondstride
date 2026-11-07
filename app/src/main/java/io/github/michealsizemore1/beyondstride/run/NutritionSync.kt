@@ -55,8 +55,8 @@ object NutritionSync {
                 io.github.michealsizemore1.beyondstride.Hydration.overlay(ctx, Nutrition.parse(body)) }
             val before = Nutrition.json(NutritionStore.days(ctx))
             sp.edit().putString("err", "").apply()
-            NutritionStore.save(ctx, days)
             FoodLibrary.refresh(ctx)
+            NutritionStore.save(ctx, CalorieTargets.apply(ctx, days))
             FoodLibrary.quickToWatch(ctx)
             FoodLibrary.libraryToWatch(ctx)
             Nutrition.json(days.takeLast(21)) != before

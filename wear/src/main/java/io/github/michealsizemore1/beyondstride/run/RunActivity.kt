@@ -1501,6 +1501,35 @@ class RunActivity : Activity() {
             layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(6) }
             setOnClickListener { quickMeal = defaultMeal(); quickQuery = ""; quickOnline = null; showQuickAdd() }
         })
+        // DAILY CALORIE TARGET — same as the phone; tap Goal or Replace to change (saved on the phone and the Command Center).
+        run {
+            val CT = io.github.michealsizemore1.beyondstride.CalorieTarget
+            val c = io.github.michealsizemore1.beyondstride.NutritionStore.calc(this)
+            if (c.has("target")) box {
+                val st = CT.Settings.from(c.optJSONObject("settings"))
+                addView(label("CALORIE TARGET", C.ACCENT, 11f, true))
+                addView(label("${CT.kcal(c.optInt("target"))} kcal", 0xFF5FD38D.toInt(), 18f, true))
+                addView(label("Range ${CT.kcal(maxOf(1200, c.optInt("target") - c.optInt("range")))}–${CT.kcal(c.optInt("target") + c.optInt("range"))}", C.MUTED, 9f))
+                c.optString("preset").takeIf { it.isNotEmpty() }?.let { addView(label(it, 0xFF93C5FD.toInt(), 9f, true)) }
+                addView(label("${CT.kcal(c.optInt("base"))} rest + ${CT.kcal(c.optInt("replace"))} workout" +
+                    c.optInt("goalAdjust").let { g -> if (g != 0) (if (g > 0) " + " else " − ") + kotlin.math.abs(g) + " goal" else "" }, Color.WHITE, 9f))
+                t?.takeIf { it.count > 0 }?.let { d -> addView(label("Logged ${CT.kcal(d.cal)} · " + if (d.cal > c.optInt("target")) "over ${CT.kcal(d.cal - c.optInt("target"))}" else "${CT.kcal(c.optInt("target") - d.cal)} left", C.MUTED, 9f)) }
+                fun send(s: CT.Settings) {
+                    RunSync.tellPhone(this@RunActivity, "/cmd/calset", s.json().toString().toByteArray()) { ok -> flash(if (ok) "Saved — updating…" else "Phone not connected") }
+                }
+                addView(LinearLayout(this@RunActivity).apply {
+                    orientation = LinearLayout.HORIZONTAL; setPadding(0, dp(5), 0, 0)
+                    addView(label((CT.GOALS.firstOrNull { it.first == st.goal }?.second ?: "Maintain").replace(" weight", ""), Color.WHITE, 10f, true).apply {
+                        background = rounded(0xFF26302C.toInt(), 12); setPadding(0, dp(4), 0, dp(4))
+                        setOnClickListener { val i = CT.GOALS.indexOfFirst { it.first == st.goal }; send(st.copy(goal = CT.GOALS[(i + 1) % CT.GOALS.size].first)) }
+                    }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f).apply { marginEnd = dp(4) })
+                    addView(label("Replace ${st.refuel}%", Color.WHITE, 10f, true).apply {
+                        background = rounded(0xFF26302C.toInt(), 12); setPadding(0, dp(4), 0, dp(4))
+                        setOnClickListener { val i = CT.REFUELS.indexOf(st.refuel); send(st.copy(refuel = CT.REFUELS[(i + 1) % CT.REFUELS.size])) }
+                    }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
+                })
+            }
+        }
         // Same tools as the phone (the photo and AI ones need the phone's camera / key).
         col.addView(LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL

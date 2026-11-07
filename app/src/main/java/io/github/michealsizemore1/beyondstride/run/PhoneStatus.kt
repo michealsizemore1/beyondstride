@@ -75,6 +75,7 @@ object PhoneStatus {
             // Watch finished a morning check: send last night's sleep (needs background access to Health Connect).
             "/cmd/fluid" -> HydrationSync.fromWatch(ctx, data)
             "/cmd/food" -> HydrationSync.foodFromWatch(ctx, data)
+            "/cmd/calset" -> try { CalorieTargets.set(ctx, io.github.michealsizemore1.beyondstride.CalorieTarget.Settings.from(org.json.JSONObject(String(data)))) } catch (e: Exception) { }
             // AI food search asked from the watch: run it here (the key stays on the phone) and send the results back.
             "/cmd/aifood" -> Thread {
                 val app = ctx.applicationContext

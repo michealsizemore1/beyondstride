@@ -24,7 +24,7 @@ object NutritionStore {
         Thread {
             try {
                 val req = PutDataMapRequest.create(PATH).apply {
-                    dataMap.putString("json", json); dataMap.putString("quick", p(ctx).getString("quick", "[]") ?: "[]"); dataMap.putLong("at", System.currentTimeMillis()) }
+                    dataMap.putString("json", json); dataMap.putString("quick", p(ctx).getString("quick", "[]") ?: "[]"); dataMap.putString("calc", p(ctx).getString("calc", "{}") ?: "{}"); dataMap.putLong("at", System.currentTimeMillis()) }
                     .asPutDataRequest().setUrgent()
                 Tasks.await(Wearable.getDataClient(app).putDataItem(req))
             } catch (e: Exception) { }
@@ -38,7 +38,7 @@ object NutritionStore {
     /** Watch: data from the phone. */
     fun apply(ctx: Context, m: DataMap) {
         val s = m.getString("json") ?: return
-        p(ctx).edit().putString("days", s).putString("quick", m.getString("quick") ?: "[]").putLong("at", System.currentTimeMillis()).apply()
+        p(ctx).edit().putString("days", s).putString("quick", m.getString("quick") ?: "[]").putString("calc", m.getString("calc") ?: "{}").putLong("at", System.currentTimeMillis()).apply()
     }
 
     /** Phone: the watch's Quick add list (sent with the next save). */
@@ -63,6 +63,10 @@ object NutritionStore {
     /** Watch: the food database from the phone. */
     fun applyLibrary(ctx: Context, m: DataMap) { m.getString("json")?.let { p(ctx).edit().putString("lib", it).apply() } }
     fun library(ctx: Context) = try { Food.parseList(org.json.JSONArray(p(ctx).getString("lib", "[]"))) } catch (e: Exception) { emptyList() }
+
+    /** The calorie target's settings and breakdown (phone sets it; sent to the watch with the days). */
+    fun setCalc(ctx: Context, json: String) = p(ctx).edit().putString("calc", json).apply()
+    fun calc(ctx: Context) = try { org.json.JSONObject(p(ctx).getString("calc", "{}")) } catch (e: Exception) { org.json.JSONObject() }
 
     /** Watch: foods for Quick add. */
     fun quick(ctx: Context) = try { Food.parseList(org.json.JSONArray(p(ctx).getString("quick", "[]"))) } catch (e: Exception) { emptyList() }

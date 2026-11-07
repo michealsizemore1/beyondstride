@@ -25,6 +25,21 @@ object FoodLibrary {
         (0 until a.length()).mapNotNull { a.optJSONObject(it) }.map { Meal(it.optString("name"), it.optString("category"), Food.parseList(it.optJSONArray("items"))) }
     } ?: emptyList()
 
+    /** The Command Center's calorie-target settings (shared with the food database). */
+    fun calSettings(ctx: Context): JSONObject? = lib(ctx).optJSONObject("calSettings")
+
+    /** Saves a meal (shown at once; the Command Center adds it to its saved meals). */
+    fun saveMeal(ctx: Context, name: String, category: String, items: List<Food.Item>) {
+        val l = lib(ctx)
+        val meals = l.optJSONArray("meals") ?: JSONArray()
+        val m = JSONObject().put("name", name).put("category", category).put("items", JSONArray().apply { items.forEach { put(Food.toJson(it, withId = false)) } })
+        val out = JSONArray().put(m); for (i in 0 until meals.length()) out.put(meals.get(i))
+        l.put("meals", out)
+        p(ctx).edit().putString("lib", l.toString()).apply()
+        io.github.michealsizemore1.beyondstride.Hydration.queue(ctx, "mealSave", m)
+        Thread { HydrationSync.flush(ctx.applicationContext) }.start()
+    }
+
     /** Your favorites and healthy foods together, no repeats (by name). */
     fun mine(ctx: Context): List<Food.Item> {
         val seen = HashSet<String>()

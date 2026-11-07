@@ -35,6 +35,78 @@ class NutritionActivity : Activity() {
         col.addView(RunUi.section(this, "TODAY"))
         col.addView(RunUi.card(this).apply { NutritionUi.today(this@NutritionActivity, this, withMicros = false, big = true) { render() } })
 
+        // DAILY CALORIE TARGET — same settings and math as the Command Center (settings shared both ways).
+        run {
+            val CT = io.github.michealsizemore1.beyondstride.CalorieTarget
+            val st = CalorieTargets.settings(ctx)
+            val r = CalorieTargets.result(ctx, days)
+            col.addView(RunUi.section(this, "DAILY CALORIE TARGET"))
+            col.addView(RunUi.card(this).apply {
+                addView(RunUi.text(ctx, java.time.LocalDate.now().format(java.time.format.DateTimeFormatter.ofPattern("EEEE, MMMM d, yyyy")), RunUi.MUTED, 12f))
+                // Settings: rest-day target · goal · replace workout calories.
+                addView(LinearLayout(ctx).apply {
+                    orientation = LinearLayout.HORIZONTAL; setPadding(0, dp(8), 0, 0)
+                    addView(LinearLayout(ctx).apply {
+                        orientation = LinearLayout.VERTICAL
+                        addView(RunUi.text(ctx, "Rest-day target", RunUi.MUTED, 11f, true))
+                        addView(android.widget.EditText(ctx).apply {
+                            setText(st.base); hint = "auto (${r.base})"; setTextColor(Color.WHITE); setHintTextColor(RunUi.DIM); textSize = 16f
+                            inputType = android.text.InputType.TYPE_CLASS_NUMBER; setSingleLine()
+                            background = RunUi.rounded(0xFF26302C.toInt(), dp(8).toFloat()); setPadding(dp(10), dp(8), dp(10), dp(8))
+                            imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_DONE
+                            fun commit() { val v = text.toString().trim(); if (v != st.base) { CalorieTargets.set(ctx, st.copy(base = v)); render() } }
+                            setOnEditorActionListener { _, _, _ -> commit(); true }
+                            setOnFocusChangeListener { _, has -> if (!has) commit() }
+                        })
+                    }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f).apply { marginEnd = dp(8) })
+                    addView(LinearLayout(ctx).apply {
+                        orientation = LinearLayout.VERTICAL
+                        addView(RunUi.text(ctx, "Goal", RunUi.MUTED, 11f, true))
+                        addView(RunUi.text(ctx, (CT.GOALS.firstOrNull { it.first == st.goal }?.second ?: "Maintain weight") + "  ▾", Color.WHITE, 15f, true).apply {
+                            background = RunUi.rounded(0xFF26302C.toInt(), dp(8).toFloat()); setPadding(dp(10), dp(9), dp(10), dp(9))
+                            setOnClickListener {
+                                android.app.AlertDialog.Builder(ctx).setTitle("Goal").setItems(CT.GOALS.map { it.second }.toTypedArray()) { _, i ->
+                                    CalorieTargets.set(ctx, st.copy(goal = CT.GOALS[i].first)); render() }.show()
+                            }
+                        })
+                    }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
+                })
+                addView(RunUi.text(ctx, "Replace workout calories", RunUi.MUTED, 11f, true).apply { setPadding(0, dp(8), 0, 0) })
+                addView(RunUi.text(ctx, "${st.refuel}%  ▾", Color.WHITE, 15f, true).apply {
+                    background = RunUi.rounded(0xFF26302C.toInt(), dp(8).toFloat()); setPadding(dp(10), dp(9), dp(10), dp(9))
+                    setOnClickListener {
+                        android.app.AlertDialog.Builder(ctx).setTitle("Replace workout calories").setItems(CT.REFUELS.map { "$it%" }.toTypedArray()) { _, i ->
+                            CalorieTargets.set(ctx, st.copy(refuel = CT.REFUELS[i])); render() }.show()
+                    }
+                })
+                // Result.
+                addView(LinearLayout(ctx).apply {
+                    orientation = LinearLayout.VERTICAL; background = RunUi.rounded(0xFF26302C.toInt(), dp(12).toFloat())
+                    setPadding(dp(12), dp(10), dp(12), dp(10))
+                    layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(10) }
+                    addView(RunUi.text(ctx, "${CT.kcal(r.target)} kcal  suggested intake", 0xFF5FD38D.toInt(), 20f, true))
+                    r.preset?.let { pr ->
+                        addView(RunUi.text(ctx, pr.label, 0xFF93C5FD.toInt(), 12f, true).apply { setPadding(0, dp(4), 0, 0) })
+                        addView(RunUi.text(ctx, "Hard-workout fueling is on. The goal adjustment is paused for this day.", RunUi.MUTED, 11f))
+                    }
+                    fun line(b: String, t: String, c: Int = Color.WHITE) = addView(RunUi.text(ctx, "$b $t", c, 13f).apply { setPadding(0, dp(3), 0, 0) })
+                    line("Practical range:", "${CT.kcal(maxOf(1200, r.target - r.range))}–${CT.kcal(r.target + r.range)} kcal")
+                    line("Calculation:", (r.preset?.let { "Higher of ${CT.kcal(it.calories)} performance target or " } ?: "") +
+                        "${CT.kcal(r.base)} rest-day target + ${CT.kcal(Math.round(r.active * r.refuel).toInt())} workout replacement" +
+                        (if (r.goalAdjust != 0) (if (r.goalAdjust > 0) " + " else " − ") + "${kotlin.math.abs(r.goalAdjust)} goal adjustment" else ""))
+                    line("Activities:", if (r.activities.isEmpty() && r.otherActive == 0) "No workout yet · 0 active kcal"
+                        else "${r.activities.size} run${if (r.activities.size == 1) "" else "s"} · ${CT.kcal(r.active)} active kcal")
+                    if (r.activities.isNotEmpty()) line("Used:", r.activities.joinToString("; ") { String.format(Locale.US, "%s (%.2f mi · %s · %s kcal)", it.name, it.miles, it.duration, CT.kcal(it.kcal)) }, 0xFFB5D99C.toInt())
+                    if (r.otherActive > 0) line("Command Center:", "+${CT.kcal(r.otherActive)} kcal from other activities logged there", 0xFFB5D99C.toInt())
+                    val logged = t?.cal ?: 0
+                    line("Logged so far:", "${CT.kcal(logged)} kcal · " + if (logged > r.target) "Over target: ${CT.kcal(logged - r.target)} kcal" else "Remaining: ${CT.kcal(r.target - logged)} kcal",
+                        if (logged > r.target) 0xFFFF8A80.toInt() else Color.WHITE)
+                    if (!r.manualBase && r.weight > 0) addView(RunUi.text(ctx, "Automatic rest-day target uses your most recent weight of ${String.format(Locale.US, "%.1f", r.weight)} lb.", RunUi.DIM, 11f).apply { setPadding(0, dp(4), 0, 0) })
+                })
+                addView(RunUi.text(ctx, "Estimate only. It uses your runs and current weight when available; medical conditions and individual metabolism can change your needs.", RunUi.DIM, 11f).apply { setPadding(0, dp(6), 0, 0) })
+            })
+        }
+
         // Tools — the Command Center's six buttons, same colors.
         run {
             fun add(action: String) = startActivity(android.content.Intent(ctx, FoodAddActivity::class.java).putExtra("meal", FoodUi.mealNow()).putExtra("action", action))
@@ -81,6 +153,10 @@ class NutritionActivity : Activity() {
                     setPadding(0, if (idx == 0) 0 else dp(10), 0, dp(2))
                     addView(RunUi.text(ctx, N.MEAL_NAMES[m] ?: m.replaceFirstChar { it.uppercase() }, Color.WHITE, 15f, true), LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
                     if (mine.isNotEmpty()) addView(RunUi.text(ctx, "${N.kcal(mine.sumOf { it.kcal })} kcal  ", RunUi.ACCENT, 14f, true))
+                    if (mine.isNotEmpty()) addView(RunUi.text(ctx, "💾", Color.WHITE, 15f).apply {
+                        background = RunUi.rounded(0xFF26302C.toInt(), dp(10).toFloat()); setPadding(dp(8), dp(3), dp(8), dp(3))
+                        setOnClickListener { saveMealDialog(m, mine) }
+                    }, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { marginEnd = dp(6) })
                     addView(RunUi.text(ctx, "＋ Add", Color.BLACK, 12f, true).apply {
                         background = RunUi.rounded(RunUi.ACCENT, dp(12).toFloat()); setPadding(dp(10), dp(4), dp(10), dp(4))
                         setOnClickListener { startActivity(android.content.Intent(ctx, FoodAddActivity::class.java).putExtra("meal", m)) }
@@ -165,5 +241,22 @@ class NutritionActivity : Activity() {
             setBackgroundColor(RunUi.BG)
             addView(col, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
         }, RunUi.TAB_NUTRITION))
+    }
+
+    /** 💾 Save this meal's foods as a saved meal (also added to the Command Center's saved meals). */
+    private fun saveMealDialog(meal: String, items: List<io.github.michealsizemore1.beyondstride.Food.Item>) {
+        val ctx = this
+        val name = android.widget.EditText(this).apply {
+            setText((Nutrition.MEAL_NAMES[meal] ?: meal) + " " + java.time.LocalDate.now().format(java.time.format.DateTimeFormatter.ofPattern("MMM d")))
+            setSelectAllOnFocus(true); setSingleLine()
+        }
+        val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(RunUi.dp(ctx, 22), RunUi.dp(ctx, 8), RunUi.dp(ctx, 22), 0)
+            addView(name); addView(RunUi.text(ctx, items.joinToString("\n") { "• ${it.name}" }, RunUi.MUTED, 12f).apply { setPadding(0, RunUi.dp(ctx, 6), 0, 0) }) }
+        android.app.AlertDialog.Builder(this).setTitle("Save meal").setView(box)
+            .setPositiveButton("Save") { _, _ ->
+                val n = name.text.toString().trim().ifEmpty { Nutrition.MEAL_NAMES[meal] ?: meal }
+                FoodLibrary.saveMeal(ctx, n, meal, items)
+                android.widget.Toast.makeText(ctx, "Saved “$n” — in Add food → Saved meals", android.widget.Toast.LENGTH_SHORT).show()
+            }.setNegativeButton("Cancel", null).show()
     }
 }
