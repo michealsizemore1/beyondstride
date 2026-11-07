@@ -125,33 +125,6 @@ object NutritionUi {
                 }
             })
         }
-        if (nd.foods.isNotEmpty()) {
-            // ▸ Meal Macro Distribution: grams of protein / carbs / fat per meal.
-            fold(act, col, "Meal Macro Distribution") { box ->
-                listOf("breakfast" to "Breakfast", "lunch" to "Lunch", "dinner" to "Dinner", "snack" to "Snacks", "liquids" to "Liquids", "sports" to "Sports", "supplements" to "Supplements").forEach { (m, name) ->
-                    val fs = nd.foods.filter { it.meal == m }
-                    box.addView(LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; setPadding(0, dp(3), 0, dp(3))
-                        addView(RunUi.text(ctx, name, Color.WHITE, 13f, true), LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
-                        addView(RunUi.text(ctx, "${Math.round(fs.sumOf { it.total(it.prot) })}g P · ${Math.round(fs.sumOf { it.total(it.carbs) })}g C · ${Math.round(fs.sumOf { it.total(it.fat) })}g F", RunUi.MUTED, 12f)) })
-                }
-            }
-            // ▸ Macro sources: share of each macro from runner-supportive vs limit foods (classified from names / ingredients).
-            fold(act, col, "Macro Sources") { box ->
-                val F = io.github.michealsizemore1.beyondstride.Food
-                val inf = nd.foods.map { F.inferSources(it) }
-                fun mix(name: String, color: Int, grams: (io.github.michealsizemore1.beyondstride.Food.Item) -> Double, src: (io.github.michealsizemore1.beyondstride.Food.Item) -> String) {
-                    var su = 0.0; var li = 0.0; var un = 0.0
-                    inf.forEach { f -> val g = grams(f); if (g <= 0) return@forEach; when (src(f)) { "support" -> su += g; "limit" -> li += g; else -> un += g } }
-                    val t = su + li + un
-                    box.addView(RunUi.text(ctx, name, color, 13f, true).apply { setPadding(0, dp(6), 0, 0) })
-                    box.addView(RunUi.text(ctx, if (t <= 0) "—" else String.format(Locale.US, "Support %.1f%% · Limit %.1f%% · Unknown %.1f%%", su / t * 100, li / t * 100, un / t * 100), RunUi.MUTED, 12f))
-                }
-                mix("● Protein", 0xFFF87171.toInt(), { it.total(it.prot) }, { it.proteinSource })
-                mix("● Carbs", 0xFFFBBF24.toInt(), { it.total(it.carbs) }, { it.carbSource })
-                mix("● Fat", 0xFF60A5FA.toInt(), { it.total(it.fat) }, { it.fatSource })
-                box.addView(RunUi.text(ctx, "ⓘ Source mix is not a medical “good/bad” score. Simple carbohydrates can be useful around training. Foods are classified automatically from their names and available ingredient information; tap a food in a meal to correct mixed or unusual foods.", RunUi.DIM, 11f).apply { setPadding(0, dp(8), 0, 0) })
-            }
-        }
         if (nd.micros.isNotEmpty()) {
             qualityBar(act, col, "Top 7 micronutrient quality", nd.microScore, nd.microLabel(), microNote(nd))
             micros(act, col, nd, header = false)
