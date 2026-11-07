@@ -1444,7 +1444,23 @@ class RunActivity : Activity() {
             addView(label("Avg ${N.kcal(week.map { it.cal }.average().toInt())} kcal" + (if (withT.isNotEmpty()) " · target ${N.kcal(withT.map { it.target }.average().toInt())}" else ""), Color.WHITE, 10f))
             addView(label("P ${week.map { it.prot }.average().toInt()} · C ${week.map { it.carbs }.average().toInt()} · F ${week.map { it.fat }.average().toInt()} g a day", C.MUTED, 9f))
         }
-        col.addView(label("Log food in the Command Center on the phone.", C.DIM, 9f).apply { setPadding(0, dp(8), 0, 0) })
+        // THIS WEEK: the same three charts as the phone (Mon–Sun).
+        run {
+            val W = io.github.michealsizemore1.beyondstride.WeekChart
+            val byDate = days.associateBy { it.date }
+            val dates = W.weekDates()
+            fun chart(title: String, color: Int, unit: String, v: (io.github.michealsizemore1.beyondstride.Nutrition.Day) -> Double) = box {
+                val vals = dates.map { dt -> byDate[dt]?.let(v)?.takeIf { it > 0 } }
+                addView(label(title, C.ACCENT, 10f, true))
+                addView(W(this@RunActivity, vals, color, small = true), LinearLayout.LayoutParams(MATCH_PARENT, dp(90)))
+                addView(label(W.summary(vals, unit).replace(" weekly average", " avg"), C.MUTED, 8f))
+            }
+            col.addView(label("THIS WEEK", C.ACCENT, 11f, true).apply { setPadding(0, dp(8), 0, 0) })
+            chart("Calories", 0xFFF39C12.toInt(), "") { if (it.count > 0) it.cal.toDouble() else 0.0 }
+            chart("Water", 0xFF3498DB.toInt(), " oz") { (if (it.water + it.sportsOz + it.otherOz > 0) it.water else it.waterOz).toDouble() }
+            chart("Total liquids (excl. caffeine)", 0xFF16A085.toInt(), " oz") { it.waterOz.toDouble() }
+        }
+        col.addView(label("Food logged on the phone or here shows in the Command Center too.", C.DIM, 9f).apply { setPadding(0, dp(8), 0, 0) })
         col.addView(View(this).apply { setBackgroundColor(0x22FFFFFF) }, LinearLayout.LayoutParams(MATCH_PARENT, dp(1)).apply { topMargin = dp(10) })
         col.addView(menuRow(2))
         root.removeAllViews()

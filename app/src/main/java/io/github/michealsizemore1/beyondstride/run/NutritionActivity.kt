@@ -109,6 +109,27 @@ class NutritionActivity : Activity() {
             })
         }
 
+        // THIS WEEK: the Command Center's three charts (Mon–Sun).
+        run {
+            val W = io.github.michealsizemore1.beyondstride.WeekChart
+            val byDate = days.associateBy { it.date }
+            val dates = W.weekDates()
+            fun chart(title: String, help: String?, color: Int, unit: String, v: (Nutrition.Day) -> Double) {
+                val vals = dates.map { dt -> byDate[dt]?.let(v)?.takeIf { it > 0 } }
+                col.addView(RunUi.card(this).apply {
+                    addView(RunUi.text(ctx, "$title — This week", RunUi.ACCENT, 14f, true))
+                    help?.let { addView(RunUi.text(ctx, it, RunUi.MUTED, 11f).apply { setPadding(0, dp(2), 0, dp(4)) }) }
+                    addView(io.github.michealsizemore1.beyondstride.WeekChart(ctx, vals, color), LinearLayout.LayoutParams(MATCH_PARENT, dp(190)))
+                    addView(RunUi.text(ctx, W.summary(vals, unit), RunUi.MUTED, 12f).apply { gravity = Gravity.CENTER; setPadding(0, dp(6), 0, 0) })
+                }.also { it.layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(10) } })
+            }
+            col.addView(RunUi.section(this, "THIS WEEK"))
+            chart("Calories", null, 0xFFF39C12.toInt(), "") { it.cal.toDouble().takeIf { _ -> it.count > 0 } ?: 0.0 }
+            chart("Water", null, 0xFF3498DB.toInt(), " oz") { (if (it.water + it.sportsOz + it.otherOz > 0) it.water else it.waterOz).toDouble() }
+            chart("Total liquids (excl. caffeine)", "Water + sports drinks + other drinks, minus coffee, energy drinks and black/green tea. GU drink mix still counts.",
+                0xFF16A085.toInt(), " oz") { it.waterOz.toDouble() }
+        }
+
         // The Command Center's own Nutrition page (AI search, label scan, food database) — still there too.
         col.addView(RunUi.button(this, "Open Nutrition in the Command Center", RunUi.CARD, Color.WHITE) { RunUi.openNutrition(this) }.apply {
             layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(22) }
