@@ -51,9 +51,10 @@ class ActivityEditActivity : Activity() {
         input("date", "Date (YYYY-MM-DD)", "2026-11-07", InputType.TYPE_CLASS_DATETIME or InputType.TYPE_DATETIME_VARIATION_DATE, v("date").ifEmpty { java.time.LocalDate.now().toString() })
         label("Type")
         val types = listOf("Run", "Ride", "Walk", "Swim", "Strength", "Rest Day", "Other")
-        col.addView(RunUi.text(this, "$type  ▾", Color.WHITE, 15f).apply {
+        val typeView = RunUi.text(this, "$type  ▾", Color.WHITE, 15f)
+        col.addView(typeView.apply {
             background = RunUi.rounded(RunUi.CARD, dp(8).toFloat()); setPadding(dp(12), dp(10), dp(12), dp(10))
-            setOnClickListener { android.app.AlertDialog.Builder(ctx).setTitle("Type").setSingleChoiceItems(types.toTypedArray(), types.indexOf(type)) { d, i -> type = types[i]; text = "$type  ▾"; d.dismiss() }.show() }
+            setOnClickListener { android.app.AlertDialog.Builder(ctx).setTitle("Type").setSingleChoiceItems(types.toTypedArray(), types.indexOf(type)) { d, i -> type = types[i]; typeView.text = "$type  ▾"; d.dismiss() }.show() }
         })
         input("title", "Title / Name", "e.g. Morning Run", text, v("title"))
         input("distance", "Distance (miles)", "0.0", num, v("distance"))
@@ -72,9 +73,10 @@ class ActivityEditActivity : Activity() {
         input("routeUrl", "Run Map / Route Link", "Garmin, Strava, Google Maps, etc.", InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI, v("routeUrl"))
         label("Source")
         val sources = (listOf("watch") + (if (source != "watch") listOf(source) else emptyList()))
-        col.addView(RunUi.text(this, S.sourceLabel(source) + "  ▾", Color.WHITE, 15f).apply {
+        val srcView = RunUi.text(this, S.sourceLabel(source) + "  ▾", Color.WHITE, 15f)
+        col.addView(srcView.apply {
             background = RunUi.rounded(RunUi.CARD, dp(8).toFloat()); setPadding(dp(12), dp(10), dp(12), dp(10))
-            setOnClickListener { android.app.AlertDialog.Builder(ctx).setTitle("Source").setSingleChoiceItems(sources.map { S.sourceLabel(it) }.toTypedArray(), sources.indexOf(source)) { d, i -> source = sources[i]; text = S.sourceLabel(source) + "  ▾"; d.dismiss() }.show() }
+            setOnClickListener { android.app.AlertDialog.Builder(ctx).setTitle("Source").setSingleChoiceItems(sources.map { S.sourceLabel(it) }.toTypedArray(), sources.indexOf(source)) { d, i -> source = sources[i]; srcView.text = S.sourceLabel(source) + "  ▾"; d.dismiss() }.show() }
         })
         input("notes", "Notes", "Any notes...", text or InputType.TYPE_TEXT_FLAG_MULTI_LINE, v("notes"))
         input("injuryReport", "Injury Report", "Pain, soreness, location, severity, or changes during the workout...", text or InputType.TYPE_TEXT_FLAG_MULTI_LINE, v("injuryReport"))
