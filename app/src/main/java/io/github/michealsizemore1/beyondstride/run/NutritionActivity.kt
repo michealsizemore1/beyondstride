@@ -49,12 +49,10 @@ class NutritionActivity : Activity() {
         col.addView(RunUi.section(this, "FOOD LOG"))
         // Food log tools — the Command Center's six buttons, same colors and place (above the meals).
         run {
-            fun add(action: String) = startActivity(android.content.Intent(ctx, FoodAddActivity::class.java).putExtra("meal", FoodUi.mealNow()).putExtra("action", action))
             fun tools(mode: String) = startActivity(android.content.Intent(ctx, NutritionToolsActivity::class.java).putExtra("mode", mode))
             val tiles = listOf(
-                Triple("📷 Camera", 0xFFE67E22.toInt()) { add("camera") }, Triple("🖼 Upload", 0xFFC0640F.toInt()) { add("upload") },
-                Triple("▥ Barcode", 0xFF0F766E.toInt()) { add("barcode") }, Triple("🥗 Meal Ideas", 0xFF059669.toInt()) { tools("ideas") },
-                Triple("🧠 Fuel AI", 0xFF8E44AD.toInt()) { tools("fuel") }, Triple("📅 Copy Day", 0xFF16A085.toInt()) { FoodUi.copyDay(this@NutritionActivity) { render() } },
+                Triple("🥗 Meal Ideas", 0xFF059669.toInt()) { tools("ideas") }, Triple("🧠 Fuel AI", 0xFF8E44AD.toInt()) { tools("fuel") },
+                Triple("📅 Copy Day", 0xFF16A085.toInt()) { FoodUi.copyDay(this@NutritionActivity) { render() } },
             )
             tiles.chunked(3).forEach { row ->
                 col.addView(LinearLayout(ctx).apply {
@@ -68,7 +66,7 @@ class NutritionActivity : Activity() {
                     }
                 })
             }
-            col.addView(RunUi.text(ctx, "Camera and Upload read a nutrition label; Camera, Upload and Fuel AI use your Anthropic key.", RunUi.DIM, 10f).apply { setPadding(dp(2), dp(4), 0, 0) })
+            col.addView(RunUi.text(ctx, "To add a food — search, barcode, label photo, AI or manual — tap ＋ Add on the meal.", RunUi.DIM, 10f).apply { setPadding(dp(2), dp(4), 0, 0) })
         }
 
         col.addView(android.view.View(ctx), LinearLayout.LayoutParams(MATCH_PARENT, dp(6)))

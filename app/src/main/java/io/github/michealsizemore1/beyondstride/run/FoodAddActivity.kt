@@ -73,21 +73,17 @@ class FoodAddActivity : Activity() {
         }
         col.addView(search, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(8) })
 
-        // Scan · Manual · Online.
-        col.addView(LinearLayout(this).apply {
+        // Every way to add one food: Barcode · Label photo · Manual, then AI search · Online.
+        fun btnRow(vararg b: Triple<String, Int, () -> Unit>) = col.addView(LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL; setPadding(0, dp(8), 0, 0)
-            fun btn(t: String, go: () -> Unit) = addView(RunUi.button(ctx, t, RunUi.CARD, Color.WHITE, go), LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f).apply { marginEnd = dp(6) })
-            btn("📷 Barcode") { scan() }
-            btn("🔎 Online") { searchOnline() }
-            btn("✎ Manual") { FoodUi.manual(this@FoodAddActivity, meal) { } }
+            b.forEachIndexed { i, (t, c, go) ->
+                addView(RunUi.button(ctx, t, c, Color.WHITE, go).apply { maxLines = 1 },
+                    LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f).apply { if (i < b.size - 1) marginEnd = dp(6) })
+            }
         })
-        // AI (your Anthropic key, set in Settings → AI food search).
-        col.addView(LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL; setPadding(0, dp(6), 0, 0)
-            fun btn(t: String, go: () -> Unit) = addView(RunUi.button(ctx, t, 0xFF3B3172.toInt(), Color.WHITE, go), LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f).apply { marginEnd = dp(6) })
-            btn("✨ AI search") { aiSearch() }
-            btn("🏷 Label photo") { labelPhoto() }
-        })
+        btnRow(Triple("▥ Barcode", 0xFF0F766E.toInt()) { scan() }, Triple("🏷 Label photo", 0xFFC0640F.toInt()) { labelPhoto() },
+            Triple("✎ Manual", RunUi.CARD) { FoodUi.manual(this@FoodAddActivity, meal) { } })
+        btnRow(Triple("✨ AI search", 0xFF3B3172.toInt()) { aiSearch() }, Triple("🔎 Online", RunUi.CARD) { searchOnline() })
 
         // Tabs: Recent · My foods · Meals.
         col.addView(LinearLayout(this).apply {
