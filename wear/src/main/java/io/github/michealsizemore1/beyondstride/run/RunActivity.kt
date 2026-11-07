@@ -1214,6 +1214,15 @@ class RunActivity : Activity() {
                 }
             }.start()
         })
+        // Resting heart rate trend (sleeping HR, last 7 nights vs the week before).
+        io.github.michealsizemore1.beyondstride.Readiness.rhrTrend(io.github.michealsizemore1.beyondstride.ReadinessSync.nights(this))?.let { tr ->
+            col.addView(card().apply {
+                addView(head("RESTING HR"))
+                addView(label(String.format(java.util.Locale.US, "%.1f bpm", tr.recent) +
+                    (tr.change?.let { String.format(java.util.Locale.US, " · %s%.1f", if (it > 0) "+" else "", it) } ?: ""), Color.WHITE, 15f, true))
+                addView(label(tr.note, tr.color, 10f))
+            })
+        }
         // Zone 2, decoupling, CP, personal bests.
         col.addView(card().apply {
             visibility = View.GONE

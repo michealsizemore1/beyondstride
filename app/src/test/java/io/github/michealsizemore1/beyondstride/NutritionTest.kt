@@ -24,3 +24,15 @@ class NutritionTest {
 
     @Test fun emptyIsSafe() { assertEquals(0, Nutrition.parse("null").size) }
 }
+
+class RhrTrendTest {
+    private fun nights(vararg hr: Int) = hr.mapIndexed { i, h -> Readiness.Night(java.time.LocalDate.parse("2026-11-06").minusDays((hr.size - 1 - i).toLong()).toString(), 400, h) }
+    @Test fun downIsGood() {
+        val t = Readiness.rhrTrend(nights(46, 46, 45, 46, 45, 46, 45, 43, 43, 42, 43, 42, 43, 42), "2026-11-06")!!
+        org.junit.Assert.assertTrue(t.change!! < -1); org.junit.Assert.assertEquals(Readiness.GREEN, t.color)
+    }
+    @Test fun spikeWarns() {
+        val t = Readiness.rhrTrend(nights(42, 43, 42, 43, 42, 43, 50), "2026-11-06")!!
+        org.junit.Assert.assertEquals(Readiness.RED, t.color)
+    }
+}

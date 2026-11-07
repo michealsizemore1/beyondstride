@@ -237,6 +237,29 @@ object Readiness {
         return Math.round(l.map { it.sleepHr }.average() * 2) / 2.0 to l.size
     }
 
+    /**
+     * Resting-HR trend from sleeping heart rate: the last 7 nights' average vs the 7 before that.
+     * Returns (recent avg, change vs before or null, message) or null with fewer than 3 nights.
+     */
+    data class RhrTrend(val recent: Double, val change: Double?, val note: String, val color: Int)
+    fun rhrTrend(nights: List<Night>, today: String = today()): RhrTrend? {
+        val l = nights.filter { it.sleepHr > 0 && daysBetween(it.day, today) in 0..29 }.sortedBy { it.day }
+        if (l.size < 3) return null
+        val recent = l.takeLast(7).map { it.sleepHr }.average()
+        val before = l.dropLast(7).takeLast(7).map { it.sleepHr }.takeIf { it.size >= 3 }?.average()
+        val last = l.last()
+        val spike = last.sleepHr - recent >= 5
+        val ch = before?.let { recent - it }
+        return when {
+            spike -> RhrTrend(recent, ch, "Last night ${last.sleepHr} bpm — ${(last.sleepHr - recent).roundToInt()} above your week. Watch for fatigue or illness; keep today easy.", RED)
+            ch == null -> RhrTrend(recent, null, "Building a trend — a second week of nights shows the direction.", Color0)
+            ch <= -1.0 -> RhrTrend(recent, ch, "Trending down — a sign of improving aerobic fitness.", GREEN)
+            ch >= 2.0 -> RhrTrend(recent, ch, "Trending up — could be fatigue, stress, heat, alcohol or a cold coming on.", YELLOW)
+            else -> RhrTrend(recent, ch, "Steady.", GREEN)
+        }
+    }
+    private const val Color0 = 0xFFE8EEEB.toInt()
+
     fun daysBetween(a: String, b: String): Long = try {
         java.time.temporal.ChronoUnit.DAYS.between(java.time.LocalDate.parse(a), java.time.LocalDate.parse(b))
     } catch (e: Exception) { 999 }

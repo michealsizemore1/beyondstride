@@ -83,6 +83,45 @@ class FitnessActivity : Activity() {
                     if (latestPb != null) 0xFFF2C94C.toInt() else Color.WHITE, openFit),
             ))
         }
+        // Resting heart rate: sleeping HR each night (Samsung Health), last 30 nights.
+        run {
+            val R = io.github.michealsizemore1.beyondstride.Readiness
+            val nights = io.github.michealsizemore1.beyondstride.ReadinessSync.nights(this)
+                .filter { it.sleepHr > 0 && R.daysBetween(it.day, R.today()) in 0..29 }.sortedBy { it.day }
+            col.addView(RunUi.section(this, "RESTING HEART RATE"))
+            col.addView(RunUi.card(this).apply {
+                if (nights.isEmpty()) addView(RunUi.text(ctx, "Comes from sleeping heart rate in Samsung Health (Readiness → Connect sleep).", RunUi.MUTED, 13f))
+                else {
+                    val tr = R.rhrTrend(nights)
+                    addView(RunUi.text(ctx, String.format(Locale.US, "%.1f bpm", tr?.recent ?: nights.last().sleepHr.toDouble()) + "  7-night average" +
+                        (tr?.change?.let { String.format(Locale.US, "  ·  %s%.1f vs week before", if (it > 0) "+" else "", it) } ?: ""), Color.WHITE, 15f, true))
+                    // Bars: lower is better, so the scale starts a little under your lowest night.
+                    val lo = nights.minOf { it.sleepHr } - 3; val hi = maxOf(nights.maxOf { it.sleepHr }, lo + 6)
+                    addView(LinearLayout(ctx).apply {
+                        orientation = LinearLayout.HORIZONTAL; gravity = Gravity.BOTTOM
+                        setPadding(0, dp(8), 0, 0)
+                        nights.forEach { n ->
+                            addView(LinearLayout(ctx).apply {
+                                orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_HORIZONTAL or Gravity.BOTTOM
+                                val high = tr != null && n.sleepHr - tr.recent >= 5
+                                if (nights.size <= 14) addView(RunUi.text(ctx, "${n.sleepHr}", RunUi.MUTED, 9f).apply { gravity = Gravity.CENTER })
+                                addView(android.view.View(ctx).apply { background = RunUi.rounded(if (high) 0xFFEF4444.toInt() else 0xFFFF6B6B.toInt(), dp(2).toFloat()) },
+                                    LinearLayout.LayoutParams(dp(if (nights.size <= 14) 12 else 6), dp(8 + (n.sleepHr - lo) * 60 / (hi - lo))))
+                            }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
+                        }
+                    })
+                    addView(LinearLayout(ctx).apply {
+                        orientation = LinearLayout.HORIZONTAL
+                        addView(RunUi.text(ctx, nights.first().day.substring(5).replace("-", "/"), RunUi.DIM, 9f), LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
+                        addView(RunUi.text(ctx, nights.last().day.substring(5).replace("-", "/"), RunUi.DIM, 9f))
+                    })
+                    tr?.let { addView(RunUi.text(ctx, it.note, it.color, 13f).apply { setPadding(0, dp(6), 0, 0) }) }
+                    addView(RunUi.text(ctx, "Sleeping heart rate (lowest overnight readings). Your zones use ${RunSettings.hrRest(ctx)} bpm.", RunUi.DIM, 11f).apply { setPadding(0, dp(4), 0, 0) })
+                }
+                setOnClickListener { startActivity(Intent(ctx, ReadinessActivity::class.java)) }
+            })
+        }
+
         // Nutrition: the last 7 days from the Command Center (calories vs target, macros).
         run {
             val N = io.github.michealsizemore1.beyondstride.Nutrition
