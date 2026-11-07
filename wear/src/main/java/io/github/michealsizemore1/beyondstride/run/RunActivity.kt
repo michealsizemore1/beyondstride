@@ -1506,7 +1506,7 @@ class RunActivity : Activity() {
             val CT = io.github.michealsizemore1.beyondstride.CalorieTarget
             val c = io.github.michealsizemore1.beyondstride.NutritionStore.calc(this)
             if (c.has("target")) box {
-                val st = CT.Settings.from(c.optJSONObject("settings"))
+                val st = io.github.michealsizemore1.beyondstride.CalorieTarget.Settings.from(c.optJSONObject("settings"))
                 addView(label("CALORIE TARGET", C.ACCENT, 11f, true))
                 addView(label("${CT.kcal(c.optInt("target"))} kcal", 0xFF5FD38D.toInt(), 18f, true))
                 addView(label("Range ${CT.kcal(maxOf(1200, c.optInt("target") - c.optInt("range")))}–${CT.kcal(c.optInt("target") + c.optInt("range"))}", C.MUTED, 9f))
@@ -1514,7 +1514,7 @@ class RunActivity : Activity() {
                 addView(label("${CT.kcal(c.optInt("base"))} rest + ${CT.kcal(c.optInt("replace"))} workout" +
                     c.optInt("goalAdjust").let { g -> if (g != 0) (if (g > 0) " + " else " − ") + kotlin.math.abs(g) + " goal" else "" }, Color.WHITE, 9f))
                 t?.takeIf { it.count > 0 }?.let { d -> addView(label("Logged ${CT.kcal(d.cal)} · " + if (d.cal > c.optInt("target")) "over ${CT.kcal(d.cal - c.optInt("target"))}" else "${CT.kcal(c.optInt("target") - d.cal)} left", C.MUTED, 9f)) }
-                fun send(s: CT.Settings) {
+                fun send(s: io.github.michealsizemore1.beyondstride.CalorieTarget.Settings) {
                     RunSync.tellPhone(this@RunActivity, "/cmd/calset", s.json().toString().toByteArray()) { ok -> flash(if (ok) "Saved — updating…" else "Phone not connected") }
                 }
                 addView(LinearLayout(this@RunActivity).apply {
