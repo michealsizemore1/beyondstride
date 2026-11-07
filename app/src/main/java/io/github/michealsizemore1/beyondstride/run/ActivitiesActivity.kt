@@ -34,7 +34,7 @@ class ActivitiesActivity : Activity() {
     override fun onResume() {
         io.github.michealsizemore1.beyondstride.Theme.load(this, "runsettings")
         super.onResume(); render()
-        Thread { if (S.refresh(this)) runOnUiThread { if (!isFinishing) render() } }.start()
+        Thread { val a = S.refresh(this); val b = PlanStore.refresh(this); if (a || b) runOnUiThread { if (!isFinishing) render() } }.start()
     }
 
     private fun dp(v: Int) = RunUi.dp(this, v)
@@ -57,8 +57,14 @@ class ActivitiesActivity : Activity() {
         if (S.fetchedAt(this) == 0L) col.addView(txt(if (NutritionSync.ready(this)) "Open the Command Center once (after reloading it) so it can share your Activities." else "Set up LiveTrack first — Activities come through the same database.", 0xFFF2C94C.toInt(), 12f).apply { setPadding(0, dp(6), 0, 0) })
         if (all.isEmpty() && S.status(this).isNotEmpty()) col.addView(txt(S.status(this), RunUi.MUTED, 11f).apply { setPadding(0, dp(4), 0, 0) })
 
-        // Phase 2: mileage summary, training zones, shoe tracker (the Command Center's order, above the log).
+        // The Command Center's order: plans, mileage, zones, shoes, plan upload, today's workout, the log, archived plans.
+        val plans = PlanStore.data(this)
+        planWaiting(col)
+        plans.optJSONObject("current")?.let { planCard(col, it, "current") }
+        plans.optJSONObject("upcoming")?.let { planCard(col, it, "upcoming") }
         mileage(col, all); zones(col); shoes(col)
+        uploadPlan(col)
+        plans.optJSONObject("current")?.let { todayWorkout(col, it, plans.optBoolean("collapsed")) }
         col.addView(RunUi.section(this, "ACTIVITIES LOG"))
 
         // Buttons.
@@ -129,6 +135,7 @@ class ActivitiesActivity : Activity() {
         listBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         col.addView(listBox)
         fill()
+        archived(col, plans.optJSONArray("archived"))
 
         val keepY = scroller?.scrollY ?: 0
         val sv = ScrollView(this).apply { setBackgroundColor(RunUi.BG); addView(col, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT)) }
@@ -618,5 +625,241 @@ class ActivitiesActivity : Activity() {
                     .put("notes", notes.text.toString().trim()).put("retired", sh?.optBoolean("retired") ?: false)
                 S.saveShoe(ctx, o); render()
             }.setNegativeButton("Cancel", null).show()
+    }
+
+    // ══ Phase 3: training plans ══
+    private val PURPLE = 0xFF667EEA.toInt()
+    private fun pbtn(box: android.view.ViewGroup, t: String, bg: Int, fg: Int = Color.WHITE, go: () -> Unit) = box.addView(txt(t, fg, 12f, true).apply {
+        background = RunUi.rounded(bg, dp(6).toFloat()); setPadding(dp(10), dp(6), dp(10), dp(6)); setOnClickListener { go() } })
+    private fun confirm(msg: String, yes: String, go: () -> Unit) = AlertDialog.Builder(this).setMessage(msg).setPositiveButton(yes) { _, _ -> go() }.setNegativeButton("Cancel", null).show()
+    private fun planDo(x: JSONObject, toast: String? = null) {
+        PlanStore.action(this, x); toast?.let { android.widget.Toast.makeText(this, it, android.widget.Toast.LENGTH_LONG).show() }; render()
+    }
+    private fun fmtDate(ds: String, pattern: String = "MMM d, yyyy") = try { java.time.LocalDate.parse(ds).format(java.time.format.DateTimeFormatter.ofPattern(pattern, Locale.US)) } catch (e: Exception) { ds.ifEmpty { "—" } }
+
+    private fun planWaiting(col: LinearLayout) {
+        val n = PlanStore.pending(this).size
+        if (n > 0) col.addView(txt("⏳ $n training-plan change${if (n == 1) "" else "s"} waiting for the Command Center (open its page to apply).", 0xFFF2C94C.toInt(), 12f).apply { setPadding(0, dp(6), 0, 0) })
+    }
+
+    /** "📋 Active Training Plan" / "📅 Upcoming Training Plan" with the Command Center's buttons and the plan text. */
+    private fun planCard(col: LinearLayout, plan: JSONObject, which: String) {
+        val ctx = this
+        val up = which == "upcoming"
+        col.addView(RunUi.card(this).apply {
+            layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(12) }
+            addView(txt(if (up) "📅 Upcoming Training Plan" else "📋 Active Training Plan", 0xFFE67E22.toInt(), 16f, true))
+            addView(FlowLayout(ctx, dp(6), dp(6)).apply {
+                setPadding(0, dp(8), 0, dp(4))
+                pbtn(this, "🪄 Clean Up Formatting", 0xFFD35400.toInt()) { aiPlan(which, plan, null) }
+                pbtn(this, "➕ Add Training Zones", 0xFF16A085.toInt()) { planDo(JSONObject().put("action", "zones").put("which", which), "Adding training zones — the Command Center updates the plan") }
+                pbtn(this, "📅 Add Dates", 0xFF2C3E50.toInt()) { planDo(JSONObject().put("action", "dates").put("which", which), "Adding dates — the Command Center updates the plan") }
+                pbtn(this, "✏ Adjust", PURPLE) { adjustDialog(which, plan) }
+                pbtn(this, "📦 Archive", 0xFF27AE60.toInt()) { confirm("Archive this ${if (up) "upcoming" else "active"} plan?", "Archive") { planDo(JSONObject().put("action", "archive").put("which", which)) } }
+                if (up) pbtn(this, "▶ Make Active Now", 0xFF2980B9.toInt()) {
+                    confirm(if (PlanStore.data(ctx).has("current")) "This will archive your current active plan and make this upcoming plan active now. Continue?" else "Make this plan active now?", "Make Active") { planDo(JSONObject().put("action", "activate")) } }
+                pbtn(this, "⌚ Send to watch", 0xFFD4E635.toInt(), 0xFF121A17.toInt()) { sendToWatch(plan) }
+                pbtn(this, "🗑 Delete", 0xFFE74C3C.toInt()) { confirm("Delete the ${if (up) "upcoming" else "active training"} plan? This cannot be undone.", "Delete") { planDo(JSONObject().put("action", "delete").put("which", which)) } }
+            })
+            if (up && plan.optString("startDate").let { it.isNotEmpty() && it <= java.time.LocalDate.now().toString() })
+                addView(txt("⚠️ This plan was set to start ${fmtDate(plan.optString("startDate"))}, which has passed, but it's still sitting here as Upcoming — your Activities card and Daily calendar won't show any of its workouts until you tap ▶ Make Active Now.",
+                    0xFFFCA5A5.toInt(), 12f, true).apply { background = RunUi.rounded(0xFF3A1E1E.toInt(), dp(8).toFloat()); setPadding(dp(10), dp(8), dp(10), dp(8)) })
+            val meta = ArrayList<String>()
+            plan.optString("type").takeIf { it.isNotEmpty() }?.let { meta += it }
+            plan.optInt("weeks").takeIf { it > 0 }?.let { meta += "$it-week plan" }
+            if (up) meta += "Starts " + fmtDate(plan.optString("startDate"))
+            if (up) plan.optString("createdAt").takeIf { it.isNotEmpty() }?.let { meta += "Saved $it" }
+            else if (plan.optString("createdAt").isNotEmpty()) meta += "Created " + plan.optString("createdAt") else plan.optString("startDate").takeIf { it.isNotEmpty() }?.let { meta += "Start $it" }
+            if (!up) plan.optString("adjustedAt").takeIf { it.isNotEmpty() }?.let { meta += "Adjusted $it" }
+            if (meta.isNotEmpty()) addView(txt(meta.joinToString(" • "), RunUi.MUTED, 12f).apply { setPadding(0, dp(4), 0, dp(6)) })
+            if (plan.optBoolean("hasPdf")) addView(txt("📄 The original PDF can be viewed in the Command Center.", RunUi.DIM, 11f))
+            addView(androidx.core.widget.NestedScrollView(ctx).apply {
+                background = RunUi.rounded(0xFF141A18.toInt(), dp(8).toFloat()); setPadding(dp(10), dp(8), dp(10), dp(8))
+                addView(txt(plan.optString("display").ifEmpty { plan.optString("text") }.ifEmpty { "(No plan text)" }, Color.WHITE, 13f).apply { setTextIsSelectable(true); setLineSpacing(0f, 1.15f) })
+            }, LinearLayout.LayoutParams(MATCH_PARENT, dp(340)).apply { topMargin = dp(4) })
+        })
+    }
+
+    private fun adjustDialog(which: String, plan: JSONObject) {
+        val input = EditText(this).apply { hint = "e.g. I missed this week due to illness, please shift the plan forward one week and adjust the long run schedule accordingly..."; minLines = 4; gravity = Gravity.TOP
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE or android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES }
+        AlertDialog.Builder(this).setTitle("💬 Tell AI how to adjust the plan:").setView(LinearLayout(this).apply { setPadding(dp(20), dp(4), dp(20), 0); addView(input, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT)) })
+            .setPositiveButton("✨ Adjust Plan") { _, _ -> val t = input.text.toString().trim()
+                if (t.isEmpty()) android.widget.Toast.makeText(this, "Please describe how you want to adjust the plan.", android.widget.Toast.LENGTH_SHORT).show() else aiPlan(which, plan, t) }
+            .setNegativeButton("Cancel", null).show()
+    }
+
+    /** Clean Up Formatting ([instruction] null) or Adjust, with the same prompts as the Command Center and your Anthropic key. */
+    private fun aiPlan(which: String, plan: JSONObject, instruction: String?) {
+        val ctx = this
+        if (!AiFood.hasKey(this)) { android.widget.Toast.makeText(this, "Add your Anthropic key in Settings → AI food search first.", android.widget.Toast.LENGTH_LONG).show(); return }
+        val text = plan.optString("text"); if (text.isEmpty()) { android.widget.Toast.makeText(this, "This plan has no text.", android.widget.Toast.LENGTH_SHORT).show(); return }
+        val prompt = if (instruction == null) "You are formatting a training plan for easy reading in a mobile app. Reformat the plan text below into a clean, consistently structured document, following this style:\n\n" +
+            "- A short title line in capitals (e.g. the distance and plan type)\n" +
+            "- A one-line subtitle describing the plan's structure/phases, using · as a separator\n" +
+            "- A full-width separator line of = characters\n" +
+            "- Key stats as their own short labeled lines in capitals (e.g. TARGET PACE, FINISH GOAL, PEAK LONG RUN) directly followed by their values, if the plan includes stats like these\n" +
+            "- The plan start date on its own line\n" +
+            "- A week-by-week schedule, each week starting with a clear \"Week N — Phase\" header, followed by each training day on its own line (e.g. \"Mon: Easy 4 miles\")\n\n" +
+            "Keep ALL of the original plan's real information -- do not invent, remove, or summarize away any detail, workout, note, or number. Only reorganize and reformat for readability. Reply with ONLY the reformatted plan text, no preamble or commentary.\n\n" +
+            "Plan text to reformat:\n\n" + text
+        else "You are a running coach. The athlete has " + (if (which == "upcoming") "an upcoming" else "an active") + " training plan and wants to adjust it.\n\nCURRENT PLAN:\n" + text +
+            "\n\nATHLETE'S REQUEST:\n" + instruction + "\n\nPlease rewrite the training plan incorporating the requested adjustments. Keep the same format and structure as the original plan. Return only the updated plan text."
+        val wait = AlertDialog.Builder(this).setMessage(if (instruction == null) "⏳ Reformatting…" else "⏳ Adjusting…").setCancelable(false).show()
+        Thread {
+            val res = try { Result.success(AiFood.askText(ctx, prompt, if (instruction == null) 6000 else 5000)) } catch (e: Exception) { Result.failure(e) }
+            runOnUiThread {
+                wait.dismiss(); if (isFinishing) return@runOnUiThread
+                res.onSuccess { t -> if (t.isBlank()) android.widget.Toast.makeText(ctx, "The AI did not return any text. Please try again.", android.widget.Toast.LENGTH_LONG).show()
+                    else planDo(JSONObject().put("action", "setText").put("which", which).put("text", t).put("adjusted", instruction != null).put("rebuild", instruction == null),
+                        if (instruction == null) "Plan reformatted." else "Plan adjusted.") }
+                    .onFailure { android.widget.Toast.makeText(ctx, "AI error: ${it.message}", android.widget.Toast.LENGTH_LONG).show() }
+            }
+        }.start()
+    }
+
+    private fun sendToWatch(plan: JSONObject) {
+        val ctx = this
+        val days = PlanStore.upcomingDays(plan)
+        if (days.length() == 0) { android.widget.Toast.makeText(this, "This plan has no dated days from today on. Use \"Add Dates\" first so each day has a date.", android.widget.Toast.LENGTH_LONG).show(); return }
+        Thread {
+            val msg = try { val n = WorkoutStore.importPlan(ctx, days)
+                "Sent ${days.length()} days: $n workouts" + (if (WorkoutStore.restDays > 0) ", ${WorkoutStore.restDays} rest days" else "") +
+                    (if (WorkoutStore.keptEdited > 0) ", ${WorkoutStore.keptEdited} kept as you edited them" else "") + ". On your watch now."
+            } catch (e: Exception) { "Couldn't send the plan: ${e.message}" }
+            runOnUiThread { android.widget.Toast.makeText(ctx, msg, android.widget.Toast.LENGTH_LONG).show() }
+        }.start()
+    }
+
+    // ── 📂 Upload Plan from Text File ──
+    private var uploadStart = ""; private var uploadUpcoming = false
+    private val PICK_PLAN = 7301
+    private fun uploadPlan(col: LinearLayout) {
+        val ctx = this
+        val prefs = getSharedPreferences("activitiesUi", 0)
+        val open = prefs.getBoolean("uploadOpen", false)
+        col.addView(txt((if (open) "▼" else "▶") + "  📂 Upload Plan from Text File", 0xFFE67E22.toInt(), 15f, true).apply {
+            setPadding(dp(2), dp(16), 0, dp(4)); setOnClickListener { prefs.edit().putBoolean("uploadOpen", !open).apply(); render() } })
+        if (!open) return
+        if (uploadStart.isEmpty()) uploadStart = java.time.LocalDate.now().toString()
+        col.addView(RunUi.card(this).apply {
+            addView(txt("Plan start date:  ${fmtDate(uploadStart)}  ▾", Color.WHITE, 13f, true).apply {
+                background = RunUi.rounded(0xFF26302C.toInt(), dp(8).toFloat()); setPadding(dp(10), dp(7), dp(10), dp(7))
+                setOnClickListener { val d = java.time.LocalDate.parse(uploadStart)
+                    android.app.DatePickerDialog(ctx, { _, y, m, dd -> uploadStart = String.format(Locale.US, "%04d-%02d-%02d", y, m + 1, dd); render() }, d.year, d.monthValue - 1, d.dayOfMonth).show() } })
+            addView(txt((if (uploadUpcoming) "☑" else "☐") + " Save as a second plan for later (keeps your current active plan running)", Color.WHITE, 13f).apply {
+                setPadding(0, dp(10), 0, dp(10)); setOnClickListener { uploadUpcoming = !uploadUpcoming; render() } })
+            addView(txt("📄 Choose .txt or .pdf File", Color.WHITE, 13f, true).apply {
+                background = RunUi.rounded(0xFF166534.toInt(), dp(6).toFloat()); setPadding(dp(14), dp(8), dp(14), dp(8))
+                layoutParams = LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT)
+                setOnClickListener { startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("*/*")
+                    .putExtra(Intent.EXTRA_MIME_TYPES, arrayOf("text/plain", "application/pdf")), PICK_PLAN) } })
+            addView(txt("Accepts .txt or .pdf (text-based, not a scanned image). Dated workouts are imported onto their exact calendar dates. The start date is used only when the file is organized by week and weekday.", RunUi.MUTED, 11f).apply { setPadding(0, dp(8), 0, 0) })
+        })
+    }
+
+    @Deprecated("Deprecated in Java")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode != PICK_PLAN || resultCode != RESULT_OK) return
+        val uri = data?.data ?: return
+        try {
+            var name = "plan.txt"
+            contentResolver.query(uri, null, null, null, null)?.use { c -> val i = c.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME); if (i >= 0 && c.moveToFirst()) name = c.getString(i) ?: name }
+            val bytes = contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: return
+            val isPdf = name.lowercase().endsWith(".pdf") || contentResolver.getType(uri) == "application/pdf"
+            if (isPdf && bytes.size > 4 * 1024 * 1024) { android.widget.Toast.makeText(this, "That PDF is too large (over 4 MB). Save it as a .txt file instead.", android.widget.Toast.LENGTH_LONG).show(); return }
+            val x = JSONObject().put("action", "upload").put("name", name).put("startDate", uploadStart).put("upcoming", uploadUpcoming)
+            if (isPdf) x.put("pdf", android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP))
+            else { val t = String(bytes).trim(); if (t.isEmpty()) { android.widget.Toast.makeText(this, "The selected text file is empty.", android.widget.Toast.LENGTH_LONG).show(); return }; x.put("text", t) }
+            uploadUpcoming = false
+            planDo(x, "Sent $name — the Command Center loads it as your ${if (x.optBoolean("upcoming")) "upcoming" else "active"} plan")
+        } catch (e: Exception) { android.widget.Toast.makeText(this, "The selected file could not be read.", android.widget.Toast.LENGTH_LONG).show() }
+    }
+
+    // ── 🏃 Training Plan — today's workout card ──
+    private fun todayWorkout(col: LinearLayout, plan: JSONObject, collapsedCard: Boolean) {
+        val ctx = this
+        val today = java.time.LocalDate.now()
+        val start = plan.optString("startDate")
+        var dayNum = 0; var weekNum = 0; var dow = 0; var isFinal = false
+        if (start.isNotEmpty()) {
+            dayNum = try { (java.time.temporal.ChronoUnit.DAYS.between(java.time.LocalDate.parse(start), today) + 1).toInt() } catch (e: Exception) { 0 }
+            if (dayNum < 1) return
+            weekNum = (dayNum + 6) / 7; dow = (dayNum - 1) % 7 + 1
+            val total = plan.optInt("weeks") * 7; isFinal = total > 0 && dayNum == total
+        }
+        if (dayNum == 1 && Regex("rest\\s*day|no\\s*scheduled\\s*workout|recovery").containsMatchIn(plan.optString("text").split("\n").take(8).joinToString(" ").lowercase())) return
+        col.addView(LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            background = RunUi.rounded(0xFF1E2140.toInt(), dp(12).toFloat())
+            layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(12) }
+            addView(LinearLayout(ctx).apply {
+                orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+                background = android.graphics.drawable.GradientDrawable(android.graphics.drawable.GradientDrawable.Orientation.TL_BR, intArrayOf(PURPLE, 0xFF764BA2.toInt())).apply {
+                    cornerRadii = floatArrayOf(dp(12).toFloat(), dp(12).toFloat(), dp(12).toFloat(), dp(12).toFloat(), 0f, 0f, 0f, 0f) }
+                setPadding(dp(12), dp(10), dp(8), dp(10))
+                addView(LinearLayout(ctx).apply {
+                    orientation = LinearLayout.VERTICAL
+                    val badge = if (weekNum > 0) (if (isFinal) " (Week $weekNum, Day $dow — Final Day 🎉)" else " (Week $weekNum, Day $dow)") else ""
+                    addView(txt("🏃 Training Plan — " + today.format(java.time.format.DateTimeFormatter.ofPattern("EEEE, MMMM d, yyyy", Locale.US)) + badge, Color.WHITE, 14f, true))
+                    plan.optString("race").takeIf { it.isNotEmpty() }?.let { r -> try {
+                        val days = java.time.temporal.ChronoUnit.DAYS.between(today, java.time.LocalDate.parse(r)).toInt()
+                        val t = when { days > 0 -> "🏁 $days day${if (days != 1) "s" else ""} to race day (${fmtDate(r)})"; days == 0 -> "🏁 Race day!"; else -> null }
+                        t?.let { addView(txt(it, 0xCCFFFFFF.toInt(), 12f)) } } catch (e: Exception) { } }
+                }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
+                fun round(t: String, go: () -> Unit) = addView(txt(t, Color.WHITE, 14f, true).apply { gravity = Gravity.CENTER
+                    background = RunUi.rounded(0x33FFFFFF, dp(14).toFloat()); setOnClickListener { go() } }, LinearLayout.LayoutParams(dp(30), dp(30)).apply { marginStart = dp(5) })
+                round("↺") { android.widget.Toast.makeText(ctx, "Refreshing…", android.widget.Toast.LENGTH_SHORT).show(); Thread { val a = S.refresh(ctx); val b = PlanStore.refresh(ctx); runOnUiThread { if (!isFinishing) render() } }.start() }
+                round("✏️") { datesDialog(plan) }
+                round(if (collapsedCard) "▸" else "▾") { planDo(JSONObject().put("action", "collapse").put("on", !collapsedCard)) }
+            })
+            if (start.isEmpty()) addView(txt("⚠️ Plan start date not set — tap ✏️ to set it.", 0xFF795548.toInt(), 12f, true).apply { setBackgroundColor(0xFFFFF8E1.toInt()); setPadding(dp(12), dp(8), dp(12), dp(8)) })
+            if (!collapsedCard) addView(txt(PlanStore.workoutFor(plan, today.toString()), Color.WHITE, 14f).apply { setPadding(dp(14), dp(12), dp(14), dp(12)); setLineSpacing(0f, 1.2f); setTextIsSelectable(true) })
+        })
+    }
+
+    private fun datesDialog(plan: JSONObject) {
+        val ctx = this
+        fun pick(cur: String, go: (String) -> Unit) { val d = try { java.time.LocalDate.parse(cur) } catch (e: Exception) { java.time.LocalDate.now() }
+            android.app.DatePickerDialog(ctx, { _, y, m, dd -> go(String.format(Locale.US, "%04d-%02d-%02d", y, m + 1, dd)) }, d.year, d.monthValue - 1, d.dayOfMonth).show() }
+        AlertDialog.Builder(this).setTitle("Training plan dates")
+            .setItems(arrayOf("⚠️ Plan start date: " + fmtDate(plan.optString("startDate")), "🏁 Race date: " + fmtDate(plan.optString("race").ifEmpty { plan.optString("raceDate") }))) { _, i ->
+                if (i == 0) pick(plan.optString("startDate")) { planDo(JSONObject().put("action", "startDate").put("date", it)) }
+                else pick(plan.optString("race").ifEmpty { plan.optString("raceDate") }) { planDo(JSONObject().put("action", "raceDate").put("date", it)) }
+            }.setNegativeButton("Close", null).show()
+    }
+
+    // ── 💼 Archived Plans ──
+    private fun archived(col: LinearLayout, arr: org.json.JSONArray?) {
+        if (arr == null || arr.length() == 0) return
+        val ctx = this
+        val prefs = getSharedPreferences("activitiesUi", 0)
+        val open = prefs.getBoolean("archOpen", false)
+        col.addView(txt((if (open) "▼" else "▶") + "  💼 Archived Plans  (${arr.length()})", 0xFFE67E22.toInt(), 15f, true).apply {
+            setPadding(dp(2), dp(18), 0, dp(4)); setOnClickListener { prefs.edit().putBoolean("archOpen", !open).apply(); render() } })
+        if (!open) return
+        for (i in 0 until arr.length()) {
+            val p = arr.optJSONObject(i) ?: continue
+            col.addView(RunUi.card(this).apply {
+                layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(8) }
+                addView(LinearLayout(ctx).apply {
+                    orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+                    val lbl = (if (p.optString("archivedFrom") == "upcoming") "Upcoming " else "Active ") + p.optString("type").ifEmpty { "Plan" } + " • " +
+                        (if (p.optInt("weeks") > 0) "${p.optInt("weeks")}-wk • " else "") + "Archived " + p.optString("archivedAt")
+                    addView(txt(lbl, Color.WHITE, 12f, true), LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
+                    pbtn(this, "Restore", PURPLE) {
+                        val target = if (p.optString("archivedFrom") == "upcoming") "upcoming" else "current"
+                        val go = { planDo(JSONObject().put("action", "restore").put("archivedAt", p.optString("archivedAt")).put("head", PlanStore.head(p))) }
+                        if (PlanStore.data(ctx).has(target)) confirm("Replace your ${if (target == "upcoming") "upcoming" else "current active"} plan with this archived one?", "Replace") { go() } else go()
+                    }
+                    addView(View(ctx), LinearLayout.LayoutParams(dp(6), 1))
+                    pbtn(this, "Delete", 0xFFE74C3C.toInt()) { confirm("Permanently delete this archived plan?", "Delete") {
+                        planDo(JSONObject().put("action", "deleteArchived").put("archivedAt", p.optString("archivedAt")).put("head", PlanStore.head(p))) } }
+                })
+                val d = p.optString("display").ifEmpty { p.optString("text") }
+                addView(txt(d.take(300) + if (d.length > 300) "…" else "", RunUi.MUTED, 12f).apply { setPadding(0, dp(6), 0, 0) })
+            })
+        }
     }
 }
