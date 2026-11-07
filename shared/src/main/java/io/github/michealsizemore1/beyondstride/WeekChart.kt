@@ -11,14 +11,16 @@ import android.view.View
  * A Monday–Sunday line chart like the Command Center's "— This Week" charts: one point per day
  * (days with nothing logged are skipped and the line joins across them), soft fill, light grid.
  */
-class WeekChart(ctx: Context, private val values: List<Double?>, private val color: Int, private val small: Boolean = false) : View(ctx) {
+class WeekChart(ctx: Context, private val values: List<Double?>, @Suppress("UNUSED_PARAMETER") requested: Int = LIME, private val small: Boolean = false) : View(ctx) {
+    // Every chart uses BeyondStride's lime so the line stands out on the dark cards.
+    private val lineColor = LIME
     private val d = ctx.resources.displayMetrics.density
     private val days = listOf("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
     private val text = Paint(Paint.ANTI_ALIAS_FLAG).apply { this.color = 0xFF9AA5A1.toInt(); textSize = (if (small) 8f else 11f) * d }
     private val grid = Paint(Paint.ANTI_ALIAS_FLAG).apply { this.color = 0x2E94A3B8; strokeWidth = d }
-    private val line = Paint(Paint.ANTI_ALIAS_FLAG).apply { this.color = color; strokeWidth = (if (small) 1.5f else 2.5f) * d; style = Paint.Style.STROKE; strokeJoin = Paint.Join.ROUND }
-    private val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply { this.color = Color.argb(40, Color.red(color), Color.green(color), Color.blue(color)); style = Paint.Style.FILL }
-    private val dot = Paint(Paint.ANTI_ALIAS_FLAG).apply { this.color = color; strokeWidth = 2f * d; style = Paint.Style.STROKE }
+    private val line = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = lineColor; strokeWidth = (if (small) 1.5f else 2.5f) * d; style = Paint.Style.STROKE; strokeJoin = Paint.Join.ROUND }
+    private val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.argb(40, Color.red(lineColor), Color.green(lineColor), Color.blue(lineColor)); style = Paint.Style.FILL }
+    private val dot = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = lineColor; strokeWidth = 2f * d; style = Paint.Style.STROKE }
 
     private fun nice(v: Double): Double {
         if (v <= 0) return 1.0
@@ -53,6 +55,7 @@ class WeekChart(ctx: Context, private val values: List<Double?>, private val col
     }
 
     companion object {
+        const val LIME = 0xFFD4E635.toInt()
         /** This week's dates, Monday first. */
         fun weekDates(): List<String> {
             val t = java.time.LocalDate.now()
