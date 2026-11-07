@@ -17,7 +17,7 @@ object NutritionUi {
     private const val TILE = 0xFF26302C.toInt()
 
     /** Calories, target bar, macros, fluids (with quick taps) and, if [withMicros], the micronutrient tiles. */
-    fun today(act: Activity, col: LinearLayout, withMicros: Boolean, big: Boolean = false, refresh: () -> Unit) {
+    fun today(act: Activity, col: LinearLayout, withMicros: Boolean, big: Boolean = false, summary: Boolean = false, refresh: () -> Unit) {
         val ctx = act
         fun dp(v: Int) = RunUi.dp(ctx, v)
         val N = Nutrition
@@ -41,6 +41,13 @@ object NutritionUi {
         }
         fluids(act, col, nd, refresh)
         if (withMicros && nd != null && nd.micros.isNotEmpty()) micros(act, col, nd)
+        else if (summary && nd != null && nd.micros.isNotEmpty()) {
+            // One line instead of the tiles (the Nutrition tab has them).
+            val low = nd.micros.count { it.status == "Low" }; val high = nd.micros.count { it.status == "High" }
+            col.addView(RunUi.text(ctx, "Micronutrients " + String.format(Locale.US, "%.1f", nd.microScore) + "/10 · " + nd.microLabel() +
+                (if (low > 0) " · $low low" else "") + (if (high > 0) " · $high high" else ""),
+                N.statusColor(when { nd.microScore >= 7 -> "Met"; nd.microScore >= 5 -> "Close"; else -> "Low" }), 12f, true).apply { setPadding(0, dp(10), 0, 0) })
+        }
     }
 
     /** Fluids line, rehydration after a run, and the quick-tap row. */
@@ -60,10 +67,10 @@ object NutritionUi {
             orientation = LinearLayout.HORIZONTAL
             layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(6) }
             fun chip(t: String, onTap: () -> Unit) = addView(RunUi.text(ctx, t, N.WATER, 12f, true).apply {
-                gravity = Gravity.CENTER; background = RunUi.rounded(TILE, dp(14).toFloat())
+                gravity = Gravity.CENTER; maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END; background = RunUi.rounded(TILE, dp(14).toFloat())
                 setPadding(dp(4), dp(7), dp(4), dp(7)); setOnClickListener { onTap() }
             }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f).apply { marginEnd = dp(4) })
-            chip("💧 +8 water") { HydrationSync.change(ctx, "water", Hydration.STEP); refresh() }
+            chip("💧+8 water") { HydrationSync.change(ctx, "water", Hydration.STEP); refresh() }
             chip("+8 sports") { HydrationSync.change(ctx, "sports", Hydration.STEP); refresh() }
             chip("+8 other") { HydrationSync.change(ctx, "other", Hydration.STEP); refresh() }
             chip("⚖ Weight") { fluidDialog(act, refresh) }
