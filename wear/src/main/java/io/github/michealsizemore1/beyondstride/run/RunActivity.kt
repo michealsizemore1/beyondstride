@@ -1653,9 +1653,9 @@ class RunActivity : Activity() {
             col.addView(label("MILEAGE", C.ACCENT, 11f, true).apply { setPadding(0, dp(8), 0, 0) })
             val ms = a.optJSONArray("mileage")
             if (ms != null) for (i in 0 until ms.length()) { val m = ms.getJSONObject(i); box {
-                addView(LinearLayout(this@RunActivity).apply { orientation = LinearLayout.HORIZONTAL
-                    addView(label(m.optString("t"), ORANGE, 11f, true).apply { gravity = Gravity.START }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
-                    addView(label(String.format(java.util.Locale.US, "%.1f mi", m.optDouble("mi")), Color.WHITE, 13f, true)) })
+                // Stacked: title, miles, details, goal bar.
+                addView(label(m.optString("t"), ORANGE, 11f, true))
+                addView(label(String.format(java.util.Locale.US, "%.1f mi", m.optDouble("mi")), Color.WHITE, 16f, true))
                 val min = m.optInt("min")
                 addView(label(listOfNotNull(m.optString("pace").ifEmpty { null }?.let { "$it/mi" }, m.optInt("w").takeIf { it > 0 }?.let { "$it W" },
                     if (min > 0) (if (min < 60) "${min}m" else "${min / 60}h ${min % 60}m") else null).joinToString(" · ").ifEmpty { "—" }, C.MUTED, 9f))
@@ -1680,14 +1680,14 @@ class RunActivity : Activity() {
                 for (i in 0 until prs.length()) { val r = prs.getJSONObject(i)
                     addView(LinearLayout(this@RunActivity).apply { orientation = LinearLayout.HORIZONTAL; setPadding(0, dp(2), 0, 0)
                         addView(label(r.optString("l"), C.MUTED, 9f).apply { gravity = Gravity.START }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
-                        addView(label(r.optString("v"), ORANGE, 10f, true)) }) }
+                        addView(label(r.optString("v"), ORANGE, 10f, true), LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT)) }) }
             } }
             // Recent activities.
             col.addView(label("RECENT", C.ACCENT, 11f, true).apply { setPadding(0, dp(8), 0, 0) })
             a.optJSONArray("recent")?.let { rs -> for (i in 0 until rs.length()) { val r = rs.getJSONObject(i); box {
                 addView(LinearLayout(this@RunActivity).apply { orientation = LinearLayout.HORIZONTAL
                     addView(label(r.optString("title"), Color.WHITE, 11f, true).apply { gravity = Gravity.START; maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
-                    addView(label(r.optString("src"), C.DIM, 8f)) })
+                    addView(label(r.optString("src"), C.DIM, 8f), LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT)) })
                 addView(label(try { java.time.LocalDate.parse(r.optString("date").take(10)).format(java.time.format.DateTimeFormatter.ofPattern("EEE, MMM d", java.util.Locale.US)) } catch (e: Exception) { r.optString("date") }, C.MUTED, 9f).apply { gravity = Gravity.START })
                 addView(label(listOfNotNull(r.optDouble("mi").takeIf { it > 0 }?.let { String.format(java.util.Locale.US, "%.2f mi", it) }, r.optString("dur").ifEmpty { null },
                     r.optString("pace").ifEmpty { null }?.let { "$it/mi" }, r.optDouble("hr").takeIf { it > 0 }?.let { "${it.toInt()} bpm" }, r.optDouble("w").takeIf { it > 0 }?.let { "${it.toInt()} W" }).joinToString(" · "), Color.WHITE, 9f).apply { gravity = Gravity.START })
