@@ -65,43 +65,18 @@ object FoodUi {
     /** A logged food: servings, meal, delete. */
     fun edit(a: Activity, f: Food.Item, done: () -> Unit) {
         val b = box(a)
-        // Serving size — editable, so a drink can be given fluid ounces / mL and count toward fluids.
-        b.addView(TextView(a).apply { text = "Serving size"; textSize = 13f })
-        val fluid = TextView(a).apply { textSize = 12f; setPadding(0, dp(a, 2), 0, 0) }
-        fun showFluid(label: String) {
-            val oz = Food.fluidOz(label)
-            fluid.text = if (oz > 0) "💧 Counts as ${Food.fmt(Math.round(oz * 10) / 10.0)} fl oz per serving (in Liquids or Sports Nutrition)"
-                else "For a drink, use fl oz or mL (e.g. 20 fl oz, 591 mL) so it counts as fluid"
-        }
-        val serving = EditText(a).apply {
-            setText(f.servingLabel); setSingleLine(); inputType = InputType.TYPE_CLASS_TEXT
-            addTextChangedListener(object : android.text.TextWatcher {
-                override fun afterTextChanged(e: android.text.Editable?) = showFluid(e?.toString() ?: "")
-                override fun beforeTextChanged(s: CharSequence?, st: Int, c: Int, af: Int) {}
-                override fun onTextChanged(s: CharSequence?, st: Int, b2: Int, c: Int) {}
-            })
-        }
-        b.addView(serving)
-        b.addView(LinearLayout(a).apply {
-            orientation = LinearLayout.HORIZONTAL
-            listOf("8 fl oz", "12 fl oz", "16.9 fl oz", "20 fl oz", "591 mL").forEach { u ->
-                addView(TextView(a).apply {
-                    text = u; textSize = 12f; setPadding(dp(a, 8), dp(a, 4), dp(a, 8), dp(a, 4))
-                    background = RunUi.rounded(0x33FFFFFF, dp(a, 10).toFloat())
-                    setOnClickListener { serving.setText(u) }
-                }, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { marginEnd = dp(a, 4) })
-            }
-        })
-        b.addView(fluid); showFluid(f.servingLabel)
+        val serving = servingPicker(a, b, f.servingLabel)
         val total = TextView(a).apply { text = per(f, f.servings); textSize = 14f; setPadding(0, dp(a, 4), 0, dp(a, 6)) }
         b.addView(total)
         val field = servingsRow(a, b, f.servings) { total.text = per(f, it) }
         val meal = mealPicker(a, b, f.meal)
+        val nutrients = nutrientEditor(a, b, f)
         AlertDialog.Builder(a).setTitle(f.name).setView(ScrollView(a).apply { addView(b) })
             .setPositiveButton("Save") { _, _ ->
                 val s = field.text.toString().toDoubleOrNull()?.takeIf { it > 0 } ?: f.servings
-                val label = serving.text.toString().trim().ifEmpty { f.servingLabel }
-                if (s != f.servings || meal() != f.meal || label != f.servingLabel) HydrationSync.food(a, "foodEdit", f.copy(servings = s, meal = meal(), servingLabel = label))
+                val label = serving().ifEmpty { f.servingLabel }
+                val upd = nutrients(f).copy(servings = s, meal = meal(), servingLabel = label)
+                if (upd != f) HydrationSync.food(a, "foodEdit", upd)
                 done()
             }
             .setNeutralButton("Delete") { _, _ ->
@@ -114,16 +89,15 @@ object FoodUi {
     /** A food chosen on the Add screen: how many servings, then add. */
     fun confirmAdd(a: Activity, f: Food.Item, meal: String, done: () -> Unit) {
         val b = box(a)
-        b.addView(TextView(a).apply { text = f.servingLabel + " per serving"; textSize = 13f })
         val total = TextView(a).apply { text = per(f, f.servings); textSize = 14f; setPadding(0, dp(a, 4), 0, dp(a, 6)) }
         b.addView(total)
         val field = servingsRow(a, b, f.servings) { total.text = per(f, it) }
-        val micro = f.micros.entries.filter { it.value > 0 }.joinToString(" · ") { "${it.key} ${Food.fmt(it.value)}" }
-        if (micro.isNotEmpty()) b.addView(TextView(a).apply { text = micro; textSize = 11f; setPadding(0, dp(a, 6), 0, 0) })
+        val serving = servingPicker(a, b, f.servingLabel)
+        val nutrients = nutrientEditor(a, b, f)
         AlertDialog.Builder(a).setTitle(f.name).setView(ScrollView(a).apply { addView(b) })
             .setPositiveButton("Add to ${Nutrition.MEAL_NAMES[meal] ?: meal}") { _, _ ->
                 val s = field.text.toString().toDoubleOrNull()?.takeIf { it > 0 } ?: f.servings
-                HydrationSync.food(a, "foodAdd", f.copy(id = Food.newId(), meal = meal, servings = s))
+                HydrationSync.food(a, "foodAdd", nutrients(f).copy(id = Food.newId(), meal = meal, servings = s, servingLabel = serving().ifEmpty { f.servingLabel }))
                 Toast.makeText(a, "Added ${f.name}", Toast.LENGTH_SHORT).show()
                 done()
             }
@@ -216,5 +190,90 @@ object FoodUi {
                 Toast.makeText(a, "Copied ${items.size} food${if (items.size == 1) "" else "s"} to ${label(dest).lowercase()}", Toast.LENGTH_SHORT).show()
                 done()
             }.setNegativeButton("Cancel", null).show()
+    }
+
+    /** The Command Center's serving units. */
+    val UNITS = listOf("serving", "cup", "tablespoon", "teaspoon", "fluid ounce", "ounce", "gram", "milligram", "milliliter", "liter", "piece", "item", "slice",
+        "scoop", "packet", "bar", "bottle", "can", "container", "handful", "capsule", "tablet", "softgel", "gummy", "IU", "microgram")
+
+    /**
+     * Serving size as amount + unit (like the Command Center), e.g. "20" + "fluid ounce". A label that isn't amount + unit
+     * (e.g. "1 Bottle (591 mL)") is kept as "as labeled" until you pick a unit. Shows whether it counts as fluid.
+     */
+    private fun servingPicker(a: Activity, b: LinearLayout, label: String): () -> String {
+        val m = Regex("^\\s*(\\d+(?:\\.\\d+)?)\\s+(.+?)\\s*$").find(label)
+        val known = m?.groupValues?.get(2)?.lowercase()?.removeSuffix("s")?.let { u -> UNITS.firstOrNull { it.lowercase() == u } }
+        val units = (if (known == null) listOf("as labeled: $label") else emptyList()) + UNITS
+        b.addView(TextView(a).apply { text = "Serving size"; textSize = 13f })
+        val fluid = TextView(a).apply { textSize = 12f; setPadding(0, dp(a, 2), 0, 0) }
+        val amount = EditText(a).apply {
+            setText(if (known != null) m!!.groupValues[1] else ""); hint = "amount"
+            inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL; setSingleLine()
+        }
+        val unit = android.widget.Spinner(a).apply {
+            adapter = android.widget.ArrayAdapter(a, android.R.layout.simple_spinner_dropdown_item, units)
+            setSelection(if (known != null) units.indexOf(known) else 0)
+        }
+        b.addView(LinearLayout(a).apply {
+            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+            addView(amount, LinearLayout.LayoutParams(dp(a, 80), WRAP_CONTENT))
+            addView(unit, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
+        })
+        fun current(): String {
+            val u = unit.selectedItem?.toString() ?: ""
+            if (u.startsWith("as labeled")) return label
+            val n = amount.text.toString().trim().ifEmpty { "1" }
+            return "$n $u"
+        }
+        fun show() {
+            val oz = Food.fluidOz(current())
+            fluid.text = if (oz > 0) "💧 Counts as ${Food.fmt(Math.round(oz * 10) / 10.0)} fl oz per serving (in Liquids or Sports Nutrition)"
+                else "For a drink, pick fluid ounce or milliliter so it counts as fluid"
+        }
+        amount.addTextChangedListener(object : android.text.TextWatcher {
+            override fun afterTextChanged(e: android.text.Editable?) = show()
+            override fun beforeTextChanged(s: CharSequence?, st: Int, c: Int, af: Int) {}
+            override fun onTextChanged(s: CharSequence?, st: Int, b2: Int, c: Int) {}
+        })
+        unit.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(p: android.widget.AdapterView<*>?, v: android.view.View?, pos: Int, id: Long) {
+                if (!units[pos].startsWith("as labeled") && amount.text.isBlank()) amount.setText("1"); show() }
+            override fun onNothingSelected(p: android.widget.AdapterView<*>?) {}
+        }
+        b.addView(fluid); show()
+        return { current() }
+    }
+
+    private val NUTRIENTS = listOf("cal" to "Calories", "prot" to "Protein g", "carbs" to "Carbs g", "fat" to "Fat g",
+        "fiber" to "Fiber g", "sugar" to "Sugar g", "sodium" to "Sodium mg", "potassium" to "Potassium mg", "calcium" to "Calcium mg",
+        "iron" to "Iron mg", "magnesium" to "Magnesium mg", "zinc" to "Zinc mg", "vitC" to "Vitamin C mg", "vitD" to "Vitamin D mcg",
+        "vitB12" to "Vitamin B12 mcg", "caffeine" to "Caffeine mg")
+
+    /** Every nutrient as a number box (per serving), two per row, like the Command Center's food cells. Returns the edited food. */
+    private fun nutrientEditor(a: Activity, b: LinearLayout, f: Food.Item): (Food.Item) -> Food.Item {
+        b.addView(TextView(a).apply { text = "Nutrition per serving (tap a number to change it)"; textSize = 13f; setPadding(0, dp(a, 12), 0, 0) })
+        fun value(k: String) = when (k) { "cal" -> f.cal; "prot" -> f.prot; "carbs" -> f.carbs; "fat" -> f.fat; else -> f.micros[k] }
+        val fields = LinkedHashMap<String, EditText>()
+        NUTRIENTS.chunked(2).forEach { row ->
+            b.addView(LinearLayout(a).apply {
+                orientation = LinearLayout.HORIZONTAL
+                row.forEachIndexed { i, (k, n) ->
+                    addView(LinearLayout(a).apply {
+                        orientation = LinearLayout.VERTICAL
+                        addView(TextView(a).apply { text = n; textSize = 11f })
+                        addView(EditText(a).apply {
+                            value(k)?.let { setText(Food.fmt(Math.round(it * 10) / 10.0)) }; hint = "—"; setSingleLine(); textSize = 15f
+                            inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL
+                        }.also { fields[k] = it })
+                    }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f).apply { if (i == 0) marginEnd = dp(a, 12) })
+                }
+            })
+        }
+        return { base ->
+            fun v(k: String) = fields[k]?.text?.toString()?.trim()?.toDoubleOrNull()
+            val micros = HashMap<String, Double>()
+            Food.MICROS.forEach { k -> v(k)?.let { micros[k] = it } }
+            base.copy(cal = v("cal"), prot = v("prot"), carbs = v("carbs"), fat = v("fat"), micros = micros)
+        }
     }
 }

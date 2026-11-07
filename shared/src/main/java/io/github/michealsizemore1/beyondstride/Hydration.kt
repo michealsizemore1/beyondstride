@@ -102,8 +102,8 @@ object Hydration {
         val i = foods.indexOfFirst { it.id == item.id }
         val x = when (op) {
             "foodAdd" -> { if (i < 0) foods += item; Food.toJson(item) }
-            "foodEdit" -> { if (i >= 0) foods[i] = foods[i].copy(servings = item.servings, meal = item.meal, servingLabel = item.servingLabel)
-                JSONObject().put("id", item.id).put("servings", item.servings).put("meal", item.meal).put("servingLabel", item.servingLabel) }
+            "foodEdit" -> { if (i >= 0) foods[i] = item.copy(image = foods[i].image.ifEmpty { item.image })
+                Food.toJson(item).put("full", true) }
             else -> { if (i >= 0) foods.removeAt(i); JSONObject().put("id", item.id) }
         }
         // Drinks logged as foods move the Sports / Other drinks counters (the Command Center does the same when it gets the food).
