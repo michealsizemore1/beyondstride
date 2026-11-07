@@ -153,6 +153,12 @@ class RunActivity : Activity() {
         if (!RunService.running && screen != Screen.SUMMARY) RunService.start(this)
         if (screen == Screen.START && !showSettings && !overlayOpen && !Run.isActive) startBuilt = false   // fresh readiness after a check
         render()
+        // New BeyondStride build out? (asks GitHub at most every 3 hours; never during a run)
+        if (!Run.isActive) Thread {
+            val had = io.github.michealsizemore1.beyondstride.Updater.available(this)?.build
+            val now = io.github.michealsizemore1.beyondstride.Updater.check(this, true)?.build
+            if (now != had) runOnUiThread { if (!isFinishing && !Run.isActive && screen == Screen.START) { startBuilt = false; render() } }
+        }.start()
     }
     override fun onPause() {
         RunTileService.refresh(this)
@@ -341,6 +347,15 @@ class RunActivity : Activity() {
         }
         fun head(t: String) = label(t, C.ACCENT, 11f, true).apply { letterSpacing = 0.08f }
         col.addView(label("BeyondStride", Color.WHITE, 20f, true))
+        io.github.michealsizemore1.beyondstride.Updater.available(this)?.let { up ->
+            col.addView(card().apply {
+                addView(head("UPDATE"))
+                addView(label("Install build ${up.build}", Color.WHITE, 14f, true))
+                val st = label("You're on build ${io.github.michealsizemore1.beyondstride.Updater.currentBuild(this@RunActivity)}. Tap to install.", C.MUTED, 10f)
+                addView(st)
+                setOnClickListener { io.github.michealsizemore1.beyondstride.Updater.start(this@RunActivity, up) { st.text = it } }
+            })
+        }
 
         // 1. TODAY: readiness + workout (+ trail), then START right under it.
         col.addView(card().apply {
@@ -493,6 +508,13 @@ class RunActivity : Activity() {
     }
 
     /** All the run settings (the phone's Run settings send zones here too). */
+    private fun card2() = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
+        setPadding(dp(12), dp(8), dp(12), dp(8))
+        background = rounded(C.CARD, 16)
+        layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(8) }
+    }
+
     private fun buildSettings() {
         val w = resources.displayMetrics.widthPixels
         val col = column().apply { setPadding(w / 8, w / 7, w / 8, w / 5) }
@@ -610,6 +632,24 @@ class RunActivity : Activity() {
         col.addView(row("menuStyle", "Menu style") {
             prefs.edit().putString("menuStyle", if (cards) "classic" else "cards").apply(); startBuilt = false
         })
+        // App update (from GitHub), same as the phone's Settings → About.
+        run {
+            val U = io.github.michealsizemore1.beyondstride.Updater
+            val box = card2()
+            val t = label("", Color.WHITE, 12f, true); val st = label("", C.MUTED, 10f)
+            fun showUp() {
+                val r = U.available(this)
+                t.text = if (r != null) "⬆ Install build ${r.build}" else "Check for updates"
+                st.text = if (r != null) "You're on build ${U.currentBuild(this)}" else "Up to date · build ${U.currentBuild(this)}"
+            }
+            box.addView(t); box.addView(st); showUp()
+            box.setOnClickListener {
+                val r = U.available(this)
+                if (r != null) U.start(this, r) { st.text = it }
+                else { st.text = "Checking…"; U.forceNext(this); Thread { U.check(this, true); runOnUiThread { showUp() } }.start() }
+            }
+            col.addView(box)
+        }
         col.addView(label("Done", Color.BLACK, 16f, true).apply {
             background = rounded(C.ACCENT, 24)
             setPadding(0, dp(10), 0, dp(10))

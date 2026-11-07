@@ -55,6 +55,12 @@ open class RunsActivity : Activity() {
         }
         WorkoutStore.pushToWatch(this)   // keeps the watch's "today" plan current
         render()
+        // New BeyondStride build out? (asks GitHub at most every 3 hours)
+        Thread {
+            val had = io.github.michealsizemore1.beyondstride.Updater.available(this)?.build
+            val now = io.github.michealsizemore1.beyondstride.Updater.check(this, false)?.build
+            if (now != had) runOnUiThread { if (!isFinishing) render() }
+        }.start()
         // Today's nutrition from the Command Center.
         if (NutritionSync.justOpened) NutritionSync.refreshAfterNutrition(this) { runOnUiThread { if (!isFinishing) render() } }
         else Thread { if (NutritionSync.refreshIfStale(this, 60_000L)) runOnUiThread { if (!isFinishing) render() } }.start()
@@ -125,6 +131,17 @@ open class RunsActivity : Activity() {
         val hrMax = RunSettings.hrMax(this); val hrRest = RunSettings.hrRest(this)
         fun divider() = android.view.View(ctx).apply { setBackgroundColor(0x22FFFFFF) }
             .also { it.layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, dp(1)).apply { topMargin = dp(10); bottomMargin = dp(10) } }
+
+        // 0. Update available.
+        io.github.michealsizemore1.beyondstride.Updater.available(this)?.let { up ->
+            col.addView(RunUi.card(this).apply {
+                orientation = LinearLayout.VERTICAL
+                addView(RunUi.text(ctx, "⬆ Update available · build ${up.build}", RunUi.ACCENT, 16f, true))
+                val st = RunUi.text(ctx, "You're on build ${io.github.michealsizemore1.beyondstride.Updater.currentBuild(ctx)}. Tap to install.", RunUi.MUTED, 12f)
+                addView(st)
+                setOnClickListener { io.github.michealsizemore1.beyondstride.Updater.start(this@RunsActivity, up) { st.text = it } }
+            })
+        }
 
         // 1. TODAY: readiness + today's workout (+ trail).
         val rd = R.compute(io.github.michealsizemore1.beyondstride.ReadinessSync.checks(this),

@@ -256,6 +256,26 @@ class RunSettingsActivity : Activity() {
             } catch (e: Exception) { "Watch app: not connected" }
             runOnUiThread { watchVer.text = v }
         }.start()
+        // App updates (from GitHub).
+        val U = io.github.michealsizemore1.beyondstride.Updater
+        val upStatus = RunUi.text(this, "", RunUi.MUTED, 13f).apply { setPadding(dp(4), dp(10), 0, 0) }
+        val upBtn = RunUi.text(this, "Check for updates", RunUi.ACCENT, 15f, true).apply { setPadding(dp(4), dp(12), 0, dp(4)) }
+        fun showUp() {
+            val r = U.available(ctx)
+            upBtn.text = if (r != null) "⬆ Install build ${r.build}" else "Check for updates"
+            upStatus.text = if (r != null) "Build ${r.build} is ready (you're on ${U.currentBuild(ctx)}). Tap to install on this phone — the watch shows its own update."
+                else "Up to date · build ${U.currentBuild(ctx)}" + (if (U.lastChecked(ctx) > 0) " · checked " + android.text.format.DateUtils.getRelativeTimeSpanString(U.lastChecked(ctx)) else "")
+        }
+        upBtn.setOnClickListener {
+            val r = U.available(ctx)
+            if (r != null) U.start(this, r) { upStatus.text = it }
+            else {
+                upStatus.text = "Checking…"
+                U.forceNext(ctx)
+                Thread { U.check(ctx, false); runOnUiThread { showUp() } }.start()
+            }
+        }
+        col.addView(upBtn); col.addView(upStatus); showUp()
         }
 
         show(col)
