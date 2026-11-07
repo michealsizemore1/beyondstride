@@ -1452,7 +1452,7 @@ class RunActivity : Activity() {
             fun chart(title: String, color: Int, unit: String, v: (io.github.michealsizemore1.beyondstride.Nutrition.Day) -> Double) = box {
                 val vals = dates.map { dt -> byDate[dt]?.let(v)?.takeIf { it > 0 } }
                 addView(label(title, C.ACCENT, 10f, true))
-                addView(W(this@RunActivity, vals, color, small = true), LinearLayout.LayoutParams(MATCH_PARENT, dp(90)))
+                addView(io.github.michealsizemore1.beyondstride.WeekChart(this@RunActivity, vals, color, small = true), LinearLayout.LayoutParams(MATCH_PARENT, dp(90)))
                 addView(label(W.summary(vals, unit).replace(" weekly average", " avg"), C.MUTED, 8f))
             }
             col.addView(label("THIS WEEK", C.ACCENT, 11f, true).apply { setPadding(0, dp(8), 0, 0) })
