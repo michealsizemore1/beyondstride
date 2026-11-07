@@ -825,6 +825,8 @@ class ActivitiesActivity : Activity() {
                 background = android.graphics.drawable.GradientDrawable(android.graphics.drawable.GradientDrawable.Orientation.TL_BR, intArrayOf(PURPLE, 0xFF764BA2.toInt())).apply {
                     cornerRadii = floatArrayOf(dp(12).toFloat(), dp(12).toFloat(), dp(12).toFloat(), dp(12).toFloat(), 0f, 0f, 0f, 0f) }
                 setPadding(dp(12), dp(10), dp(8), dp(10))
+                // Tap the header (or ▾) to collapse / expand the workout.
+                setOnClickListener { planDo(JSONObject().put("action", "collapse").put("on", !collapsedCard)) }
                 addView(LinearLayout(ctx).apply {
                     orientation = LinearLayout.VERTICAL
                     val badge = if (weekNum > 0) (if (isFinal) " (Week $weekNum, Day $dow — Final Day 🎉)" else " (Week $weekNum, Day $dow)") else ""
