@@ -37,9 +37,7 @@ object NutritionUi {
             })
             val (pp, cp, fp) = nd.ratios()
             col.addView(RunUi.text(ctx, N.macros(nd) + "  ($pp / $cp / $fp %)", RunUi.MUTED, 12f))
-            // The Command Center's two quality bars: Daily food quality and Top 7 micronutrient quality (notes on the Nutrition tab).
-            io.github.michealsizemore1.beyondstride.Food.dayQuality(nd)?.let { q -> qualityBar(act, col, "Daily food quality", q.score, q.label, if (big) q.note else null) }
-            if (nd.micros.isNotEmpty()) qualityBar(act, col, "Top 7 micronutrient quality", nd.microScore, nd.microLabel(), if (big) microNote(nd) else null)
+
         }
         // One line for the calorie target; tap for the breakdown and settings.
         if (big) try {
@@ -88,6 +86,38 @@ object NutritionUi {
         }
         N.rehydrate(nd)?.takeIf { it.needOz > 0 }?.let { h ->
             col.addView(RunUi.text(ctx, "💧 Drink ~${h.needOz} oz more to rehydrate after your run", N.WATER, 12f, true).apply { setPadding(0, dp(4), 0, 0) })
+        }
+    }
+
+    /** "Macros & Micronutrients": Daily food quality, Daily Macro Ratio tiles, Top 7 micronutrient quality, then the micronutrient tiles. */
+    fun macrosMicros(act: Activity, col: LinearLayout, nd: Nutrition.Day) {
+        val ctx = act
+        fun dp(v: Int) = RunUi.dp(ctx, v)
+        io.github.michealsizemore1.beyondstride.Food.dayQuality(nd)?.let { q -> qualityBar(act, col, "Daily food quality", q.score, q.label, q.note) }
+        nd.macroTiles()?.let { tiles ->
+            col.addView(RunUi.text(ctx, "Daily macro ratio", Color.WHITE, 13f, true).apply { setPadding(0, dp(14), 0, 0) })
+            col.addView(RunUi.text(ctx, nd.mtLabel + " · " + Nutrition.kcal(if (nd.mtCal > 0) nd.mtCal else nd.target) + " kcal goal", RunUi.MUTED, 11f))
+            val colors = mapOf("Protein" to 0xFFF87171.toInt(), "Carbs" to 0xFFFBBF24.toInt(), "Fat" to 0xFF60A5FA.toInt())
+            col.addView(LinearLayout(ctx).apply {
+                orientation = LinearLayout.HORIZONTAL
+                layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(6) }
+                tiles.forEachIndexed { i, t ->
+                    addView(LinearLayout(ctx).apply {
+                        orientation = LinearLayout.VERTICAL; background = RunUi.rounded(TILE, dp(10).toFloat()); setPadding(dp(8), dp(8), dp(8), dp(8))
+                        addView(RunUi.text(ctx, t.name, colors[t.name] ?: Color.WHITE, 12f, true))
+                        addView(RunUi.text(ctx, "", Color.WHITE, 15f, true).apply {
+                            val sb = android.text.SpannableStringBuilder(String.format(Locale.US, "%.1f%%", t.actual)); val st = sb.length
+                            sb.append(" / ${t.goal}%"); sb.setSpan(android.text.style.ForegroundColorSpan(RunUi.MUTED), st, sb.length, 0); sb.setSpan(android.text.style.RelativeSizeSpan(0.72f), st, sb.length, 0); text = sb })
+                        addView(RunUi.text(ctx, "${t.remaining}g remaining", RunUi.MUTED, 11f))
+                        val sc = when (t.status) { "On target" -> 0xFF4ADE80.toInt(); "High" -> 0xFFF87171.toInt(); else -> 0xFFFBBF24.toInt() }
+                        addView(RunUi.text(ctx, t.status, sc, 12f, true).apply { setPadding(0, dp(3), 0, 0) })
+                    }, LinearLayout.LayoutParams(0, MATCH_PARENT, 1f).apply { if (i < 2) marginEnd = dp(6) })
+                }
+            })
+        }
+        if (nd.micros.isNotEmpty()) {
+            qualityBar(act, col, "Top 7 micronutrient quality", nd.microScore, nd.microLabel(), microNote(nd))
+            micros(act, col, nd, header = false)
         }
     }
 

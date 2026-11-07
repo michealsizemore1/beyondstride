@@ -1507,7 +1507,6 @@ class RunActivity : Activity() {
                 val (pp, cp, fp) = t.ratios()
                 addView(label(N.macros(t) + "  ($pp/$cp/$fp%)", C.MUTED, 10f))
                 if (t.active > 0) addView(label("Target includes ${N.kcal(t.active)} active kcal", C.DIM, 9f))
-                qualityBars(this, t)
             }
             io.github.michealsizemore1.beyondstride.NutritionStore.calc(this@RunActivity).takeIf { it.has("target") }?.let { c ->
                 val g = c.optInt("goalAdjust")
@@ -1528,8 +1527,15 @@ class RunActivity : Activity() {
             })
             setOnClickListener { showFluids() }
         }
-        if (t != null && t.count > 0 && t.micros.isNotEmpty()) box {
-            addView(label("MICRONUTRIENTS", C.ACCENT, 11f, true))
+        if (t != null && t.count > 0) box {
+            addView(label("MACROS & MICRONUTRIENTS", C.ACCENT, 11f, true))
+            io.github.michealsizemore1.beyondstride.Food.dayQuality(t)?.let { q -> qualityBar(this, "Food quality", q.score, q.label) }
+            t.macroTiles()?.let { tiles ->
+                addView(label("Macro ratio", Color.WHITE, 11f, true).apply { setPadding(0, dp(5), 0, 0) })
+                tiles.forEach { m -> addView(label("${m.name} " + String.format(java.util.Locale.US, "%.0f", m.actual) + "% / ${m.goal}% · ${m.status}",
+                    when (m.status) { "On target" -> 0xFF4ADE80.toInt(); "High" -> 0xFFF87171.toInt(); else -> 0xFFFBBF24.toInt() }, 10f, true)) }
+            }
+            if (t.micros.isNotEmpty()) qualityBar(this, "Micronutrients", t.microScore, t.microLabel())
             t.microsByNeed().forEach { m ->
                 addView(label("${m.name.replace("Vitamin ", "Vit ")}  ${m.shown()}", Color.WHITE, 10f).apply { setPadding(0, dp(2), 0, 0) })
                 addView(label("${m.pct.toInt()}% · ${m.status}", N.statusColor(m.status), 11f, true))
@@ -2412,6 +2418,20 @@ class RunActivity : Activity() {
         }
         io.github.michealsizemore1.beyondstride.Food.dayQuality(d)?.let { bar("Food quality", it.score, it.label) }
         if (d.micros.isNotEmpty()) bar("Micronutrients", d.microScore, d.microLabel())
+    }
+    private fun qualityBar(box: LinearLayout, title: String, score: Double, lbl: String) {
+        val N = io.github.michealsizemore1.beyondstride.Nutrition
+        box.addView(label("$title  " + String.format(java.util.Locale.US, "%.1f", score) + " · " + lbl, N.statusColor(when { score >= 7 -> "Met"; score >= 5 -> "Close"; else -> "Low" }), 10f, true).apply { setPadding(0, dp(4), 0, 0) })
+        val pct = ((score - 1) / 9).coerceIn(0.0, 1.0).toFloat()
+        box.addView(object : android.view.View(this) {
+            override fun onDraw(c: android.graphics.Canvas) {
+                val p = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG); val h = height.toFloat(); val r = h / 2; val bh = h * 0.6f
+                p.shader = android.graphics.LinearGradient(0f, 0f, width.toFloat(), 0f, intArrayOf(0xFFDC2626.toInt(), 0xFFF97316.toInt(), 0xFFFACC15.toInt(), 0xFF84CC16.toInt(), 0xFF16A34A.toInt()), null, android.graphics.Shader.TileMode.CLAMP)
+                c.drawRoundRect(0f, (h - bh) / 2, width.toFloat(), (h + bh) / 2, bh / 2, bh / 2, p); p.shader = null
+                val x = (width * pct).coerceIn(r, width - r); p.color = Color.WHITE; c.drawCircle(x, h / 2, r * 0.9f, p)
+                p.color = 0xFF0F172A.toInt(); p.style = android.graphics.Paint.Style.STROKE; p.strokeWidth = r * 0.32f; c.drawCircle(x, h / 2, r * 0.74f, p)
+            }
+        }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(12)).apply { topMargin = dp(2) })
     }
     private fun rounded(color: Int, radiusDp: Int) = GradientDrawable().apply { setColor(color); cornerRadius = dp(radiusDp).toFloat() }
     private fun column() = LinearLayout(this).apply {

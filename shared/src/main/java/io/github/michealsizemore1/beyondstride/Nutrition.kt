@@ -34,11 +34,25 @@ object Nutrition {
         val foods: List<Food.Item> = emptyList(),
         /** Training that day, for food quality (from the Command Center): a run day, and which hard workout ("long", "tempo"…). */
         val qRun: Boolean = false, val qHard: String = "",
+        /** Daily Macro Ratio target (% protein / carbs / fat), its label and calorie goal — from the Command Center. */
+        val mtProt: Int = 0, val mtCarbs: Int = 0, val mtFat: Int = 0, val mtLabel: String = "", val mtCal: Int = 0,
     ) {
         fun microLabel() = when { microScore >= 9 -> "Excellent"; microScore >= 7 -> "Good"; microScore >= 5 -> "Fair"; microScore >= 3 -> "Low"; else -> "Poor" }
         /** Lowest first (Low, then High, Close, Met), like the Command Center's breakdown. */
         fun microsByNeed() = micros.sortedWith(compareBy({ mapOf("Low" to 0, "High" to 1, "Close" to 2, "Met" to 3)[it.status] }, { it.pct }))
         val left get() = if (target > 0) target - cal else 0
+        data class MacroTile(val name: String, val actual: Double, val goal: Int, val remaining: Int, val status: String)
+        /** The Command Center's Daily Macro Ratio tiles (null until it has shared today's target). */
+        fun macroTiles(): List<MacroTile>? {
+            if (mtProt + mtCarbs + mtFat == 0) return null
+            val p = prot * 4; val c = carbs * 4; val f = fat * 9; val t = p + c + f
+            val kcal = if (mtCal > 0) mtCal else target
+            fun tile(n: String, kc: Double, grams: Double, goal: Int, per: Int): MacroTile {
+                val a = if (t > 0) kc / t * 100 else 0.0; val diff = a - goal
+                return MacroTile(n, a, goal, Math.max(0, Math.round(kcal * (goal / 100.0) / per - grams).toInt()), if (diff < -3) "Low" else if (diff > 3) "High" else "On target")
+            }
+            return listOf(tile("Protein", p, prot, mtProt, 4), tile("Carbs", c, carbs, mtCarbs, 4), tile("Fat", f, fat, mtFat, 9))
+        }
         /** Share of the day's calories from protein / carbs / fat (%). */
         fun ratios(): Triple<Int, Int, Int> {
             val p = prot * 4; val c = carbs * 4; val f = fat * 9; val t = p + c + f
@@ -77,7 +91,9 @@ object Nutrition {
         return Day(date, o.optInt("cal"), o.optDouble("prot", 0.0), o.optDouble("carbs", 0.0), o.optDouble("fat", 0.0),
             o.optDouble("fiber", 0.0), o.optInt("sodium"), o.optInt("waterOz"), o.optInt("target"), o.optInt("range"), o.optInt("active"),
             meals, items, o.optInt("count", items.size), o.optLong("updated"), micros, o.optDouble("microScore", 0.0),
-            o.optInt("water"), o.optInt("sportsOz"), o.optInt("otherOz"), o.optDouble("weight", 0.0), o.optDouble("postWeight", 0.0), foods, o.optBoolean("qrun"), o.optString("qhard"))
+            o.optInt("water"), o.optInt("sportsOz"), o.optInt("otherOz"), o.optDouble("weight", 0.0), o.optDouble("postWeight", 0.0), foods, o.optBoolean("qrun"), o.optString("qhard"),
+            o.optJSONObject("mt")?.optInt("prot") ?: 0, o.optJSONObject("mt")?.optInt("carbs") ?: 0, o.optJSONObject("mt")?.optInt("fat") ?: 0,
+            o.optJSONObject("mt")?.optString("label") ?: "", o.optJSONObject("mt")?.optInt("cal") ?: 0)
     }
 
     /** Firebase's {"2026-11-06": {...}, ...} (or null) → days, oldest first. */
@@ -96,6 +112,7 @@ object Nutrition {
                 .put("microScore", d.microScore)
                 .put("foods", Food.listJson(d.foods))
                 .put("water", d.water).put("sportsOz", d.sportsOz).put("otherOz", d.otherOz).put("weight", d.weight).put("postWeight", d.postWeight).put("qrun", d.qRun).put("qhard", d.qHard)
+                .put("mt", JSONObject().put("prot", d.mtProt).put("carbs", d.mtCarbs).put("fat", d.mtFat).put("label", d.mtLabel).put("cal", d.mtCal))
                 .put("micros", JSONArray().apply { d.micros.forEach { put(JSONObject().put("n", it.name).put("f", it.field).put("v", it.value).put("t", it.target).put("mx", it.max).put("u", it.unit)) } }))
         }
     }.toString()

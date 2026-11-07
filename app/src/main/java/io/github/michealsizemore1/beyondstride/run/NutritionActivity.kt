@@ -80,12 +80,10 @@ class NutritionActivity : Activity() {
         col.addView(RunUi.section(this, "TODAY"))
         col.addView(RunUi.card(this).apply { NutritionUi.today(this@NutritionActivity, this, withMicros = false, big = true, chips = false) { render() } })
 
-        // Micronutrients.
-        if (t != null && t.count > 0 && t.micros.isNotEmpty()) {
-            col.addView(RunUi.section(this, "MICRONUTRIENTS"))
-            col.addView(RunUi.card(this).apply {
-                NutritionUi.micros(this@NutritionActivity, this, t, header = false)
-            })
+        // Macros & Micronutrients: food quality, macro ratio, micronutrient quality and tiles.
+        if (t != null && t.count > 0) {
+            col.addView(RunUi.section(this, "MACROS & MICRONUTRIENTS"))
+            col.addView(RunUi.card(this).apply { NutritionUi.macrosMicros(this@NutritionActivity, this, t) })
         }
 
         // FOOD LOG: every meal with its foods. Tap a food to change it; ＋ to add.
