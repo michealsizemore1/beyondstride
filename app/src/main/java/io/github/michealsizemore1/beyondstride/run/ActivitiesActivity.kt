@@ -68,15 +68,16 @@ class ActivitiesActivity : Activity() {
         // The Command Center's arrangement: today's workout on top; the active / upcoming plans below the activities.
         planWaiting(col)
         plans.optJSONObject("current")?.let { todayWorkout(col, it, plans.optBoolean("collapsed")) }
-        mileage(col, all); zones(col); shoes(col)
-        uploadPlan(col)
-        // 📊 Run Metrics Summary, then 📈 Charts — their own sections, outside the collapsed log.
-        // Analysis sections (each collapsible): metrics, records, race times, charts, heat / humidity, then Weekly Run Notes.
+        mileage(col, all)
+        // Collapsible sections, most-used first: how training is going → records / race times → conditions →
+        // notes → setup and gear (zones, shoes, plan upload). Each starts closed.
         ActivityAnalysis(this, panels) { render() }.apply {
-            metrics(col, all); prs(col, all); racePredictor(col, all); charts(col, all)
-            cardioDrift(col, all); heatAcclimation(col, all); humidity(col, all)
+            metrics(col, all); charts(col, all); prs(col, all); racePredictor(col, all)
+            heatAcclimation(col, all); cardioDrift(col, all); humidity(col, all)
         }
         weekNotes(col)
+        zones(col); shoes(col)
+        uploadPlan(col)
         // 🏃 Activities: collapsed each time the screen opens, like the Command Center's Activities section.
         col.addView(txt((if (logOpen) "▼" else "▶") + "  🏃 Activities" + (if (all.isNotEmpty()) "  (${all.size})" else ""), 0xFFE67E22.toInt(), 17f, true).apply {
             background = RunUi.rounded(RunUi.CARD, dp(10).toFloat()); setPadding(dp(12), dp(12), dp(12), dp(12))
@@ -110,8 +111,6 @@ class ActivitiesActivity : Activity() {
         })
 
         // Stats bar (filtered).
-        statsBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        col.addView(statsBox, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(10) })
 
         // Filters.
         col.addView(RunUi.card(this).apply {
@@ -150,6 +149,9 @@ class ActivitiesActivity : Activity() {
                 addView(txt((if (groupByDay) "☑" else "☐") + " Group by day", Color.WHITE, 13f).apply { setPadding(dp(6), dp(7), dp(6), dp(7)); setOnClickListener { groupByDay = !groupByDay; fill() } })
             })
         })
+        // Stats bar: totals of what the filters show, right above the list.
+        statsBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        col.addView(statsBox, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(10) })
         showing = txt("", RunUi.MUTED, 12f).apply { setPadding(dp(2), dp(8), 0, 0) }
         col.addView(showing)
         listBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
