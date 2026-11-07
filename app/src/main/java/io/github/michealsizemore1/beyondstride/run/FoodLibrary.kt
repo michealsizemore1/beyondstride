@@ -80,8 +80,11 @@ object FoodLibrary {
     /** A food's picture: its own, or the one saved with the same name in your food database. */
     private var picCache: Pair<String, Map<String, String>>? = null
     fun imageFor(ctx: Context, f: Food.Item): String {
+        // A photo you took for this food wins, then its own picture, then a photo taken for a food with the same name.
+        val ph = photos(ctx)
+        ph.optString("id:" + f.id).takeIf { it.isNotEmpty() }?.let { return it }
         if (f.image.isNotEmpty()) return f.image
-        photos(ctx).let { ph -> (ph.optString("id:" + f.id).ifEmpty { ph.optString("n:" + f.name.lowercase().trim()) }).takeIf { it.isNotEmpty() }?.let { return it } }
+        ph.optString("n:" + f.name.lowercase().trim()).takeIf { it.isNotEmpty() }?.let { return it }
         val raw = p(ctx).getString("lib", "") ?: ""
         val map = picCache?.takeIf { it.first.length == raw.length }?.second ?: run {
             val m = HashMap<String, String>()
