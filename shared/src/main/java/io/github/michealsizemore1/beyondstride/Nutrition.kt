@@ -26,6 +26,10 @@ object Nutrition {
         val fiber: Double, val sodium: Int, val waterOz: Int, val target: Int, val range: Int, val active: Int,
         val meals: Map<String, Int>, val items: List<Item>, val count: Int, val updated: Long,
         val micros: List<Micro> = emptyList(), val microScore: Double = 0.0,
+        /** Fluid breakdown (oz): plain water, sports drinks, other drinks (caffeine excluded). waterOz is their total. */
+        val water: Int = 0, val sportsOz: Int = 0, val otherOz: Int = 0,
+        /** Wake-up and post-run weight (lb), 0 when not entered. */
+        val weight: Double = 0.0, val postWeight: Double = 0.0,
     ) {
         fun microLabel() = when { microScore >= 9 -> "Excellent"; microScore >= 7 -> "Good"; microScore >= 5 -> "Fair"; microScore >= 3 -> "Low"; else -> "Poor" }
         /** Lowest first (Low, then High, Close, Met), like the Command Center's breakdown. */
@@ -59,7 +63,8 @@ object Nutrition {
         }
         return Day(date, o.optInt("cal"), o.optDouble("prot", 0.0), o.optDouble("carbs", 0.0), o.optDouble("fat", 0.0),
             o.optDouble("fiber", 0.0), o.optInt("sodium"), o.optInt("waterOz"), o.optInt("target"), o.optInt("range"), o.optInt("active"),
-            meals, items, o.optInt("count", items.size), o.optLong("updated"), micros, o.optDouble("microScore", 0.0))
+            meals, items, o.optInt("count", items.size), o.optLong("updated"), micros, o.optDouble("microScore", 0.0),
+            o.optInt("water"), o.optInt("sportsOz"), o.optInt("otherOz"), o.optDouble("weight", 0.0), o.optDouble("postWeight", 0.0))
     }
 
     /** Firebase's {"2026-11-06": {...}, ...} (or null) → days, oldest first. */
@@ -76,6 +81,7 @@ object Nutrition {
                 .put("meals", JSONObject().apply { d.meals.forEach { (k, v) -> put(k, v) } })
                 .put("items", JSONArray().apply { d.items.forEach { put(JSONObject().put("meal", it.meal).put("name", it.name).put("cal", it.cal).put("prot", it.prot).put("carbs", it.carbs).put("fat", it.fat)) } })
                 .put("microScore", d.microScore)
+                .put("water", d.water).put("sportsOz", d.sportsOz).put("otherOz", d.otherOz).put("weight", d.weight).put("postWeight", d.postWeight)
                 .put("micros", JSONArray().apply { d.micros.forEach { put(JSONObject().put("n", it.name).put("f", it.field).put("v", it.value).put("t", it.target).put("mx", it.max).put("u", it.unit)) } }))
         }
     }.toString()
@@ -86,6 +92,21 @@ object Nutrition {
 
     const val MET = 0xFF5FD38D.toInt(); const val CLOSE = 0xFFF2C94C.toInt(); const val LOW = 0xFFFF8A80.toInt(); const val HIGH = 0xFFEF4444.toInt()
     fun statusColor(s: String) = when (s) { "Met" -> MET; "Close" -> CLOSE; "High" -> HIGH; else -> LOW }
+
+    /**
+     * Post-run rehydration, same as the Command Center: weight lost (wake-up minus post-run) × 20 oz per lb
+     * (ACSM: 16–24 oz per lb lost), minus the fluids had today. Null when both weights aren't entered.
+     */
+    data class Rehydrate(val lostLb: Double, val targetOz: Int, val hadOz: Int, val needOz: Int)
+    fun rehydrate(d: Day?): Rehydrate? {
+        if (d == null || d.weight <= 0 || d.postWeight <= 0 || d.postWeight >= d.weight) return null
+        val lost = d.weight - d.postWeight
+        val target = (lost * 20).roundToInt()
+        return Rehydrate(lost, target, d.waterOz, (target - d.waterOz).coerceAtLeast(0))
+    }
+    /** "Water 24 · Sports 8 · Other 0 oz" (or just the total for older shares). */
+    fun fluids(d: Day) = if (d.water + d.sportsOz + d.otherOz > 0) "Water ${d.water} · Sports ${d.sportsOz} · Other ${d.otherOz} oz" else "${d.waterOz} oz"
+    const val WATER = 0xFF4FC3F7.toInt()
 
     fun kcal(v: Int) = String.format(java.util.Locale.US, "%,d", v)
 

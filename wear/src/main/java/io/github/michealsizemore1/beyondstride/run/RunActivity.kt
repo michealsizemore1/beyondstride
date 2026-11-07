@@ -1172,7 +1172,15 @@ class RunActivity : Activity() {
                 if (t.target > 0) addView(label(if (t.left >= 0) "${N.kcal(t.left)} left of ${N.kcal(t.target)}" else "${N.kcal(-t.left)} over ${N.kcal(t.target)}",
                     if (t.left >= 0) 0xFF5FD38D.toInt() else 0xFFF2C94C.toInt(), 12f, true))
                 addView(label(N.macros(t), C.MUTED, 11f))
-                if (t.waterOz > 0) addView(label("Water ${t.waterOz} oz", C.MUTED, 11f))
+            }
+        }
+        if (t != null && (t.waterOz > 0 || N.rehydrate(t) != null)) box {
+            addView(label("💧 HYDRATION", N.WATER, 11f, true))
+            addView(label("${t.waterOz} oz today", Color.WHITE, 15f, true))
+            addView(label(N.fluids(t), C.MUTED, 10f))
+            N.rehydrate(t)?.let { h ->
+                addView(label("Lost ${String.format(java.util.Locale.US, "%.1f", h.lostLb)} lb on the run → ~${h.targetOz} oz", Color.WHITE, 11f, true).apply { setPadding(0, dp(4), 0, 0) })
+                addView(label(if (h.needOz == 0) "Caught up ✓" else "Drink ~${h.needOz} oz more", if (h.needOz == 0) 0xFF5FD38D.toInt() else N.WATER, 13f, true))
             }
         }
         if (t != null && t.micros.isNotEmpty()) box {
