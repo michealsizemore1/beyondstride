@@ -36,6 +36,8 @@ object Nutrition {
         val qRun: Boolean = false, val qHard: String = "",
         /** Daily Macro Ratio target (% protein / carbs / fat), its label and calorie goal — from the Command Center. */
         val mtProt: Int = 0, val mtCarbs: Int = 0, val mtFat: Int = 0, val mtLabel: String = "", val mtCal: Int = 0,
+        /** Meal notes, the fueling note (hard-workout days) and pre-run meal ideas (JSON) — from the Command Center. */
+        val notes: Map<String, String> = emptyMap(), val perfNote: String = "", val prerun: String = "",
     ) {
         fun microLabel() = when { microScore >= 9 -> "Excellent"; microScore >= 7 -> "Good"; microScore >= 5 -> "Fair"; microScore >= 3 -> "Low"; else -> "Poor" }
         /** Lowest first (Low, then High, Close, Met), like the Command Center's breakdown. */
@@ -93,7 +95,8 @@ object Nutrition {
             meals, items, o.optInt("count", items.size), o.optLong("updated"), micros, o.optDouble("microScore", 0.0),
             o.optInt("water"), o.optInt("sportsOz"), o.optInt("otherOz"), o.optDouble("weight", 0.0), o.optDouble("postWeight", 0.0), foods, o.optBoolean("qrun"), o.optString("qhard"),
             o.optJSONObject("mt")?.optInt("prot") ?: 0, o.optJSONObject("mt")?.optInt("carbs") ?: 0, o.optJSONObject("mt")?.optInt("fat") ?: 0,
-            o.optJSONObject("mt")?.optString("label") ?: "", o.optJSONObject("mt")?.optInt("cal") ?: 0)
+            o.optJSONObject("mt")?.optString("label") ?: "", o.optJSONObject("mt")?.optInt("cal") ?: 0,
+            o.optJSONObject("notes")?.let { n -> n.keys().asSequence().associateWith { n.optString(it) } } ?: emptyMap(), o.optString("perfNote"), o.optJSONObject("prerun")?.toString() ?: "")
     }
 
     /** Firebase's {"2026-11-06": {...}, ...} (or null) → days, oldest first. */
@@ -112,6 +115,7 @@ object Nutrition {
                 .put("microScore", d.microScore)
                 .put("foods", Food.listJson(d.foods))
                 .put("water", d.water).put("sportsOz", d.sportsOz).put("otherOz", d.otherOz).put("weight", d.weight).put("postWeight", d.postWeight).put("qrun", d.qRun).put("qhard", d.qHard)
+                .put("notes", JSONObject().apply { d.notes.forEach { (k, v) -> put(k, v) } }).put("perfNote", d.perfNote).apply { if (d.prerun.isNotEmpty()) put("prerun", JSONObject(d.prerun)) }
                 .put("mt", JSONObject().put("prot", d.mtProt).put("carbs", d.mtCarbs).put("fat", d.mtFat).put("label", d.mtLabel).put("cal", d.mtCal))
                 .put("micros", JSONArray().apply { d.micros.forEach { put(JSONObject().put("n", it.name).put("f", it.field).put("v", it.value).put("t", it.target).put("mx", it.max).put("u", it.unit)) } }))
         }

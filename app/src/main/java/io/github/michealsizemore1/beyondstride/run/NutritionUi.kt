@@ -95,9 +95,18 @@ object NutritionUi {
         val ctx = act
         fun dp(v: Int) = RunUi.dp(ctx, v)
         io.github.michealsizemore1.beyondstride.Food.dayQuality(nd)?.let { q -> qualityBar(act, col, "Daily food quality", q.score, q.label, q.note) }
-        nd.macroTiles()?.let { tiles ->
-            col.addView(RunUi.text(ctx, "Daily macro ratio", Color.WHITE, 13f, true).apply { setPadding(0, dp(14), 0, 0) })
-            col.addView(RunUi.text(ctx, nd.mtLabel + " · " + Nutrition.kcal(if (nd.mtCal > 0) nd.mtCal else nd.target) + " kcal goal", RunUi.MUTED, 11f))
+        // A Change Ratio made here shows at once (the Command Center works out "automatic" itself).
+        val pr = NutriDay.pendingRatio(ctx, nd.date)
+        val nd2 = if (pr != null && pr.optBoolean("enabled", true)) nd.copy(mtProt = pr.optInt("prot"), mtCarbs = pr.optInt("carbs"), mtFat = pr.optInt("fat"), mtLabel = "Custom macro target") else nd
+        nd2.macroTiles()?.let { tiles ->
+            col.addView(LinearLayout(ctx).apply {
+                orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL; setPadding(0, dp(14), 0, 0)
+                addView(RunUi.text(ctx, "Daily macro ratio", Color.WHITE, 13f, true), LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
+                addView(RunUi.text(ctx, "Change Ratio", Color.WHITE, 12f, true).apply {
+                    background = RunUi.rounded(TILE, dp(6).toFloat()); setPadding(dp(10), dp(5), dp(10), dp(5)); setOnClickListener { ratioDialog(act, nd2) } })
+            })
+            col.addView(RunUi.text(ctx, (if (pr != null && !pr.optBoolean("enabled", true)) "Automatic target — updating from the Command Center…" else nd2.mtLabel) + " · " + Nutrition.kcal(if (nd2.mtCal > 0) nd2.mtCal else nd2.target) + " kcal goal", RunUi.MUTED, 11f))
+            if (nd.perfNote.isNotEmpty()) col.addView(RunUi.text(ctx, nd.perfNote, 0xFF93C5FD.toInt(), 11f).apply { setPadding(0, dp(3), 0, 0) })
             val colors = mapOf("Protein" to 0xFFF87171.toInt(), "Carbs" to 0xFFFBBF24.toInt(), "Fat" to 0xFF60A5FA.toInt())
             col.addView(LinearLayout(ctx).apply {
                 orientation = LinearLayout.HORIZONTAL
@@ -116,10 +125,98 @@ object NutritionUi {
                 }
             })
         }
+        if (nd.foods.isNotEmpty()) {
+            // ▸ Meal Macro Distribution: grams of protein / carbs / fat per meal.
+            fold(act, col, "Meal Macro Distribution") { box ->
+                listOf("breakfast" to "Breakfast", "lunch" to "Lunch", "dinner" to "Dinner", "snack" to "Snacks", "liquids" to "Liquids", "sports" to "Sports", "supplements" to "Supplements").forEach { (m, name) ->
+                    val fs = nd.foods.filter { it.meal == m }
+                    box.addView(LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; setPadding(0, dp(3), 0, dp(3))
+                        addView(RunUi.text(ctx, name, Color.WHITE, 13f, true), LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
+                        addView(RunUi.text(ctx, "${Math.round(fs.sumOf { it.total(it.prot) })}g P · ${Math.round(fs.sumOf { it.total(it.carbs) })}g C · ${Math.round(fs.sumOf { it.total(it.fat) })}g F", RunUi.MUTED, 12f)) })
+                }
+            }
+            // ▸ Macro sources: share of each macro from runner-supportive vs limit foods (classified from names / ingredients).
+            fold(act, col, "Macro Sources") { box ->
+                val F = io.github.michealsizemore1.beyondstride.Food
+                val inf = nd.foods.map { F.inferSources(it) }
+                fun mix(name: String, color: Int, grams: (io.github.michealsizemore1.beyondstride.Food.Item) -> Double, src: (io.github.michealsizemore1.beyondstride.Food.Item) -> String) {
+                    var su = 0.0; var li = 0.0; var un = 0.0
+                    inf.forEach { f -> val g = grams(f); if (g <= 0) return@forEach; when (src(f)) { "support" -> su += g; "limit" -> li += g; else -> un += g } }
+                    val t = su + li + un
+                    box.addView(RunUi.text(ctx, name, color, 13f, true).apply { setPadding(0, dp(6), 0, 0) })
+                    box.addView(RunUi.text(ctx, if (t <= 0) "—" else String.format(Locale.US, "Support %.1f%% · Limit %.1f%% · Unknown %.1f%%", su / t * 100, li / t * 100, un / t * 100), RunUi.MUTED, 12f))
+                }
+                mix("● Protein", 0xFFF87171.toInt(), { it.total(it.prot) }, { it.proteinSource })
+                mix("● Carbs", 0xFFFBBF24.toInt(), { it.total(it.carbs) }, { it.carbSource })
+                mix("● Fat", 0xFF60A5FA.toInt(), { it.total(it.fat) }, { it.fatSource })
+                box.addView(RunUi.text(ctx, "ⓘ Source mix is not a medical “good/bad” score. Simple carbohydrates can be useful around training. Foods are classified automatically from their names and available ingredient information; tap a food in a meal to correct mixed or unusual foods.", RunUi.DIM, 11f).apply { setPadding(0, dp(8), 0, 0) })
+            }
+        }
         if (nd.micros.isNotEmpty()) {
             qualityBar(act, col, "Top 7 micronutrient quality", nd.microScore, nd.microLabel(), microNote(nd))
             micros(act, col, nd, header = false)
+            col.addView(RunUi.text(ctx, "Tap a nutrient to see which foods it came from.", RunUi.DIM, 11f).apply { setPadding(0, dp(4), 0, 0) })
+            fold(act, col, "Nutrient Interactions") { box ->
+                box.addView(RunUi.text(ctx, "How these 12 can affect each other -- mostly meal-timing or supplement-dose issues, not a concern from food alone.", RunUi.DIM, 11f))
+                INTERACTIONS.forEach { (k, v) -> box.addView(RunUi.text(ctx, k, Color.WHITE, 13f, true).apply { setPadding(0, dp(8), 0, 0) }); box.addView(RunUi.text(ctx, v, RunUi.MUTED, 12f)) }
+            }
         }
+    }
+
+    private val INTERACTIONS = listOf(
+        "Calcium + Iron" to "Calcium blocks iron absorption when eaten together. Take iron-rich food or a supplement 2+ hours apart from calcium.",
+        "Sodium → Calcium" to "High sodium increases how much calcium is lost in urine. A long-term bone-health concern, not an immediate one.",
+        "Magnesium → Potassium" to "Low magnesium makes it hard for the kidneys to retain potassium. Low potassium that won't correct on its own often means magnesium needs fixing first.",
+        "Calcium + Magnesium" to "Share gut absorption pathways. High-dose supplements of one can modestly reduce absorption of the other; minor from food alone.",
+        "Vitamin D + Calcium" to "Vitamin D improves calcium absorption. A helpful pairing, not a conflict.",
+        "Magnesium → Vitamin D" to "Magnesium is needed to activate vitamin D. Low magnesium can blunt vitamin D's effectiveness even when vitamin D intake looks fine.",
+        "Vitamin C + Iron" to "Vitamin C improves absorption of plant-based (non-heme) iron when eaten together. Pair iron-rich meals with a vitamin C-rich food for better uptake.",
+        "Zinc + Iron" to "High-dose iron supplements (25mg+) can reduce zinc absorption when taken together. Space iron and zinc supplements a few hours apart; iron from fortified food isn't a concern.",
+        "Fiber → Iron, Zinc" to "Phytates in whole grains, beans, and nuts bind iron and zinc, reducing absorption from high-fiber plant meals. Not a concern as part of a varied diet overall.",
+        "Caffeine → Calcium" to "Caffeine modestly increases calcium loss in urine, roughly offset by 1-2 tablespoons of milk per cup. Not established as a bone-health risk if calcium intake is otherwise adequate.",
+        "Caffeine → Iron" to "Coffee and tea can cut non-heme (plant-based) iron absorption by roughly 60-80% when drunk with a meal. Wait 1-2 hours after iron-rich food before coffee or tea.",
+        "Vitamin B12" to "No meaningful interaction with the other eleven nutrients at normal intake levels.",
+        "Sugar" to "No meaningful absorption interaction with the other tracked nutrients -- tracked separately as a diet-quality marker, not a mineral/vitamin interaction.",
+    )
+
+    /** A ▸ heading that opens / closes [build]'s content (closed at first). */
+    private val folds = HashSet<String>()
+    private fun fold(act: Activity, col: LinearLayout, title: String, build: (LinearLayout) -> Unit) {
+        val ctx = act; fun dp(v: Int) = RunUi.dp(ctx, v)
+        val body = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL; visibility = if (title in folds) android.view.View.VISIBLE else android.view.View.GONE; setPadding(dp(4), 0, 0, dp(4)) }
+        val head = RunUi.text(ctx, (if (title in folds) "▾  " else "▸  ") + title, 0xFFCBD5E1.toInt(), 13f, true).apply { setPadding(0, dp(12), 0, dp(2)) }
+        head.setOnClickListener { val open = body.visibility != android.view.View.VISIBLE; body.visibility = if (open) android.view.View.VISIBLE else android.view.View.GONE
+            head.text = (if (open) "▾  " else "▸  ") + title; if (open) folds += title else folds -= title }
+        col.addView(head); build(body); col.addView(body)
+    }
+
+    /** Change Ratio — that day only, like the Command Center (each 5–80%, total 100%). */
+    fun ratioDialog(act: Activity, nd: Nutrition.Day) {
+        val ctx = act; fun dp(v: Int) = RunUi.dp(ctx, v)
+        val box = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(20), dp(8), dp(20), 0) }
+        fun f(l: String, v: Int) = android.widget.EditText(ctx).apply { setText(v.toString()); inputType = android.text.InputType.TYPE_CLASS_NUMBER }
+            .also { box.addView(android.widget.TextView(ctx).apply { text = l; setPadding(0, dp(6), 0, 0) }); box.addView(it) }
+        val p = f("Protein %", nd.mtProt.takeIf { it > 0 } ?: 15); val c = f("Carbs %", nd.mtCarbs.takeIf { it > 0 } ?: 60); val fa = f("Fat %", nd.mtFat.takeIf { it > 0 } ?: 25)
+        box.addView(android.widget.TextView(ctx).apply { text = "Total must equal 100%. Applies to this day only."; textSize = 12f; setPadding(0, dp(8), 0, 0) })
+        android.app.AlertDialog.Builder(ctx).setTitle("Change Ratio").setView(box)
+            .setPositiveButton("Save Ratio") { _, _ ->
+                val pv = p.text.toString().toIntOrNull() ?: 0; val cv = c.text.toString().toIntOrNull() ?: 0; val fv = fa.text.toString().toIntOrNull() ?: 0
+                if (listOf(pv, cv, fv).any { it < 5 || it > 80 } || pv + cv + fv != 100) { android.widget.Toast.makeText(ctx, "Protein, carbs, and fat must each be 5–80% and total exactly 100%. Current total: ${pv + cv + fv}%.", android.widget.Toast.LENGTH_LONG).show(); return@setPositiveButton }
+                NutriDay.setRatio(ctx, nd.date, org.json.JSONObject().put("enabled", true).put("prot", pv).put("carbs", cv).put("fat", fv)); act.recreate()
+            }
+            .setNeutralButton("Use Automatic") { _, _ -> NutriDay.setRatio(ctx, nd.date, org.json.JSONObject().put("enabled", false)); act.recreate() }
+            .setNegativeButton("Cancel", null).show()
+    }
+
+    /** Which foods a micronutrient came from (tap a tile), like the Command Center's sources list. */
+    fun microSources(act: Activity, nd: Nutrition.Day, m: Nutrition.Micro) {
+        val rows = nd.foods.map { it to it.total(it.micros[m.field]) }.filter { it.second > 0.0001 }.sortedByDescending { it.second }
+        val tot = rows.sumOf { it.second }
+        fun fmt(v: Double) = if (m.unit == "mg" && v >= 100) String.format(Locale.US, "%,d", Math.round(v)) else (Math.round(v * 10) / 10.0).toString()
+        val msg = if (rows.isEmpty()) "None of the foods logged this day have ${m.name.lowercase()} data recorded yet. Items added without full nutrition info show 0 until edited."
+            else "From ${rows.size} logged food${if (rows.size == 1) "" else "s"} · ${fmt(tot)}${m.unit} total\n\n" + rows.joinToString("\n") { (f, v) ->
+                "${f.name} (${Nutrition.MEAL_NAMES[f.meal] ?: f.meal}) — ${fmt(v)}${m.unit} · ${if (tot > 0) Math.round(v / tot * 100) else 0}%" }
+        android.app.AlertDialog.Builder(act).setTitle("${m.name} sources").setMessage(msg).setPositiveButton("OK", null).show()
     }
 
     /** A 1–10 score on the red → green bar with a marker, like the Command Center's. */
@@ -203,6 +300,7 @@ object NutritionUi {
                         addView(RunUi.text(ctx, m.name.replace("Vitamin ", "Vit "), RunUi.MUTED, 10f))
                         addView(RunUi.text(ctx, m.shown(), Color.WHITE, 12f, true))
                         addView(RunUi.text(ctx, "${m.pct.toInt()}% · ${m.status}", N.statusColor(m.status), 12f, true))
+                        setOnClickListener { microSources(act, nd, m) }
                     }, LinearLayout.LayoutParams(0, MATCH_PARENT, 1f).apply { if (i < 2) marginEnd = dp(4) })
                 }
                 repeat(3 - row.size) { addView(android.view.View(ctx), LinearLayout.LayoutParams(0, 1, 1f)) }

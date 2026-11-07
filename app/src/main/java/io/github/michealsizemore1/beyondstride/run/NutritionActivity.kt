@@ -122,6 +122,32 @@ class NutritionActivity : Activity() {
             col.addView(RunUi.card(this).apply { NutritionUi.macrosMicros(this@NutritionActivity, this, t) })
         }
 
+        // 🍽️ Pre-Run Meal Ideas — the day before a hard workout, from your Healthy 7+ foods (🔀 Shuffle for others). Tap a food to log it.
+        t?.prerun?.takeIf { it.isNotEmpty() && NutriDay.isToday() }?.let { pj -> try {
+            val o = org.json.JSONObject(pj); val sets = o.optJSONArray("sets")
+            if (sets != null && sets.length() > 0) col.addView(RunUi.card(this).apply {
+                background = RunUi.rounded(0xFF1E2A4A.toInt(), dp(14).toFloat())
+                layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(12) }
+                addView(LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+                    addView(RunUi.text(ctx, o.optString("title"), 0xFFBFDBFE.toInt(), 15f, true), LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
+                    addView(RunUi.text(ctx, "🔀 Shuffle", Color.WHITE, 12f, true).apply { background = RunUi.rounded(0xFF1E3A8A.toInt(), dp(7).toFloat()); setPadding(dp(10), dp(5), dp(10), dp(5))
+                        setOnClickListener { prerunSet = (prerunSet + 1) % sets.length(); render() } }) })
+                addView(RunUi.text(ctx, "Built from your Healthy 7+ foods to help fuel tomorrow's workout. Tap a food to log it.", RunUi.MUTED, 11f).apply { setPadding(0, dp(4), 0, dp(4)) })
+                val set = sets.getJSONArray(prerunSet % sets.length())
+                for (i in 0 until set.length()) { val sl = set.getJSONObject(i); val foods = sl.optJSONArray("foods")
+                    val key = listOf("breakfast", "lunch", "dinner").getOrElse(i) { "snack" }
+                    addView(LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL; background = RunUi.rounded(0xFF26324F.toInt(), dp(9).toFloat()); setPadding(dp(10), dp(6), dp(10), dp(6))
+                        layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(6) }
+                        addView(RunUi.text(ctx, sl.optString("label"), 0xFFBFDBFE.toInt(), 13f, true))
+                        if (foods == null || foods.length() == 0) addView(RunUi.text(ctx, "Log a few more healthy foods to get ideas here.", RunUi.DIM, 12f))
+                        else for (j in 0 until foods.length()) { val fo = io.github.michealsizemore1.beyondstride.Food.fromJson(foods.getJSONObject(j), key)
+                            addView(RunUi.text(ctx, fo.name + "  · " + Math.round(fo.cal ?: 0.0) + " cal", Color.WHITE, 13f).apply { setPadding(0, dp(2), 0, dp(2))
+                                setOnClickListener { FoodUi.confirmAdd(this@NutritionActivity, fo.copy(id = io.github.michealsizemore1.beyondstride.Food.newId()), key) { render() } } }) }
+                    })
+                }
+            })
+        } catch (e: Exception) { } }
+
         // FOOD LOG: every meal with its foods. Tap a food to change it; ＋ to add.
         col.addView(RunUi.section(this, "FOOD LOG"))
         // Food log tools — the Command Center's six buttons, same colors and place (above the meals).
@@ -161,6 +187,10 @@ class NutritionActivity : Activity() {
                         orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
                         addView(RunUi.text(ctx, (MEAL_ICON[m] ?: "🍴") + "  " + (MEAL_LABEL[m] ?: N.MEAL_NAMES[m] ?: m), 0xFFE9D8B4.toInt(), 17f, true), LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
                         if (mine.isNotEmpty()) addView(RunUi.text(ctx, "${mine.size} item${if (mine.size == 1) "" else "s"} · ${N.kcal(mine.sumOf { it.kcal })}  ", RunUi.MUTED, 12f, true))
+                        addView(RunUi.text(ctx, "📅", Color.WHITE, 14f).apply {
+                            background = RunUi.rounded(0xFF26302C.toInt(), dp(10).toFloat()); setPadding(dp(9), dp(5), dp(9), dp(5))
+                            setOnClickListener { if (mine.isEmpty()) android.widget.Toast.makeText(ctx, "Add foods to this meal first", android.widget.Toast.LENGTH_SHORT).show() else copyMealTo(m, mine) }
+                        }, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { marginEnd = dp(6) })
                         addView(RunUi.text(ctx, "💾", Color.WHITE, 14f).apply {
                             background = RunUi.rounded(0xFF26302C.toInt(), dp(10).toFloat()); setPadding(dp(9), dp(5), dp(9), dp(5))
                             setOnClickListener { if (mine.isEmpty()) android.widget.Toast.makeText(ctx, "Add foods to this meal first", android.widget.Toast.LENGTH_SHORT).show() else saveMealDialog(m, mine) }
@@ -212,6 +242,23 @@ class NutritionActivity : Activity() {
                             setOnClickListener { FoodUi.edit(this@NutritionActivity, f) { render() } }
                         })
                     }
+                    // Notes for this meal (saved when you leave the box; also in the Command Center).
+                    if (!picker || mine.isNotEmpty()) body.addView(android.widget.EditText(ctx).apply {
+                        val date = NutriDay.date(); val start = NutriDay.note(ctx, t, date, m)
+                        setText(start); hint = (MEAL_LABEL[m] ?: m) + " notes..."; textSize = 13f; setTextColor(Color.WHITE); setHintTextColor(RunUi.DIM)
+                        background = RunUi.rounded(0xFF26302C.toInt(), dp(6).toFloat()); setPadding(dp(8), dp(5), dp(8), dp(5))
+                        inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE or android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+                        var last = start
+                        val saveIt = Runnable { val v = text.toString().trim(); if (v != last) { last = v; NutriDay.setNote(ctx, date, m, v) } }
+                        // Saves 1.5 s after you stop typing (and when you leave the box).
+                        addTextChangedListener(object : android.text.TextWatcher {
+                            override fun afterTextChanged(e: android.text.Editable?) { removeCallbacks(saveIt); postDelayed(saveIt, 1500) }
+                            override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+                            override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+                        })
+                        setOnFocusChangeListener { _, has -> if (!has) { removeCallbacks(saveIt); saveIt.run() } }
+                        layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(6) }
+                    })
                 })
             }
         }
@@ -543,5 +590,19 @@ class NutritionActivity : Activity() {
                 android.widget.Toast.makeText(this, "Photo added to ${f.name}", android.widget.Toast.LENGTH_SHORT).show(); render()
             }
         }.start()
+    }
+
+    private var prerunSet = 0
+
+    /** 📅 Copy to Date: this meal's foods to any date (same meal). */
+    private fun copyMealTo(m: String, foods: List<io.github.michealsizemore1.beyondstride.Food.Item>) {
+        val d0 = java.time.LocalDate.parse(NutriDay.date()).plusDays(1)
+        android.app.DatePickerDialog(this, { _, y, mo, dd ->
+            val dest = String.format(Locale.US, "%04d-%02d-%02d", y, mo + 1, dd)
+            foods.forEach { HydrationSync.food(this, "foodAdd", it.copy(id = io.github.michealsizemore1.beyondstride.Food.newId()), dest) }
+            android.widget.Toast.makeText(this, "Copied ${foods.size} food${if (foods.size == 1) "" else "s"} to ${MEAL_LABEL[m] ?: m} on " +
+                java.time.LocalDate.parse(dest).format(java.time.format.DateTimeFormatter.ofPattern("EEE, MMM d", Locale.US)), android.widget.Toast.LENGTH_LONG).show()
+            render()
+        }, d0.year, d0.monthValue - 1, d0.dayOfMonth).show()
     }
 }

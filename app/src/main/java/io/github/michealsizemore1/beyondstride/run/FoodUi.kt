@@ -70,13 +70,34 @@ object FoodUi {
         b.addView(total)
         val field = servingsRow(a, b, f.servings) { total.text = per(f, it) }
         val meal = mealPicker(a, b, f.meal)
+        // Macro sources (Support / Limit / Unknown) — corrects how food quality and the source mix classify this food.
+        val inf = Food.inferSources(f)
+        val opts = listOf("support" to "Support", "limit" to "Limit", "unknown" to "Unknown")
+        fun srcPicker(label: String, cur: String): Array<String> {
+            val sel = arrayOf(cur.ifEmpty { "unknown" })
+            b.addView(TextView(a).apply { text = label; textSize = 12f; setPadding(0, dp(a, 8), 0, 0) })
+            b.addView(android.widget.Spinner(a).apply {
+                adapter = android.widget.ArrayAdapter(a, android.R.layout.simple_spinner_dropdown_item, opts.map { it.second })
+                setSelection(opts.indexOfFirst { it.first == sel[0] }.coerceAtLeast(0))
+                onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
+                    override fun onItemSelected(p: android.widget.AdapterView<*>?, v: android.view.View?, pos: Int, id: Long) { sel[0] = opts[pos].first }
+                    override fun onNothingSelected(p: android.widget.AdapterView<*>?) {}
+                }
+            })
+            return sel
+        }
+        val ps = if ((f.prot ?: 0.0) > 0) srcPicker("Protein source", inf.proteinSource) else null
+        val cs = if ((f.carbs ?: 0.0) > 0) srcPicker("Carb source", inf.carbSource) else null
+        val fs = if ((f.fat ?: 0.0) > 0) srcPicker("Fat source", inf.fatSource) else null
         val nutrients = nutrientEditor(a, b, f)
         AlertDialog.Builder(a).setTitle(f.name).setView(ScrollView(a).apply { addView(b) })
             .setPositiveButton("Save") { _, _ ->
                 val s = field.text.toString().toDoubleOrNull()?.takeIf { it > 0 } ?: f.servings
                 val label = serving().ifEmpty { f.servingLabel }
-                val upd = nutrients(f).copy(servings = s, meal = meal(), servingLabel = label)
-                if (upd != f) HydrationSync.food(a, "foodEdit", upd)
+                var upd = nutrients(f).copy(servings = s, meal = meal(), servingLabel = label)
+                val srcChanged = (ps != null && ps[0] != inf.proteinSource.ifEmpty { "unknown" }) || (cs != null && cs[0] != inf.carbSource.ifEmpty { "unknown" }) || (fs != null && fs[0] != inf.fatSource.ifEmpty { "unknown" })
+                if (srcChanged) upd = upd.copy(proteinSource = ps?.get(0) ?: upd.proteinSource, carbSource = cs?.get(0) ?: upd.carbSource, fatSource = fs?.get(0) ?: upd.fatSource)
+                if (upd != f) HydrationSync.food(a, "foodEdit", upd, extra = if (srcChanged) org.json.JSONObject().put("srcSet", true) else null)
                 done()
             }
             .setNeutralButton("Delete") { _, _ ->

@@ -16,7 +16,7 @@ object Hydration {
 
     /** A change waiting for the Command Center. [id] is Firebase's key once posted. */
     data class Change(val date: String, val f: String, val d: Int, val v: Double, val at: Long, val id: String?, val x: String? = null)
-    val FOOD_OPS = listOf("foodAdd", "foodEdit", "foodDel", "mealSave", "calSettings", "libAction", "libDelete", "actSave", "actDel", "actSettings", "shoeSave", "shoeDel", "planAction", "wrnSave", "actImport", "dayRequest", "foodPhoto", "favAdd")
+    val FOOD_OPS = listOf("foodAdd", "foodEdit", "foodDel", "mealSave", "calSettings", "libAction", "libDelete", "actSave", "actDel", "actSettings", "shoeSave", "shoeDel", "planAction", "wrnSave", "actImport", "dayRequest", "foodPhoto", "favAdd", "macroRatio", "mealNote")
 
     /** Queues a change that isn't tied to the day's values (a saved meal, calorie-target settings). */
     @Synchronized fun queue(ctx: Context, f: String, x: JSONObject, date: String = Readiness.today()) =
@@ -94,7 +94,7 @@ object Hydration {
      * A food change for [date] on top of [shown]: "foodAdd" ([item] new), "foodEdit" ([item] with new servings / meal),
      * "foodDel" ([item]'s id). Saves the day's foods here and queues the change. Returns the new day.
      */
-    @Synchronized fun recordFood(ctx: Context, shown: Nutrition.Day?, date: String, op: String, item: Food.Item): Nutrition.Day {
+    @Synchronized fun recordFood(ctx: Context, shown: Nutrition.Day?, date: String, op: String, item: Food.Item, extra: JSONObject? = null): Nutrition.Day {
         val base = shown ?: blank(date)
         val l = local(ctx)
         val o = l.optJSONObject(date) ?: JSONObject().put("water", base.water).put("sports", base.sportsOz).put("other", base.otherOz)
@@ -104,7 +104,7 @@ object Hydration {
         val x = when (op) {
             "foodAdd" -> { if (i < 0) foods += item; Food.toJson(item) }
             "foodEdit" -> { if (i >= 0) foods[i] = item.copy(image = foods[i].image.ifEmpty { item.image })
-                Food.toJson(item).put("full", true) }
+                Food.toJson(item).put("full", true).also { j -> extra?.keys()?.forEach { k -> j.put(k, extra.get(k)) } } }
             else -> { if (i >= 0) foods.removeAt(i); JSONObject().put("id", item.id) }
         }
         // Drinks logged as foods move the Sports / Other drinks counters (the Command Center does the same when it gets the food).

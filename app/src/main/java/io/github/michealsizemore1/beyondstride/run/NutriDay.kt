@@ -119,5 +119,13 @@ object NutriDay {
         } catch (e: Exception) { false }
     }
 
+    /** A Change Ratio made here, not yet applied by the Command Center: (enabled, p, c, f) or null. */
+    fun pendingRatio(ctx: Context, date: String): JSONObject? = Hydration.changes(ctx).lastOrNull { it.f == "macroRatio" && it.date == date }?.x?.let { try { JSONObject(it) } catch (e: Exception) { null } }
+    fun setRatio(ctx: Context, date: String, x: JSONObject) { Hydration.queue(ctx, "macroRatio", x, date); Thread { HydrationSync.flush(ctx.applicationContext) }.start() }
+    /** A meal's notes, with any typed here on top. */
+    fun note(ctx: Context, d: Nutrition.Day?, date: String, meal: String): String =
+        Hydration.changes(ctx).lastOrNull { it.f == "mealNote" && it.date == date && it.x?.contains("\"$meal\"") == true }?.x?.let { try { JSONObject(it).optString("text") } catch (e: Exception) { null } } ?: d?.notes?.get(meal) ?: ""
+    fun setNote(ctx: Context, date: String, meal: String, text: String) { Hydration.queue(ctx, "mealNote", JSONObject().put("meal", meal).put("text", text), date); Thread { HydrationSync.flush(ctx.applicationContext) }.start() }
+
     fun waiting(ctx: Context, date: String) = Hydration.changes(ctx).any { it.f == "dayRequest" && it.x?.contains(date) == true }
 }
