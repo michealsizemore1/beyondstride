@@ -1446,6 +1446,13 @@ class RunActivity : Activity() {
                     addView(label("${items.size} foods · ${N.kcal(items.sumOf { it.kcal })} kcal", C.MUTED, 9f))
                     setOnClickListener { watchAddFoods(items.map { it.copy(id = F.newId()) }, "Copied ${items.size} foods"); showNutrition() }
                 })
+                // Single foods under each meal: tap one to copy just that food.
+                if (m != "all") items.forEach { f ->
+                    col.addView(label("＋ ${f.name} · ${f.kcal}", C.MUTED, 9f).apply {
+                        setPadding(dp(10), dp(3), 0, dp(1))
+                        setOnClickListener { watchAddFoods(listOf(f.copy(id = F.newId())), "Copied ${f.name}"); showNutrition() }
+                    })
+                }
             }
         }
         col.addView(label("Back", C.MUTED, 13f, true).apply { setPadding(0, dp(12), 0, dp(4)); setOnClickListener { showNutrition() } })

@@ -136,7 +136,7 @@ object FoodUi {
     fun mealNow() = when (java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)) {
         in 4..10 -> "breakfast"; in 11..14 -> "lunch"; in 17..21 -> "dinner"; else -> "snack" }
 
-    /** Copy Day: the foods from one day (all, or one meal) onto today or tomorrow. */
+    /** Copy Day: pick a day, tick the foods you want (whole meals or single foods), copy them to today or tomorrow. */
     fun copyDay(a: Activity, done: () -> Unit) {
         val days = io.github.michealsizemore1.beyondstride.NutritionStore.days(a).filter { it.foods.isNotEmpty() }.sortedByDescending { it.date }
         if (days.isEmpty()) { Toast.makeText(a, "No logged days to copy from yet", Toast.LENGTH_SHORT).show(); return }
@@ -145,20 +145,45 @@ object FoodUi {
             when (dd) { today -> "Today"; today.minusDays(1) -> "Yesterday"; today.plusDays(1) -> "Tomorrow"
                 else -> dd.dayOfWeek.name.take(3).lowercase().replaceFirstChar { it.uppercase() } + " " + dd.monthValue + "/" + dd.dayOfMonth } }
         val b = box(a)
-        fun spinner(title: String, items: List<String>, start: Int) = android.widget.Spinner(a).apply {
-            adapter = android.widget.ArrayAdapter(a, android.R.layout.simple_spinner_dropdown_item, items); setSelection(start)
-        }.also { b.addView(TextView(a).apply { text = title; textSize = 13f; setPadding(0, dp(a, 8), 0, 0) }); b.addView(it) }
-        val fromIdx = days.indexOfFirst { it.date != today.toString() }.coerceAtLeast(0)
-        val from = spinner("Copy from", days.map { label(it.date) + " · ${it.count} foods · ${Nutrition.kcal(it.cal)} kcal" }, fromIdx)
-        val meals = listOf("all") + Nutrition.MEAL_ORDER
-        val meal = spinner("Which foods", meals.map { if (it == "all") "Everything" else Nutrition.MEAL_NAMES[it] ?: it }, 0)
+        b.addView(TextView(a).apply { text = "Copy from"; textSize = 13f })
+        val from = android.widget.Spinner(a).apply {
+            adapter = android.widget.ArrayAdapter(a, android.R.layout.simple_spinner_dropdown_item, days.map { label(it.date) + " · ${it.count} foods · ${Nutrition.kcal(it.cal)} kcal" })
+            setSelection(days.indexOfFirst { it.date != today.toString() }.coerceAtLeast(0))
+        }
+        b.addView(from)
+        b.addView(TextView(a).apply { text = "Foods to copy (tap a meal to tick all of it)"; textSize = 13f; setPadding(0, dp(a, 10), 0, 0) })
+        val list = LinearLayout(a).apply { orientation = LinearLayout.VERTICAL }
+        b.addView(list)
+        val checks = ArrayList<Pair<android.widget.CheckBox, Food.Item>>()
+        fun fill(day: Nutrition.Day) {
+            list.removeAllViews(); checks.clear()
+            Nutrition.MEAL_ORDER.filter { m -> day.foods.any { it.meal == m } }.forEach { m ->
+                val mine = ArrayList<android.widget.CheckBox>()
+                list.addView(TextView(a).apply {
+                    text = (Nutrition.MEAL_NAMES[m] ?: m) + "  ▸ all"; textSize = 15f; setTypeface(typeface, android.graphics.Typeface.BOLD)
+                    setPadding(0, dp(a, 8), 0, 0)
+                    setOnClickListener { val on = mine.any { !it.isChecked }; mine.forEach { it.isChecked = on } }
+                })
+                day.foods.filter { it.meal == m }.forEach { f ->
+                    val cb = android.widget.CheckBox(a).apply { text = "${f.name}  (${Food.fmt(f.servings)}× · ${f.kcal} kcal)"; textSize = 13f }
+                    mine += cb; checks += cb to f; list.addView(cb)
+                }
+            }
+        }
+        from.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(p: android.widget.AdapterView<*>?, v: android.view.View?, pos: Int, id: Long) = fill(days[pos])
+            override fun onNothingSelected(p: android.widget.AdapterView<*>?) {}
+        }
+        fill(days[from.selectedItemPosition])
+        b.addView(TextView(a).apply { text = "Copy to"; textSize = 13f; setPadding(0, dp(a, 10), 0, 0) })
         val toDates = listOf(today.toString(), today.plusDays(1).toString())
-        val to = spinner("Copy to", toDates.map { label(it) }, 0)
+        val to = android.widget.Spinner(a).apply { adapter = android.widget.ArrayAdapter(a, android.R.layout.simple_spinner_dropdown_item, toDates.map { label(it) }) }
+        b.addView(to)
         AlertDialog.Builder(a).setTitle("Copy food between days").setView(ScrollView(a).apply { addView(b) })
             .setPositiveButton("Copy") { _, _ ->
-                val src = days[from.selectedItemPosition]; val m = meals[meal.selectedItemPosition]; val dest = toDates[to.selectedItemPosition]
-                val items = src.foods.filter { m == "all" || it.meal == m }
-                if (items.isEmpty()) { Toast.makeText(a, "Nothing in that meal", Toast.LENGTH_SHORT).show(); return@setPositiveButton }
+                val items = checks.filter { it.first.isChecked }.map { it.second }
+                if (items.isEmpty()) { Toast.makeText(a, "Tick at least one food", Toast.LENGTH_SHORT).show(); return@setPositiveButton }
+                val dest = toDates[to.selectedItemPosition]
                 items.forEach { HydrationSync.food(a, "foodAdd", it.copy(id = Food.newId()), dest) }
                 Toast.makeText(a, "Copied ${items.size} food${if (items.size == 1) "" else "s"} to ${label(dest).lowercase()}", Toast.LENGTH_SHORT).show()
                 done()
