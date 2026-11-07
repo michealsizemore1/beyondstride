@@ -78,7 +78,7 @@ object RunUi {
         val tabs = listOf<Triple<String, String, Class<*>?>>(
             Triple("Today", "☀", RunsActivity::class.java),
             Triple("Fitness", "♥", FitnessActivity::class.java),
-            Triple("Nutrition", "🍎", null),
+            Triple("Nutrition", "🍎", NutritionActivity::class.java),
             Triple("Plan", "▦", WorkoutsActivity::class.java),
             Triple("Runs", "≡", AllRunsActivity::class.java),
         )

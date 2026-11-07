@@ -149,9 +149,9 @@ class FitnessActivity : Activity() {
                     val withT = days.filter { it.target > 0 }
                     addView(RunUi.text(ctx, "Average ${N.kcal(avgCal)} kcal/day" + (if (withT.isNotEmpty()) " · target ${N.kcal(withT.map { it.target }.average().toInt())}" else "") +
                         "\nProtein ${avgP.toInt()} g · carbs ${avgC.toInt()} g a day", Color.WHITE, 13f).apply { setPadding(0, dp(8), 0, 0) })
-                    addView(RunUi.text(ctx, "Green = within 15% of that day's target. Tap to open Nutrition.", RunUi.DIM, 11f).apply { setPadding(0, dp(4), 0, 0) })
+                    addView(RunUi.text(ctx, "Green = within 15% of that day's target. Tap for Nutrition.", RunUi.DIM, 11f).apply { setPadding(0, dp(4), 0, 0) })
                 }
-                setOnClickListener { RunUi.openNutrition(this@FitnessActivity) }
+                setOnClickListener { startActivity(Intent(ctx, NutritionActivity::class.java)) }
             })
         }
 

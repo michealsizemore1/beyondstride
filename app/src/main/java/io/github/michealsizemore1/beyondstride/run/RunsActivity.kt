@@ -10,7 +10,6 @@ import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.Toast
-import io.github.michealsizemore1.beyondstride.Hydration
 import io.github.michealsizemore1.beyondstride.RunMath
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -177,77 +176,13 @@ open class RunsActivity : Activity() {
                 }
                 setOnClickListener { startActivity(Intent(ctx, WorkoutsActivity::class.java)) }
             })
-            // Fuel: today's eating from the Command Center's Nutrition tab.
+            // Fuel: today's eating (tap for the Nutrition screen).
             addView(divider())
             addView(LinearLayout(ctx).apply {
                 orientation = LinearLayout.VERTICAL
-                val N = io.github.michealsizemore1.beyondstride.Nutrition
-                val nd = N.today(io.github.michealsizemore1.beyondstride.NutritionStore.days(ctx))
                 addView(RunUi.text(ctx, "FUEL", RunUi.ACCENT, 11f, true))
-                // Fluids and post-run rehydration, part of Fuel (right under the macros). Entered here or in the Command Center.
-                fun fluidLines() {
-                    addView(RunUi.text(ctx, "Fluids ${nd?.waterOz ?: 0} oz" + (if (nd != null && nd.water + nd.sportsOz + nd.otherOz > 0)
-                        "  (water ${nd.water} · sports ${nd.sportsOz} · other ${nd.otherOz})" else ""), RunUi.MUTED, 12f).apply {
-                        setPadding(0, dp(4), 0, dp(2)); setOnClickListener { fluidDialog() } })
-                    N.rehydrate(nd)?.let { h ->
-                        addView(RunUi.text(ctx, "Lost ${String.format(Locale.US, "%.1f", h.lostLb)} lb on the run → ~${h.targetOz} oz to rehydrate · " +
-                            (if (h.needOz == 0) "caught up ✓" else "drink ~${h.needOz} oz more"),
-                            if (h.needOz == 0) 0xFF5FD38D.toInt() else N.WATER, 12f, true).apply { setPadding(0, dp(2), 0, 0); setOnClickListener { fluidDialog() } })
-                    }
-                    // Quick taps: a cup of water / sports drink / other, and weights.
-                    addView(LinearLayout(ctx).apply {
-                        orientation = LinearLayout.HORIZONTAL
-                        layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(6) }
-                        fun chip(t: String, onTap: () -> Unit) = addView(RunUi.text(ctx, t, N.WATER, 12f, true).apply {
-                            gravity = Gravity.CENTER; background = RunUi.rounded(0xFF26302C.toInt(), dp(14).toFloat())
-                            setPadding(dp(4), dp(7), dp(4), dp(7)); setOnClickListener { onTap() }
-                        }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f).apply { marginEnd = dp(4) })
-                        chip("💧 +8 water") { HydrationSync.change(ctx, "water", Hydration.STEP); render() }
-                        chip("+8 sports") { HydrationSync.change(ctx, "sports", Hydration.STEP); render() }
-                        chip("+8 other") { HydrationSync.change(ctx, "other", Hydration.STEP); render() }
-                        chip("⚖ Weight") { fluidDialog() }
-                    })
-                }
-                when {
-                    !NutritionSync.ready(ctx) -> addView(RunUi.text(ctx, "Set up LiveTrack first — nutrition is shared through the same database.", RunUi.MUTED, 12f))
-                    NutritionSync.lastError(ctx) == "rules" -> addView(RunUi.text(ctx, "Update your Firebase rules to share nutrition (Settings → LiveTrack → copy rules).", 0xFFF2C94C.toInt(), 12f))
-                    nd == null || nd.count == 0 -> { addView(RunUi.text(ctx, "Nothing logged today · tap to open 🍎 Nutrition", RunUi.MUTED, 13f)); fluidLines() }
-                    else -> {
-                        val over = nd.target > 0 && nd.left < 0
-                        addView(RunUi.text(ctx, N.line(nd), if (over) 0xFFF2C94C.toInt() else Color.WHITE, 16f, true))
-                        if (nd.target > 0) addView(android.widget.ProgressBar(ctx, null, android.R.attr.progressBarStyleHorizontal).apply {
-                            max = nd.target; progress = nd.cal.coerceAtMost(nd.target)
-                            progressTintList = android.content.res.ColorStateList.valueOf(if (over) 0xFFF2C94C.toInt() else 0xFF5FD38D.toInt())
-                            layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, dp(8)).apply { topMargin = dp(4); bottomMargin = dp(4) }
-                        })
-                        val (pp, cp, fp) = nd.ratios()
-                        addView(RunUi.text(ctx, N.macros(nd) + "  ($pp / $cp / $fp %)", RunUi.MUTED, 12f))
-                        fluidLines()
-                        // Micronutrients: score + every nutrient as a small tile (lowest first), colored by status.
-                        if (nd.micros.isNotEmpty()) {
-                            addView(RunUi.text(ctx, "MICRONUTRIENTS  " + String.format(Locale.US, "%.1f", nd.microScore) + "/10 · " + nd.microLabel(),
-                                N.statusColor(when { nd.microScore >= 7 -> "Met"; nd.microScore >= 5 -> "Close"; else -> "Low" }), 12f, true).apply { setPadding(0, dp(10), 0, dp(2)) })
-                            nd.microsByNeed().chunked(3).forEach { row ->
-                                addView(LinearLayout(ctx).apply {
-                                    orientation = LinearLayout.HORIZONTAL
-                                    layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(4) }
-                                    row.forEachIndexed { i, m ->
-                                        addView(LinearLayout(ctx).apply {
-                                            orientation = LinearLayout.VERTICAL
-                                            background = RunUi.rounded(0xFF26302C.toInt(), dp(8).toFloat())
-                                            setPadding(dp(6), dp(4), dp(6), dp(4))
-                                            addView(RunUi.text(ctx, m.name.replace("Vitamin ", "Vit "), RunUi.MUTED, 10f))
-                                            addView(RunUi.text(ctx, m.shown(), Color.WHITE, 12f, true))
-                                            addView(RunUi.text(ctx, "${m.pct.toInt()}% · ${m.status}", N.statusColor(m.status), 12f, true))
-                                        }, LinearLayout.LayoutParams(0, MATCH_PARENT, 1f).apply { if (i < 2) marginEnd = dp(4) })
-                                    }
-                                    repeat(3 - row.size) { addView(android.view.View(ctx), LinearLayout.LayoutParams(0, 1, 1f)) }
-                                })
-                            }
-                        }
-                    }
-                }
-                setOnClickListener { RunUi.openNutrition(this@RunsActivity) }
+                NutritionUi.today(this@RunsActivity, this, withMicros = true) { render() }
+                setOnClickListener { startActivity(Intent(ctx, NutritionActivity::class.java)) }
             })
         })
 
@@ -348,51 +283,6 @@ open class RunsActivity : Activity() {
         }, if (showAll) RunUi.TAB_RUNS else RunUi.TAB_TODAY))
     }
 
-    /** Fluids (± a cup) and wake-up / post-run weight for today. Fluid taps save at once; weights on Save. */
-    private fun fluidDialog() {
-        val ctx = this
-        fun dp(v: Int) = RunUi.dp(ctx, v)
-        val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(20), dp(8), dp(20), 0) }
-        val names = mapOf("water" to "Water", "sports" to "Sports drinks", "other" to "Other drinks")
-        fun value(f: String) = HydrationSync.today(ctx).let { d -> when (f) { "water" -> d?.water; "sports" -> d?.sportsOz; else -> d?.otherOz } ?: 0 }
-        Hydration.FLUIDS.forEach { f ->
-            box.addView(LinearLayout(ctx).apply {
-                orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
-                setPadding(0, dp(6), 0, dp(6))
-                addView(android.widget.TextView(ctx).apply { text = names[f]; textSize = 16f }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
-                val v = android.widget.TextView(ctx).apply { text = "${value(f)} oz"; textSize = 16f; gravity = Gravity.CENTER; setTypeface(typeface, android.graphics.Typeface.BOLD) }
-                fun btn(t: String, d: Int) = android.widget.Button(ctx).apply {
-                    text = t; minWidth = 0; minimumWidth = 0
-                    setOnClickListener { HydrationSync.change(ctx, f, d); v.text = "${value(f)} oz" }
-                }
-                addView(btn("−8", -Hydration.STEP), LinearLayout.LayoutParams(dp(56), WRAP_CONTENT))
-                addView(v, LinearLayout.LayoutParams(dp(72), WRAP_CONTENT))
-                addView(btn("+8", Hydration.STEP), LinearLayout.LayoutParams(dp(56), WRAP_CONTENT))
-            })
-        }
-        val today = HydrationSync.today(ctx)
-        fun field(hint: String, v: Double) = android.widget.EditText(ctx).apply {
-            this.hint = hint; inputType = android.text.InputType.TYPE_CLASS_NUMBER or android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL
-            if (v > 0) setText(Hydration.lb(v))
-        }
-        box.addView(android.widget.TextView(ctx).apply { text = "Wake-up weight (lb)"; setPadding(0, dp(12), 0, 0) })
-        val wake = field("e.g. 172.4", today?.weight ?: 0.0); box.addView(wake)
-        box.addView(android.widget.TextView(ctx).apply { text = "Post-run weight (lb)"; setPadding(0, dp(8), 0, 0) })
-        val post = field("e.g. 171.2", today?.postWeight ?: 0.0); box.addView(post)
-        box.addView(android.widget.TextView(ctx).apply {
-            text = "Also goes to the Command Center (its Nutrition and Wellness fields)."; textSize = 12f; setPadding(0, dp(8), 0, 0)
-        })
-        android.app.AlertDialog.Builder(this).setTitle("Fluids & weight · today").setView(ScrollView(this).apply { addView(box) })
-            .setPositiveButton("Save") { _, _ ->
-                fun num(e: android.widget.EditText) = e.text.toString().trim().toDoubleOrNull()?.takeIf { it in 70.0..600.0 } ?: 0.0
-                val w = num(wake); val p = num(post)
-                if (w != (today?.weight ?: 0.0)) HydrationSync.change(ctx, "weight", value = w)
-                if (p != (today?.postWeight ?: 0.0)) HydrationSync.change(ctx, "postWeight", value = p)
-                render()
-            }
-            .setOnDismissListener { render() }
-            .show()
-    }
 }
 
 /** Every run (the Runs tab). */
