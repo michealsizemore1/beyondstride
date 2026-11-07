@@ -49,6 +49,8 @@ object HydrationSync {
     }
 
     private fun base(ctx: Context) = Live.db(ctx) + "/nutrition/" + NutritionSync.key(ctx) + "/inbox"
+    /** Food changes go to their own inbox, so a Command Center page that hasn't been reloaded yet leaves them waiting. */
+    private fun base(ctx: Context, f: String) = if (f in Hydration.FOOD_OPS) Live.db(ctx) + "/nutrition/" + NutritionSync.key(ctx) + "/foodinbox" else base(ctx)
 
     /** Posts changes not sent yet. Call off the main thread. */
     @Synchronized fun flush(ctx: Context) {
@@ -61,7 +63,7 @@ object HydrationSync {
                     c.f in Hydration.FLUIDS -> body.put("d", c.d)
                     else -> body.put("v", c.v)
                 }
-                val conn = (URL(base(ctx) + ".json").openConnection() as HttpURLConnection).apply {
+                val conn = (URL(base(ctx, c.f) + ".json").openConnection() as HttpURLConnection).apply {
                     requestMethod = "POST"; doOutput = true; connectTimeout = 12_000; readTimeout = 15_000
                     setRequestProperty("Content-Type", "application/json")
                 }
@@ -84,10 +86,13 @@ object HydrationSync {
         flush(ctx)
         if (Hydration.changes(ctx).none { it.id != null }) { synchronized(Hydration) { Hydration.settle(ctx) }; return }
         try {
-            val conn = (URL(base(ctx) + ".json?shallow=true").openConnection() as HttpURLConnection).apply { connectTimeout = 12_000; readTimeout = 15_000 }
-            if (conn.responseCode != 200) return
-            val txt = conn.inputStream.bufferedReader().readText()
-            val keys = if (txt.isBlank() || txt == "null") emptySet() else JSONObject(txt).keys().asSequence().toSet()
+            fun ids(url: String): Set<String>? {
+                val conn = (URL("$url.json?shallow=true").openConnection() as HttpURLConnection).apply { connectTimeout = 12_000; readTimeout = 15_000 }
+                if (conn.responseCode != 200) return null
+                val txt = conn.inputStream.bufferedReader().readText()
+                return if (txt.isBlank() || txt == "null") emptySet() else JSONObject(txt).keys().asSequence().toSet()
+            }
+            val keys = (ids(base(ctx)) ?: return) + (ids(base(ctx, "foodAdd")) ?: return)
             synchronized(Hydration) {
                 Hydration.saveChanges(ctx, Hydration.changes(ctx).filter { it.id == null || it.id in keys })
                 Hydration.settle(ctx)
