@@ -263,11 +263,29 @@ class NutritionActivity : Activity() {
                         tile("↩️", "Undo All", "(${stats.second} foods)", 0xFFFDA4AF.toInt(), 0xFF3A2329.toInt(), "undo", "Remove every AI-estimated value from your Food Database. This can't be undone.")),
                     listOf(tile("↻", "Rescan Foods", "", 0xFFFDBA74.toInt(), 0xFF3A2A1A.toInt(), "rescan", "Re-check every saved Nutrition day and barcode picture for healthy foods."),
                         tile("🧹", "Remove Dupes", "", 0xFFFDBA74.toInt(), 0xFF3A2A1A.toInt(), "dedupe", "Remove duplicate foods from your saved foods."))
-                ).forEach { row ->
-                    addView(LinearLayout(ctx).apply {
-                        orientation = LinearLayout.HORIZONTAL; layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(8) }
-                        row.forEachIndexed { i, v -> addView(v, LinearLayout.LayoutParams(0, MATCH_PARENT, 1f).apply { if (i == 0) marginEnd = dp(8) }) }
-                    })
+                ).let { rows ->
+                    // Folded into one line; tap to show the four tools.
+                    val prefs = getSharedPreferences("foodlog", 0)
+                    val tools = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL; visibility = if (prefs.getBoolean("toolsOpen", false)) android.view.View.VISIBLE else android.view.View.GONE }
+                    rows.forEach { row ->
+                        tools.addView(LinearLayout(ctx).apply {
+                            orientation = LinearLayout.HORIZONTAL; layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(8) }
+                            row.forEachIndexed { i, v -> addView(v, LinearLayout.LayoutParams(0, MATCH_PARENT, 1f).apply { if (i == 0) marginEnd = dp(8) }) }
+                        })
+                    }
+                    val head = RunUi.text(ctx, "", Color.WHITE, 14f, true).apply {
+                        background = RunUi.rounded(0xFF26302C.toInt(), dp(10).toFloat()); setPadding(dp(12), dp(9), dp(12), dp(9))
+                        layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(8) }
+                    }
+                    fun label() { head.text = "🧰 Database tools " + (if (tools.visibility == android.view.View.VISIBLE) "▾" else "▸") +
+                        (if (stats.first > 0) "  (${stats.first} need enriching)" else "") }
+                    label()
+                    head.setOnClickListener {
+                        val open = tools.visibility != android.view.View.VISIBLE
+                        tools.visibility = if (open) android.view.View.VISIBLE else android.view.View.GONE
+                        prefs.edit().putBoolean("toolsOpen", open).apply(); label()
+                    }
+                    addView(head); addView(tools)
                 }
             }
             // The list scrolls inside the panel (about six foods tall).
