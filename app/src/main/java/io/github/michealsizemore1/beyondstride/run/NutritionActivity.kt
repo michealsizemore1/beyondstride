@@ -69,7 +69,7 @@ class NutritionActivity : Activity() {
 
         // Today: calories, macros, fluids (and weights).
         col.addView(RunUi.section(this, "TODAY"))
-        col.addView(RunUi.card(this).apply { NutritionUi.today(this@NutritionActivity, this, withMicros = false, big = true) { render() } })
+        col.addView(RunUi.card(this).apply { NutritionUi.today(this@NutritionActivity, this, withMicros = false, big = true, chips = false) { render() } })
 
         // Micronutrients.
         if (t != null && t.count > 0 && t.micros.isNotEmpty()) {
@@ -260,6 +260,45 @@ class NutritionActivity : Activity() {
             }, LinearLayout.LayoutParams(MATCH_PARENT, dp(400)).apply { topMargin = dp(4) })
             fill()
         })
+
+        // LIQUIDS — like the Command Center's: Water, Sports Nutrition Drinks, Other Drinks (tap ± for a cup, hold for 1 oz), and weights.
+        col.addView(RunUi.section(this, "LIQUIDS"))
+        run {
+            val H = io.github.michealsizemore1.beyondstride.Hydration
+            fun row(icon: String, title: String, note: String?, f: String, oz: Int) = col.addView(RunUi.card(this).apply {
+                layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(8) }
+                addView(LinearLayout(ctx).apply {
+                    orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+                    addView(RunUi.text(ctx, "$icon  $title" + (note?.let { " ($it)" } ?: "") + ":", Color.WHITE, 15f, true))
+                })
+                addView(LinearLayout(ctx).apply {
+                    orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(0, dp(8), 0, 0)
+                    fun btn(t: String, d: Int) = RunUi.text(ctx, t, 0xFF8EA2F2.toInt(), 20f, true).apply {
+                        gravity = Gravity.CENTER
+                        background = android.graphics.drawable.GradientDrawable().apply { setStroke(dp(2), 0xFF6B7FE0.toInt()); cornerRadius = dp(8).toFloat() }
+                        setOnClickListener { HydrationSync.change(ctx, f, d * H.STEP); render() }
+                        setOnLongClickListener { HydrationSync.change(ctx, f, d); render(); true }
+                    }
+                    addView(btn("−", -1), LinearLayout.LayoutParams(dp(48), dp(44)))
+                    addView(RunUi.text(ctx, "$oz oz (${String.format(Locale.US, "%.1f", oz / 8.0)} cups)", Color.WHITE, 17f, true).apply { gravity = Gravity.CENTER },
+                        LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
+                    addView(btn("+", 1), LinearLayout.LayoutParams(dp(48), dp(44)))
+                })
+            })
+            row("💧", "Water Intake", null, "water", t?.water ?: 0)
+            row("🏃", "Sports Nutrition Drinks", null, "sports", t?.sportsOz ?: 0)
+            row("🥤", "Other Drinks", "coffee, tea, juice, soda, etc.", "other", t?.otherOz ?: 0)
+            col.addView(RunUi.card(this).apply {
+                layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(8) }
+                addView(RunUi.text(ctx, "⚖  Weight: wake-up ${io.github.michealsizemore1.beyondstride.Hydration.lb(t?.weight ?: 0.0)} · post-run ${io.github.michealsizemore1.beyondstride.Hydration.lb(t?.postWeight ?: 0.0)} lb  ▸", Color.WHITE, 15f, true))
+                Nutrition.rehydrate(t)?.let { h ->
+                    addView(RunUi.text(ctx, "Lost ${String.format(Locale.US, "%.1f", h.lostLb)} lb → ~${h.targetOz} oz to rehydrate · " + if (h.needOz == 0) "caught up ✓" else "drink ~${h.needOz} oz more",
+                        if (h.needOz == 0) 0xFF5FD38D.toInt() else Nutrition.WATER, 12f, true).apply { setPadding(0, dp(4), 0, 0) })
+                }
+                setOnClickListener { NutritionUi.fluidDialog(this@NutritionActivity) { render() } }
+            })
+            col.addView(RunUi.text(ctx, "Tap − / + for a cup (8 oz); press and hold for 1 oz.", RunUi.DIM, 10f).apply { setPadding(dp(2), dp(4), 0, 0) })
+        }
 
         // The last 7 days.
         val week = days.filter { it.count > 0 }.takeLast(7)
