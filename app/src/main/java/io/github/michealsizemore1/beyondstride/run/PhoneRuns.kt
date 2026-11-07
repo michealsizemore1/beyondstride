@@ -52,7 +52,9 @@ object PhoneRuns {
     }
 
     // Where each run has been sent.
-    fun sentToCommandCenter(ctx: Context, start: Long) = flags(ctx).getBoolean("cc_$start", false)
+    /** Sent: opened in the Command Center, or put in the cloud for it to pick up. */
+    fun sentToCommandCenter(ctx: Context, start: Long) = flags(ctx).getBoolean("cc_$start", false) || flags(ctx).getBoolean("ccup_$start", false)
+    fun setUploadedToCommandCenter(ctx: Context, start: Long) = flags(ctx).edit().putBoolean("ccup_$start", true).apply()
     fun setSentToCommandCenter(ctx: Context, start: Long) = flags(ctx).edit().putBoolean("cc_$start", true).apply()
 
     fun title(json: JSONObject): String {
@@ -182,14 +184,16 @@ class RunReceiverService : WearableListenerService() {
                     try { RunWeather.fill(this, json.optLong("start")) } catch (e: Exception) { }
                     try { CpUpdate.afterRun(this) } catch (e: Exception) { }
                     try { Backup.autoUpdate(this) } catch (e: Exception) { }
-                    notifyRun(json)
+                    // Straight to the Command Center (through the cloud) — no tap needed.
+                    val sent = try { CommandCenter.autoOn(this) && CommandCenter.upload(this, listOf(json.optLong("start"))) > 0 } catch (e: Exception) { false }
+                    notifyRun(PhoneRuns.read(this, json.optLong("start")) ?: json, sent)
                     // (Automatic Stryd lookups are off: Stryd only has runs after an offline sync, which isn't used.)
                 }
             } catch (e: Exception) { android.util.Log.w("RunReceiver", "run sync failed", e) }
         }
     }
 
-    private fun notifyRun(json: JSONObject) {
+    private fun notifyRun(json: JSONObject, sentToCc: Boolean = false) {
         val nm = getSystemService(NotificationManager::class.java)
         nm.createNotificationChannel(NotificationChannel("runs", "Runs from watch", NotificationManager.IMPORTANCE_DEFAULT))
         val open = PendingIntent.getActivity(this, json.optLong("start").toInt(),
@@ -198,7 +202,7 @@ class RunReceiverService : WearableListenerService() {
         val n = android.app.Notification.Builder(this, "runs")
             .setSmallIcon(R.drawable.ic_stat_run)
             .setContentTitle("${PhoneRuns.title(json)} saved")
-            .setContentText(PhoneRuns.shortLine(json))
+            .setContentText(PhoneRuns.shortLine(json) + if (sentToCc) " · sent to Command Center" else "")
             .setContentIntent(open).setAutoCancel(true).build()
         try { nm.notify(json.optLong("start").toInt(), n) } catch (e: SecurityException) { }
     }

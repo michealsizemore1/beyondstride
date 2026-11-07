@@ -40,6 +40,17 @@ object PhoneStatus {
                 ctx.getSharedPreferences("runsettings", 0).edit().putString("screens", org.json.JSONArray(String(data)).toString()).apply()
             } catch (e: Exception) { }
             "/cmd/cc" -> {
+                // Automatic: send through the cloud, no tap needed.
+                if (CommandCenter.autoOn(ctx)) {
+                    Thread {
+                        val list = unsentCc(ctx)
+                        val sent = if (list.isEmpty()) 0 else CommandCenter.upload(ctx, list)
+                        if (list.isNotEmpty()) notify(ctx, 901, if (sent > 0) "Sent $sent run${if (sent == 1) "" else "s"} to the Command Center" else "Couldn't send runs",
+                            if (sent > 0) "They appear in Activities next time the Command Center is open" else "No connection — try again in a moment",
+                            Intent(ctx, RunsActivity::class.java))
+                    }.start()
+                    return
+                }
                 // The Command Center opens in the phone's browser, which needs a tap on the phone.
                 val n = unsentCc(ctx).size
                 notify(ctx, 901, if (n > 0) "Send $n run${if (n == 1) "" else "s"} to Command Center" else "Command Center is up to date",

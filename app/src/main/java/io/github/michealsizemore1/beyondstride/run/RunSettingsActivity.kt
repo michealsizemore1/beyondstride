@@ -197,6 +197,8 @@ class RunSettingsActivity : Activity() {
         if (on("cc")) {
             val cc = input("Command Center page", RunSettings.ccUrl(this), InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI)
             col.addView(RunUi.text(this, "Where finished runs are sent and where \"Send plan to BeyondStride\" comes from.", RunUi.MUTED, 12f).apply { setPadding(dp(4), dp(6), 0, 0) })
+            switch("Send runs automatically", "Each finished run goes straight to the Command Center (through your LiveTrack database) — it shows in Activities next time the Command Center is open. Off: tap Command Center to send.",
+                getSharedPreferences("runsettings", 0).getBoolean("ccAuto", true)) { getSharedPreferences("runsettings", 0).edit().putBoolean("ccAuto", it).apply() }
             col.addView(RunUi.button(this, "Save", RunUi.ACCENT) {
                 RunSettings.save(ctx, RunSettings.hrMax(ctx), RunSettings.hrRest(ctx), RunSettings.cp(ctx), RunSettings.cal(ctx), cc.text.toString().trim().ifBlank { RunSettings.ccUrl(ctx) })
                 Toast.makeText(ctx, "Saved", Toast.LENGTH_SHORT).show()

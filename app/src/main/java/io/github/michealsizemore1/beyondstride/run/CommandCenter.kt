@@ -152,6 +152,34 @@ object CommandCenter {
         }
     }
 
+    /** Send runs automatically (through the cloud) — on unless turned off in Settings, and needs the LiveTrack database. */
+    fun autoOn(ctx: Context) = ctx.getSharedPreferences("runsettings", 0).getBoolean("ccAuto", true) && NutritionSync.ready(ctx)
+
+    /**
+     * Puts each run in the cloud (<db>/nutrition/<key>/runs/<start>); the Command Center adds them to Activities the next
+     * time it's open (and every minute while it is), then clears them. Returns how many were sent. Call off the main thread.
+     */
+    fun upload(ctx: Context, starts: List<Long>): Int {
+        if (!NutritionSync.ready(ctx)) return 0
+        var n = 0
+        starts.forEach { s ->
+            try {
+                PhoneRuns.read(ctx, s)?.let { if (!RunWeather.has(it)) try { RunWeather.fill(ctx, s) } catch (e: Exception) { } }
+                val run = PhoneRuns.read(ctx, s) ?: return@forEach
+                val body = activity(ctx, run).toString()
+                val url = Live.db(ctx) + "/nutrition/" + NutritionSync.key(ctx) + "/runs/" + s + ".json"
+                val c = (java.net.URL(url).openConnection() as java.net.HttpURLConnection).apply {
+                    requestMethod = "PUT"; doOutput = true; connectTimeout = 12_000; readTimeout = 15_000
+                    setRequestProperty("Content-Type", "application/json")
+                }
+                c.outputStream.use { it.write(body.toByteArray()) }
+                if (c.responseCode in 200..299) { PhoneRuns.setUploadedToCommandCenter(ctx, s); n++ }
+            } catch (e: Exception) { }
+        }
+        if (n > 0) PhoneStatus.push(ctx)
+        return n
+    }
+
     /** Opens the Command Center with these runs; it adds them to Activities and syncs. */
     fun send(ctx: Context, starts: List<Long>) {
         // Fill in weather/AQI first for any run that doesn't have it yet (quick lookup), then open.

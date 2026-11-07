@@ -218,6 +218,10 @@ open class RunsActivity : Activity() {
             val lp = { last: Boolean -> LinearLayout.LayoutParams(0, MATCH_PARENT, 1f).apply { if (!last) marginEnd = dp(6) } }
             addView(tile("Command Center", if (unsentCc.isEmpty()) "✓ sent" else "Send ${unsentCc.size}", RunUi.CC) {
                 if (unsentCc.isEmpty()) Toast.makeText(ctx, "All runs are already in the Command Center", Toast.LENGTH_SHORT).show()
+                else if (CommandCenter.autoOn(ctx)) Thread {
+                    val n = CommandCenter.upload(ctx, unsentCc)
+                    runOnUiThread { Toast.makeText(ctx, if (n > 0) "Sent $n — they appear in Activities next time the Command Center is open" else "Couldn't send — check your connection", Toast.LENGTH_LONG).show(); render() }
+                }.start()
                 else CommandCenter.send(ctx, unsentCc)
             }, lp(false))
             addView(tile("LiveTrack", if (live) "● ON" else "Off", if (live) 0xFF1F6FB2.toInt() else RunUi.CARD) {
