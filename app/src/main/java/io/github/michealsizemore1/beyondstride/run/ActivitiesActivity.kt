@@ -70,6 +70,8 @@ class ActivitiesActivity : Activity() {
         plans.optJSONObject("current")?.let { todayWorkout(col, it, plans.optBoolean("collapsed")) }
         mileage(col, all); zones(col); shoes(col)
         uploadPlan(col)
+        // 📊 Run Metrics Summary — its own section, outside the collapsed log.
+        ActivityAnalysis(this, panels) { render() }.metrics(col, all)
         // 🏃 Activities: collapsed each time the screen opens, like the Command Center's Activities section.
         col.addView(txt((if (logOpen) "▼" else "▶") + "  🏃 Activities" + (if (all.isNotEmpty()) "  (${all.size})" else ""), 0xFFE67E22.toInt(), 17f, true).apply {
             background = RunUi.rounded(RunUi.CARD, dp(10).toFloat()); setPadding(dp(12), dp(12), dp(12), dp(12))
@@ -150,7 +152,6 @@ class ActivitiesActivity : Activity() {
             })
         })
         weekNotes(col)
-        ActivityAnalysis(this, panels) { render() }.metrics(col, all)
         showing = txt("", RunUi.MUTED, 12f).apply { setPadding(dp(2), dp(8), 0, 0) }
         col.addView(showing)
         listBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }

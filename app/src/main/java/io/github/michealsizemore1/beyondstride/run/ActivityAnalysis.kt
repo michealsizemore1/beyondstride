@@ -296,7 +296,7 @@ class ActivityAnalysis(private val act: Activity, private val open: MutableSet<S
 
     // ── 📊 Run Metrics Summary ──
     fun metrics(col: LinearLayout, all: List<JSONObject>) {
-        if (!toggle(col, "metrics", "📊 Metrics")) return
+        if (!toggle(col, "metrics", "📊 Run Metrics Summary")) return
         val box = card(col, 4)
         if (all.isEmpty()) { box.addView(txt("No activities recorded yet.", RunUi.MUTED, 13f)); return }
         val runs = all.filter { S.str(it, "type").lowercase().contains("run") }
@@ -339,7 +339,6 @@ class ActivityAnalysis(private val act: Activity, private val open: MutableSet<S
         maxA("calories")?.let { m("🔥", "Most Calories Burned", comma(S.num(it, "calories")) + " cal", sub(it)) }
         if (hrN > 0) m("❤", "Avg Heart Rate", "${Math.round(hrS / hrN)} bpm", "$hrN run${if (hrN != 1) "s" else ""} averaged")
         if (te > 0) m("⛰", "Total Elevation", comma(te) + " ft", "all runs")
-        box.addView(txt("📊 Run Metrics Summary", ORANGE, 15f, true))
         cells.chunked(2).forEach { row -> box.addView(LinearLayout(act).apply {
             orientation = LinearLayout.HORIZONTAL; layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(6) }
             row.forEachIndexed { i, (l, v, s) -> addView(LinearLayout(act).apply { orientation = LinearLayout.VERTICAL
