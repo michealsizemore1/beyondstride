@@ -17,6 +17,7 @@ import java.util.Locale
 
 /** The phone's Running home: runs from the watch, and where they've been sent. */
 open class RunsActivity : Activity() {
+    private var askedSms = false
 
     /** True when this file was installed on the wrong kind of device (a message is shown instead). */
     private var wrongDevice = false
@@ -46,6 +47,12 @@ open class RunsActivity : Activity() {
         io.github.michealsizemore1.beyondstride.Theme.load(this, "runsettings")
         super.onResume()
         if (wrongDevice) return
+        // LiveTrack is on (e.g. restored from a backup) but this app may not text yet: ask once per launch.
+        if (!askedSms && getSharedPreferences("runsettings", 0).getBoolean("liveOn", false) && Live.smsOn(this) && Live.contacts(this).isNotEmpty() &&
+            checkSelfPermission(android.Manifest.permission.SEND_SMS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            askedSms = true
+            requestPermissions(arrayOf(android.Manifest.permission.SEND_SMS), 31)
+        }
         WorkoutStore.pushToWatch(this)   // keeps the watch's "today" plan current
         render()
         // Today's nutrition from the Command Center.
@@ -224,7 +231,8 @@ open class RunsActivity : Activity() {
                 }.start()
                 else CommandCenter.send(ctx, unsentCc)
             }, lp(false))
-            addView(tile("LiveTrack", if (live) "● ON" else "Off", if (live) 0xFF1F6FB2.toInt() else RunUi.CARD) {
+            val smsBlocked = live && Live.smsOn(ctx) && checkSelfPermission(android.Manifest.permission.SEND_SMS) != android.content.pm.PackageManager.PERMISSION_GRANTED
+            addView(tile("LiveTrack", if (smsBlocked) "● ON · texts not allowed" else if (live) "● ON" else "Off", if (live) 0xFF1F6FB2.toInt() else RunUi.CARD) {
                 if (Live.db(ctx).isBlank()) startActivity(Intent(ctx, LiveTrackActivity::class.java))
                 else {
                     RunSettings.setBool(ctx, "liveOn", !live)

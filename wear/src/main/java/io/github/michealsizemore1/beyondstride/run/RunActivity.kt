@@ -28,6 +28,7 @@ import kotlin.math.abs
  * during the run, and a summary when you finish.
  */
 class RunActivity : Activity() {
+    private var askedSms = false
 
     /** True when this file was installed on the wrong kind of device (a message is shown instead). */
     private var wrongDevice = false
@@ -139,6 +140,12 @@ class RunActivity : Activity() {
         io.github.michealsizemore1.beyondstride.Theme.load(this, "run")
         super.onResume()
         if (wrongDevice) return
+        // LiveTrack on (e.g. restored from a backup) but no texting permission yet on this watch app: ask.
+        if (!askedSms && !Run.isActive && prefs.getBoolean("liveOn", false) &&
+            checkSelfPermission(android.Manifest.permission.SEND_SMS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            askedSms = true
+            requestPermissions(arrayOf(android.Manifest.permission.SEND_SMS), 7)
+        }
         if (!Run.isActive) { RunSync.loadSettings(this); RunSync.loadTrail(this) }
         loadScreens()
         Run.listen(onRunChanged)
