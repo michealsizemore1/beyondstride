@@ -52,7 +52,9 @@ object NutritionSync {
             }
             val body = c.inputStream.bufferedReader().readText()
             val days = synchronized(io.github.michealsizemore1.beyondstride.Hydration) {
-                io.github.michealsizemore1.beyondstride.Hydration.overlay(ctx, Nutrition.parse(body)) }
+                io.github.michealsizemore1.beyondstride.Hydration.overlay(ctx, Nutrition.parse(body).map { d ->
+                    // A day with foods but no micronutrient totals (older shares): work them out here.
+                    if (d.foods.isNotEmpty() && d.micros.isEmpty()) io.github.michealsizemore1.beyondstride.Food.summarize(d, d.foods).copy(cal = d.cal) else d }) }
             val before = Nutrition.json(NutritionStore.days(ctx))
             sp.edit().putString("err", "").apply()
             FoodLibrary.refresh(ctx)

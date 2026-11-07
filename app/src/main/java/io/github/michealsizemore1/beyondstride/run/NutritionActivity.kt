@@ -348,7 +348,8 @@ class NutritionActivity : Activity() {
                 col.addView(RunUi.card(this).apply {
                     addView(RunUi.text(ctx, "$title — This week", RunUi.ACCENT, 14f, true))
                     help?.let { addView(RunUi.text(ctx, it, RunUi.MUTED, 11f).apply { setPadding(0, dp(2), 0, dp(4)) }) }
-                    addView(io.github.michealsizemore1.beyondstride.WeekChart(ctx, vals, color), LinearLayout.LayoutParams(MATCH_PARENT, dp(190)))
+                    addView(RunUi.text(ctx, "Tap a day to see its number", RunUi.DIM, 10f))
+                    addView(io.github.michealsizemore1.beyondstride.WeekChart(ctx, vals, color, label = title.substringBefore(" ("), unit = unit), LinearLayout.LayoutParams(MATCH_PARENT, dp(190)))
                     addView(RunUi.text(ctx, W.summary(vals, unit), RunUi.MUTED, 12f).apply { gravity = Gravity.CENTER; setPadding(0, dp(6), 0, 0) })
                 }.also { it.layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(10) } })
             }

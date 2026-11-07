@@ -1377,7 +1377,7 @@ class RunActivity : Activity() {
     private fun showChartFull(title: String, vals: List<Double?>, unit: String): Unit = overlay { col ->
         val W = io.github.michealsizemore1.beyondstride.WeekChart
         col.addView(label(title, C.ACCENT, 13f, true))
-        col.addView(io.github.michealsizemore1.beyondstride.WeekChart(this, vals, small = false, showValues = true), LinearLayout.LayoutParams(MATCH_PARENT, (resources.displayMetrics.heightPixels * 0.5).toInt()))
+        col.addView(io.github.michealsizemore1.beyondstride.WeekChart(this, vals, small = false, showValues = true, label = title.substringBefore(" ("), unit = unit), LinearLayout.LayoutParams(MATCH_PARENT, (resources.displayMetrics.heightPixels * 0.5).toInt()))
         col.addView(label(W.summary(vals, unit), Color.WHITE, 10f).apply { setPadding(0, dp(4), 0, 0) })
         col.addView(label("Back", C.MUTED, 13f, true).apply { setPadding(0, dp(10), 0, dp(4)); setOnClickListener { showNutrition() } })
     }
