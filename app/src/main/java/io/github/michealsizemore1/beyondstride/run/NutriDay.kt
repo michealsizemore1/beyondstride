@@ -11,7 +11,7 @@ import java.net.URL
 
 /**
  * The day shown on the Nutrition tab (today unless you've gone back). The last 3 weeks come with the usual
- * refresh; older days are read one at a time from the Command Center's shared days and kept here (up to 120).
+ * refresh; every older day the Command Center has shared is downloaded here (all of them, a month at a time).
  * Adding / changing foods, fluids and weights on the Nutrition tab goes to this day.
  */
 object NutriDay {
@@ -20,7 +20,62 @@ object NutriDay {
     fun isToday() = date() == Readiness.today()
 
     private fun p(ctx: Context) = ctx.getSharedPreferences("nutHistory", 0)
-    private fun cache(ctx: Context): JSONObject = try { JSONObject(p(ctx).getString("days", "{}")) } catch (e: Exception) { JSONObject() }
+    // Every older day, kept in a file (it can be a few MB): {"2025-03-04": {...}, ...}.
+    private fun file(ctx: Context) = java.io.File(ctx.filesDir, "nutrition_history.json")
+    @Volatile private var mem: JSONObject? = null
+    @Synchronized private fun cache(ctx: Context): JSONObject {
+        mem?.let { return it }
+        val f = file(ctx)
+        val o = try { if (f.exists()) JSONObject(f.readText()) else JSONObject(p(ctx).getString("days", "{}")) } catch (e: Exception) { JSONObject() }
+        mem = o; return o
+    }
+    @Synchronized private fun write(ctx: Context, o: JSONObject) { mem = o; try { file(ctx).writeText(o.toString()) } catch (e: Exception) { } }
+    fun historyCount(ctx: Context) = cache(ctx).length()
+    /** Every day with food (newest first) — the 3 recent weeks plus the history. */
+    fun allDates(ctx: Context): List<String> = (cache(ctx).keys().asSequence().toList() + NutritionStore.days(ctx).filter { it.count > 0 }.map { it.date }).distinct()
+        .filter { d -> cache(ctx).optJSONObject(d)?.optBoolean("empty") != true }.sortedDescending()
+
+    @Volatile var loading = false
+    @Volatile var loaded = 0
+    /**
+     * Downloads every older day the Command Center has shared that isn't here yet, a month at a time.
+     * Returns how many days were added. Call off the main thread.
+     */
+    fun fetchAll(ctx: Context, onProgress: () -> Unit = {}): Int {
+        if (!NutritionSync.ready(ctx) || loading) return 0
+        loading = true; loaded = 0
+        try {
+            val base = Live.db(ctx) + "/nutrition/" + NutritionSync.key(ctx) + "/days"
+            val c = (URL("$base.json?shallow=true").openConnection() as HttpURLConnection).apply { connectTimeout = 12_000; readTimeout = 30_000 }
+            if (c.responseCode != 200) return 0
+            val txt = c.inputStream.bufferedReader().readText(); if (txt == "null" || txt.isBlank()) return 0
+            val recent = NutritionStore.days(ctx).map { it.date }.toSet()
+            val have = cache(ctx)
+            val need = JSONObject(txt).keys().asSequence().filter { Regex("\\d{4}-\\d{2}-\\d{2}").matches(it) && it !in recent && !have.has(it) }.toList()
+            if (need.isEmpty()) { p(ctx).edit().putLong("fullAt", System.currentTimeMillis()).apply(); return 0 }
+            var added = 0
+            need.groupBy { it.take(7) }.toSortedMap(compareByDescending { it }).forEach { (month, _) ->
+                val url = "$base.json?orderBy=%22%24key%22&startAt=%22$month-01%22&endAt=%22$month-31%22"
+                val mc = (URL(url).openConnection() as HttpURLConnection).apply { connectTimeout = 12_000; readTimeout = 40_000 }
+                if (mc.responseCode != 200) return@forEach
+                val body = mc.inputStream.bufferedReader().readText(); if (body == "null" || body.isBlank()) return@forEach
+                val mo = JSONObject(body); val all = JSONObject(cache(ctx).toString())
+                mo.keys().forEach { d -> if (d in recent) return@forEach
+                    var o = mo.optJSONObject(d) ?: return@forEach
+                    Nutrition.parse(JSONObject().put(d, o).toString()).firstOrNull()?.let { day ->
+                        if (day.foods.isNotEmpty() && day.micros.isEmpty()) o = JSONObject(Nutrition.json(listOf(io.github.michealsizemore1.beyondstride.Food.summarize(day, day.foods).copy(cal = day.cal)))).getJSONObject(d) }
+                    if (!all.has(d)) added++
+                    all.put(d, o)
+                }
+                write(ctx, all); loaded = added; onProgress()
+            }
+            p(ctx).edit().putLong("fullAt", System.currentTimeMillis()).apply()
+            return added
+        } catch (e: Exception) { return 0 } finally { loading = false }
+    }
+    /** Checks for history not here yet at most every few hours (older days rarely change; a viewed day is re-read anyway). */
+    fun fetchAllIfDue(ctx: Context, onProgress: () -> Unit): Int =
+        if (System.currentTimeMillis() - p(ctx).getLong("fullAt", 0L) > 3 * 3600_000L || historyCount(ctx) == 0) fetchAll(ctx, onProgress) else 0
 
     /** The raw day (no local changes on top): recent days from the store, older ones from the cache. */
     fun raw(ctx: Context, date: String): Nutrition.Day? =
@@ -57,12 +112,9 @@ object NutriDay {
             Nutrition.parse(JSONObject().put(date, o).toString()).firstOrNull()?.let { d ->
                 if (d.foods.isNotEmpty() && d.micros.isEmpty()) o = JSONObject(Nutrition.json(listOf(io.github.michealsizemore1.beyondstride.Food.summarize(d, d.foods).copy(cal = d.cal)))).getJSONObject(date)
             }
-            val all = cache(ctx); val changed = all.optJSONObject(date)?.toString() != o.toString()
+            val all = JSONObject(cache(ctx).toString()); val changed = all.optJSONObject(date)?.toString() != o.toString()
             all.put(date, o)
-            // Keep the 120 most recently viewed days.
-            val keys = all.keys().asSequence().toList()
-            if (keys.size > 120) keys.sorted().take(keys.size - 120).forEach { all.remove(it) }
-            p(ctx).edit().putString("days", all.toString()).apply()
+            write(ctx, all)
             changed
         } catch (e: Exception) { false }
     }

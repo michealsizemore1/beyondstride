@@ -64,6 +64,8 @@ class NutritionActivity : Activity() {
         io.github.michealsizemore1.beyondstride.Theme.load(this, "runsettings")
         super.onResume(); render()
         if (!NutriDay.isToday()) Thread { if (NutriDay.fetch(this, NutriDay.date())) runOnUiThread { if (!isFinishing) render() } }.start()
+        // Your whole nutrition history (every day before the last 3 weeks), downloaded once and topped up now and then.
+        Thread { if (NutriDay.fetchAllIfDue(this) { runOnUiThread { if (!isFinishing) render() } } > 0) runOnUiThread { if (!isFinishing) render() } }.start()
         if (NutritionSync.justOpened) NutritionSync.refreshAfterNutrition(this) { runOnUiThread { if (!isFinishing) render() } }
         else Thread { if (NutritionSync.refreshIfStale(this, 30_000L)) runOnUiThread { if (!isFinishing) render() } }.start()
     }
@@ -98,6 +100,11 @@ class NutritionActivity : Activity() {
                     .apply { datePicker.maxDate = System.currentTimeMillis() }.show() } }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
             arrow("›", !NutriDay.isToday(), vd.plusDays(1))
         })
+        run {
+            val n = NutriDay.historyCount(ctx)
+            col.addView(RunUi.text(ctx, if (NutriDay.loading) "⏳ Downloading your nutrition history… ${n} past days so far"
+                else if (n > 0) "History: ${NutriDay.allDates(ctx).size} days with food on this phone · tap the date for any day" else "Tap the date to jump to any day", RunUi.DIM, 11f).apply { setPadding(0, dp(4), 0, 0) })
+        }
         if (!NutriDay.isToday()) {
             col.addView(RunUi.text(ctx, "Back to today ▸", RunUi.ACCENT, 13f, true).apply { setPadding(0, dp(6), 0, 0); setOnClickListener { go(today0) } })
             if (t == null && NutriDay.missing(ctx, NutriDay.date()))
