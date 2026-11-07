@@ -16,6 +16,15 @@ object ActivityStore {
     private fun p(ctx: Context) = ctx.getSharedPreferences("activities", 0)
     private fun raw(ctx: Context): JSONObject = try { JSONObject(p(ctx).getString("data", "{}")) } catch (e: Exception) { JSONObject() }
 
+    /** An activity id as the Command Center writes it (decimals without "E12"). */
+    fun idStr(v: Any?): String = when (v) {
+        null -> ""
+        is Double -> if (v == Math.floor(v) && !v.isInfinite()) v.toLong().toString() else java.math.BigDecimal.valueOf(v).toPlainString()
+        is Float -> idStr(v.toDouble())
+        else -> v.toString()
+    }
+    fun idOf(a: JSONObject) = idStr(a.opt("id"))
+
     fun fetchedAt(ctx: Context) = p(ctx).getLong("at", 0)
     fun status(ctx: Context) = p(ctx).getString("status", "") ?: ""
 
@@ -25,8 +34,8 @@ object ActivityStore {
         val out = (0 until a.length()).mapNotNull { a.optJSONObject(it) }.toMutableList()
         Hydration.changes(ctx).filter { it.f == "actSave" || it.f == "actDel" }.sortedBy { it.at }.forEach { c ->
             val x = try { JSONObject(c.x ?: "{}") } catch (e: Exception) { return@forEach }
-            val id = x.opt("id")?.toString() ?: return@forEach
-            val i = out.indexOfFirst { it.opt("id")?.toString() == id }
+            val id = idStr(x.opt("id")).ifEmpty { return@forEach }
+            val i = out.indexOfFirst { idOf(it) == id }
             if (c.f == "actDel") { if (i >= 0) out.removeAt(i) }
             else {
                 val act = x.optJSONObject("act") ?: return@forEach
@@ -37,7 +46,12 @@ object ActivityStore {
         return out
     }
 
-    fun extras(ctx: Context, id: Any?): JSONObject = raw(ctx).optJSONObject("extras")?.optJSONObject(id.toString()) ?: JSONObject()
+    /** Extras are keyed by id with . $ # [ ] / replaced by _ (Firebase can't store those in keys). */
+    fun extras(ctx: Context, id: Any?): JSONObject {
+        val ex = raw(ctx).optJSONObject("extras") ?: return JSONObject()
+        val raw = idStr(id)
+        return ex.optJSONObject(raw.replace(Regex("[.$#\\[\\]/]"), "_").ifEmpty { "_" }) ?: ex.optJSONObject(raw) ?: JSONObject()
+    }
     fun settings(ctx: Context): JSONObject = raw(ctx).optJSONObject("settings") ?: JSONObject()
 
     /** Saves an activity (new or changed). [clear]: fields emptied. */

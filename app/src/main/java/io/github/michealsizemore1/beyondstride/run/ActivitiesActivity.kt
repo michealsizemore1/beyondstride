@@ -64,7 +64,7 @@ class ActivitiesActivity : Activity() {
                 background = RunUi.rounded(bg, dp(8).toFloat()); setPadding(dp(12), dp(7), dp(12), dp(7)); setOnClickListener { go() } })
             btn("+ Add", 0xFFE67E22.toInt()) { startActivity(Intent(ctx, ActivityEditActivity::class.java)) }
             btn("⊞ Expand", RunUi.CARD) { collapsed.clear(); fill() }
-            btn("⊟ Collapse", RunUi.CARD) { all.forEach { collapsed += it.opt("id").toString() }; fill() }
+            btn("⊟ Collapse", RunUi.CARD) { all.forEach { collapsed += S.idOf(it) }; fill() }
             btn(if (compare) "✖ Exit Compare" else "⚖️ Compare", if (compare) 0xFF4C1D95.toInt() else 0xFF7C3AED.toInt()) { compare = !compare; if (!compare) chosen.clear(); render() }
             btn("BeyondStride runs ▸", RunUi.CARD) { startActivity(Intent(ctx, AllRunsActivity::class.java)) }
         })
@@ -229,7 +229,7 @@ class ActivitiesActivity : Activity() {
 
     private fun card(a: JSONObject, date: String?, inGroup: Boolean): View {
         val ctx = this
-        val id = a.opt("id").toString()
+        val id = S.idOf(a)
         val x = S.extras(this, a.opt("id"))
         val type = S.str(a, "type"); val tc = S.TYPE_COLOR[type] ?: 0xFF95A5A6.toInt()
         val src = S.str(a, "source").ifEmpty { "manual" }.lowercase()
@@ -322,7 +322,7 @@ class ActivitiesActivity : Activity() {
             })
         }
         // BeyondStride's own record of the run (map, splits, charts) when it came from the watch.
-        a.opt("id")?.toString()?.toLongOrNull()?.takeIf { PhoneRuns.read(ctx, it) != null }?.let { start ->
+        S.idOf(a).toLongOrNull()?.takeIf { PhoneRuns.read(ctx, it) != null }?.let { start ->
             body.addView(txt("📍 Map, splits & charts ▸", RunUi.ACCENT, 13f, true).apply {
                 setPadding(0, dp(8), 0, 0); setOnClickListener { startActivity(Intent(ctx, RunDetailActivity::class.java).putExtra("start", start)) } })
         }
@@ -375,7 +375,7 @@ class ActivitiesActivity : Activity() {
 
     /** Side-by-side table with 🏆 on the best value per row — the Command Center's Compare. */
     private fun showCompare() {
-        val acts = S.list(this).filter { it.opt("id").toString() in chosen }.sortedBy { S.str(it, "date") }
+        val acts = S.list(this).filter { S.idOf(it) in chosen }.sortedBy { S.str(it, "date") }
         if (acts.size < 2) { android.widget.Toast.makeText(this, "Select at least 2 activities to compare.", android.widget.Toast.LENGTH_SHORT).show(); return }
         data class Row(val label: String, val v: (JSONObject) -> Double, val show: (JSONObject, Double) -> String, val best: String?)
         val rows = listOf(

@@ -24,7 +24,7 @@ class ActivityEditActivity : Activity() {
     override fun onCreate(b: Bundle?) {
         super.onCreate(b)
         io.github.michealsizemore1.beyondstride.Theme.load(this, "runsettings")
-        intent.getStringExtra("id")?.let { id -> orig = S.list(this).firstOrNull { it.opt("id").toString() == id } }
+        intent.getStringExtra("id")?.let { id -> orig = S.list(this).firstOrNull { S.idOf(it) == id } }
         orig?.let { type = S.str(it, "type").ifEmpty { "Run" }; source = S.str(it, "source").ifEmpty { "manual" } }
         build()
     }
