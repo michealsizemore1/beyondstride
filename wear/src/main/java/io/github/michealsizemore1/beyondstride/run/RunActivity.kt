@@ -1319,19 +1319,6 @@ class RunActivity : Activity() {
         }
         fun head(t: String) = label(t, C.ACCENT, 11f, true).apply { letterSpacing = 0.08f }
         col.addView(label("Fitness", Color.WHITE, 20f, true))
-        col.addView(card().apply {
-            addView(head("READINESS"))
-            val big = label("", Color.WHITE, 16f, true); val sub = label("", C.MUTED, 10f)
-            addView(big); addView(sub)
-            setOnClickListener { startActivity(Intent(this@RunActivity, MorningCheckActivity::class.java).putExtra("start", !Recovery.checkedToday(this@RunActivity))) }
-            Thread {
-                val r = try { Recovery.result(this@RunActivity) } catch (e: Exception) { null }
-                runOnUiThread {
-                    if (r == null) { big.text = "Morning check ▸"; big.setTextColor(C.ACCENT); sub.text = "2½ min with your strap" }
-                    else { big.text = "${r.score} · ${r.label}"; big.setTextColor(r.color); sub.text = r.parts.filter { it.pts >= 0 }.joinToString(" · ") { "${it.name} ${it.value}" } }
-                }
-            }.start()
-        })
         // Resting heart rate trend (sleeping HR, last 7 nights vs the week before).
         io.github.michealsizemore1.beyondstride.Readiness.rhrTrend(io.github.michealsizemore1.beyondstride.ReadinessSync.nights(this))?.let { tr ->
             col.addView(card().apply {
