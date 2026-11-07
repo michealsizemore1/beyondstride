@@ -30,6 +30,7 @@ class ActivitiesActivity : Activity() {
     private lateinit var statsBox: LinearLayout
     private lateinit var showing: TextView
     private var scroller: ScrollView? = null
+    private var logOpen = false
 
     override fun onResume() {
         io.github.michealsizemore1.beyondstride.Theme.load(this, "runsettings")
@@ -65,7 +66,13 @@ class ActivitiesActivity : Activity() {
         mileage(col, all); zones(col); shoes(col)
         uploadPlan(col)
         plans.optJSONObject("current")?.let { todayWorkout(col, it, plans.optBoolean("collapsed")) }
-        col.addView(RunUi.section(this, "ACTIVITIES LOG"))
+        // 🏃 Activities: collapsed each time the screen opens, like the Command Center's Activities section.
+        col.addView(txt((if (logOpen) "▼" else "▶") + "  🏃 Activities" + (if (all.isNotEmpty()) "  (${all.size})" else ""), 0xFFE67E22.toInt(), 17f, true).apply {
+            background = RunUi.rounded(RunUi.CARD, dp(10).toFloat()); setPadding(dp(12), dp(12), dp(12), dp(12))
+            layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(16) }
+            setOnClickListener { logOpen = !logOpen; render() }
+        })
+        val logFrom = col.childCount
 
         // Buttons.
         col.addView(FlowLayout(this, dp(6), dp(6)).apply {
@@ -135,6 +142,7 @@ class ActivitiesActivity : Activity() {
         listBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         col.addView(listBox)
         fill()
+        if (!logOpen) for (i in logFrom until col.childCount) col.getChildAt(i).visibility = View.GONE
         archived(col, plans.optJSONArray("archived"))
 
         val keepY = scroller?.scrollY ?: 0
