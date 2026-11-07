@@ -11,7 +11,7 @@ import android.view.View
  * A Monday–Sunday line chart like the Command Center's "— This Week" charts: one point per day
  * (days with nothing logged are skipped and the line joins across them), soft fill, light grid.
  */
-class WeekChart(ctx: Context, private val values: List<Double?>, @Suppress("UNUSED_PARAMETER") requested: Int = LIME, private val small: Boolean = false) : View(ctx) {
+class WeekChart(ctx: Context, private val values: List<Double?>, @Suppress("UNUSED_PARAMETER") requested: Int = LIME, private val small: Boolean = false, private val showValues: Boolean = false) : View(ctx) {
     // Every chart uses BeyondStride's lime so the line stands out on the dark cards.
     private val lineColor = LIME
     private val d = ctx.resources.displayMetrics.density
@@ -52,6 +52,15 @@ class WeekChart(ctx: Context, private val values: List<Double?>, @Suppress("UNUS
         val area = Path(path).apply { lineTo(pts.last().first, bottom); lineTo(pts.first().first, bottom); close() }
         c.drawPath(area, fill); c.drawPath(path, line)
         pts.forEach { (px, py) -> c.drawCircle(px, py, (if (small) 2.5f else 5f) * d, dot) }
+        // Enlarged view: each day's number above its point.
+        if (showValues) {
+            val vp = Paint(text).apply { color = Color.WHITE; isFakeBoldText = true }
+            values.forEachIndexed { i, v ->
+                if (v == null || v <= 0) return@forEachIndexed
+                val s = if (v >= 100) Math.round(v).toString() else String.format(java.util.Locale.US, "%.0f", v)
+                c.drawText(s, (x(i) - vp.measureText(s) / 2).coerceIn(0f, width - vp.measureText(s)), maxOf(vp.textSize, y(v) - 7 * d), vp)
+            }
+        }
     }
 
     companion object {

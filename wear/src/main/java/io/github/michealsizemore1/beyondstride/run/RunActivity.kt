@@ -1373,6 +1373,15 @@ class RunActivity : Activity() {
         col.addView(label("Back", C.MUTED, 13f, true).apply { setPadding(0, dp(12), 0, dp(4)); setOnClickListener { showNutrition() } })
     }
 
+    /** One week chart filling the watch screen, with each day's number. Back returns to Nutrition. */
+    private fun showChartFull(title: String, vals: List<Double?>, unit: String): Unit = overlay { col ->
+        val W = io.github.michealsizemore1.beyondstride.WeekChart
+        col.addView(label(title, C.ACCENT, 13f, true))
+        col.addView(io.github.michealsizemore1.beyondstride.WeekChart(this, vals, small = false, showValues = true), LinearLayout.LayoutParams(MATCH_PARENT, (resources.displayMetrics.heightPixels * 0.5).toInt()))
+        col.addView(label(W.summary(vals, unit), Color.WHITE, 10f).apply { setPadding(0, dp(4), 0, 0) })
+        col.addView(label("Back", C.MUTED, 13f, true).apply { setPadding(0, dp(10), 0, dp(4)); setOnClickListener { showNutrition() } })
+    }
+
     private fun showNutrition() {
         overlayOpen = true; startBuilt = false
         val N = io.github.michealsizemore1.beyondstride.Nutrition
@@ -1454,6 +1463,8 @@ class RunActivity : Activity() {
                 addView(label(title, C.ACCENT, 10f, true))
                 addView(io.github.michealsizemore1.beyondstride.WeekChart(this@RunActivity, vals, color, small = true), LinearLayout.LayoutParams(MATCH_PARENT, dp(90)))
                 addView(label(W.summary(vals, unit).replace(" weekly average", " avg"), C.MUTED, 8f))
+                addView(label("Tap to enlarge", C.DIM, 7f))
+                setOnClickListener { showChartFull(title, vals, unit) }
             }
             col.addView(label("THIS WEEK", C.ACCENT, 11f, true).apply { setPadding(0, dp(8), 0, 0) })
             chart("Calories", 0xFFF39C12.toInt(), "") { if (it.count > 0) it.cal.toDouble() else 0.0 }
