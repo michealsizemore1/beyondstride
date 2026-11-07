@@ -42,6 +42,12 @@ object AiFood {
     fun askText(ctx: Context, prompt: String, maxTokens: Int = 3000) =
         ask(ctx, "claude-haiku-4-5-20251001", maxTokens, JSONArray().put(JSONObject().put("type", "text").put("text", prompt)))
 
+    /** An image plus a question → the answer text (activity screenshot scan). Call off the main thread. */
+    fun askImage(ctx: Context, b64: String, mediaType: String, prompt: String, maxTokens: Int = 2000) =
+        ask(ctx, "claude-haiku-4-5-20251001", maxTokens, JSONArray()
+            .put(JSONObject().put("type", "image").put("source", JSONObject().put("type", "base64").put("media_type", mediaType).put("data", b64)))
+            .put(JSONObject().put("type", "text").put("text", prompt)))
+
     private fun json(text: String): JSONObject? = try { JSONObject(text) } catch (e: Exception) {
         Regex("\\{[\\s\\S]*\\}").find(text)?.value?.let { try { JSONObject(it) } catch (e2: Exception) { null } }
     }

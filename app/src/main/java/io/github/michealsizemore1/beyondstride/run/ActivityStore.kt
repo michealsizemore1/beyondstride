@@ -81,6 +81,19 @@ object ActivityStore {
         }
         return out
     }
+    /** Weekly Run Notes by Monday (with notes saved here on top). */
+    fun weekNotes(ctx: Context): Map<String, String> {
+        val out = HashMap<String, String>()
+        raw(ctx).optJSONObject("weekNotes")?.let { o -> o.keys().forEach { out[it] = o.optString(it) } }
+        pending(ctx, "wrnSave").forEach { (_, x) -> val w = x.optString("week"); val t = x.optString("text").trim(); if (t.isEmpty()) out.remove(w) else out[w] = t }
+        return out
+    }
+    fun saveWeekNote(ctx: Context, week: String, text: String) { Hydration.queue(ctx, "wrnSave", JSONObject().put("week", week).put("text", text)); Thread { HydrationSync.flush(ctx.applicationContext) }.start() }
+    /** A Garmin / Stryd / Strava CSV, imported by the Command Center's own importer. */
+    fun importCsv(ctx: Context, csv: String, hint: String, name: String) { Hydration.queue(ctx, "actImport", JSONObject().put("csv", csv).put("hint", hint).put("name", name)); Thread { HydrationSync.flush(ctx.applicationContext) }.start() }
+    /** The Command Center's last message (e.g. "Imported 12 activities (garmin).") and when. */
+    fun notice(ctx: Context): Pair<String, Long>? = try { JSONObject(p(ctx).getString("notice", "") ?: "").let { it.optString("msg") to it.optLong("at") }.takeIf { it.first.isNotEmpty() } } catch (e: Exception) { null }
+
     fun saveSettings(ctx: Context, x: JSONObject) { Hydration.queue(ctx, "actSettings", x); Thread { HydrationSync.flush(ctx.applicationContext) }.start() }
     fun saveShoe(ctx: Context, shoe: JSONObject) { Hydration.queue(ctx, "shoeSave", JSONObject().put("id", shoe.optString("id")).put("shoe", shoe)); Thread { HydrationSync.flush(ctx.applicationContext) }.start() }
     fun deleteShoe(ctx: Context, id: String) { Hydration.queue(ctx, "shoeDel", JSONObject().put("id", id)); Thread { HydrationSync.flush(ctx.applicationContext) }.start() }
@@ -122,6 +135,10 @@ object ActivityStore {
                     else "Command Center: " + o.optString("stage") + (if (o.has("count")) " · ${o.optInt("count")} activities" else "") + (if (o.has("bytes")) " · ${o.optInt("bytes") / 1024} KB" else "") +
                         (if (o.has("status")) " · HTTP ${o.optInt("status")}" else "") + (o.optString("err").takeIf { it.isNotEmpty() }?.let { " · $it" } ?: "") +
                         " · " + android.text.format.DateUtils.getRelativeTimeSpanString(o.optLong("at"))).apply()
+            } catch (e: Exception) { }
+            try {
+                val nc = (URL(Live.db(ctx) + "/nutrition/" + NutritionSync.key(ctx) + "/notice.json").openConnection() as HttpURLConnection).apply { connectTimeout = 10_000; readTimeout = 10_000 }
+                if (nc.responseCode == 200) nc.inputStream.bufferedReader().readText().takeIf { it != "null" && it.isNotBlank() }?.let { p(ctx).edit().putString("notice", it).apply() }
             } catch (e: Exception) { }
             if (txt == "null" || txt.isBlank()) return true
             val changed = txt != p(ctx).getString("data", "")

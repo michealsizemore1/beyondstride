@@ -31,6 +31,8 @@ class ActivitiesActivity : Activity() {
     private lateinit var showing: TextView
     private var scroller: ScrollView? = null
     private var logOpen = false
+    private val panels = HashSet<String>()
+    private var wrnOff = 0
 
     override fun onResume() {
         io.github.michealsizemore1.beyondstride.Theme.load(this, "runsettings")
@@ -56,6 +58,7 @@ class ActivitiesActivity : Activity() {
             }
         })
         if (S.fetchedAt(this) == 0L) col.addView(txt(if (NutritionSync.ready(this)) "Open the Command Center once (after reloading it) so it can share your Activities." else "Set up LiveTrack first — Activities come through the same database.", 0xFFF2C94C.toInt(), 12f).apply { setPadding(0, dp(6), 0, 0) })
+        S.notice(this)?.let { (m, at) -> if (System.currentTimeMillis() - at < 15 * 60_000L) col.addView(txt("Command Center: $m", 0xFF7DD3FC.toInt(), 12f, true).apply { setPadding(0, dp(6), 0, 0) }) }
         if (all.isEmpty() && S.status(this).isNotEmpty()) col.addView(txt(S.status(this), RunUi.MUTED, 11f).apply { setPadding(0, dp(4), 0, 0) })
 
         // The Command Center's order: plans, mileage, zones, shoes, plan upload, today's workout, the log, archived plans.
@@ -80,6 +83,9 @@ class ActivitiesActivity : Activity() {
             fun btn(t: String, bg: Int, fg: Int = Color.WHITE, go: () -> Unit) = addView(txt(t, fg, 13f, true).apply {
                 background = RunUi.rounded(bg, dp(8).toFloat()); setPadding(dp(12), dp(7), dp(12), dp(7)); setOnClickListener { go() } })
             btn("+ Add", 0xFFE67E22.toInt()) { startActivity(Intent(ctx, ActivityEditActivity::class.java)) }
+            btn("📥 Import ▾", 0xFF00B2E3.toInt()) { importMenu() }
+            btn("💾 Export", 0xFF27AE60.toInt()) { exportCsv() }
+            btn("🖨️ Print", 0xFF2980B9.toInt()) { printLog(all) }
             btn("⊞ Expand", RunUi.CARD) { collapsed.clear(); fill() }
             btn("⊟ Collapse", RunUi.CARD) { all.forEach { collapsed += S.idOf(it) }; fill() }
             btn(if (compare) "✖ Exit Compare" else "⚖️ Compare", if (compare) 0xFF4C1D95.toInt() else 0xFF7C3AED.toInt()) { compare = !compare; if (!compare) chosen.clear(); render() }
@@ -99,6 +105,11 @@ class ActivitiesActivity : Activity() {
         // Stats bar (filtered).
         statsBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         col.addView(statsBox, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(10) })
+        // Phase 4: the Command Center's analysis, in its order.
+        ActivityAnalysis(this, panels) { render() }.apply {
+            streakLoad(col, all); acwr(col, all); prs(col, all); racePredictor(col, all); volume(col, all); dailyMiles(col, all)
+            cardioDrift(col, all); heatAcclimation(col, all); humidity(col, all)
+        }
 
         // Filters.
         col.addView(RunUi.card(this).apply {
@@ -137,6 +148,8 @@ class ActivitiesActivity : Activity() {
                 addView(txt((if (groupByDay) "☑" else "☐") + " Group by day", Color.WHITE, 13f).apply { setPadding(dp(6), dp(7), dp(6), dp(7)); setOnClickListener { groupByDay = !groupByDay; fill() } })
             })
         })
+        weekNotes(col)
+        ActivityAnalysis(this, panels) { render() }.metrics(col, all)
         showing = txt("", RunUi.MUTED, 12f).apply { setPadding(dp(2), dp(8), 0, 0) }
         col.addView(showing)
         listBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
@@ -769,7 +782,11 @@ class ActivitiesActivity : Activity() {
     @Deprecated("Deprecated in Java")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode != PICK_PLAN || resultCode != RESULT_OK) return
+        if (resultCode != RESULT_OK) return
+        if (requestCode == PICK_CSV) { onCsv(data?.data); return }
+        if (requestCode == SAVE_CSV) { data?.data?.let { u -> try { contentResolver.openOutputStream(u)?.use { it.write(csvText.toByteArray()) }
+            android.widget.Toast.makeText(this, "Exported ${S.list(this).size} activities", android.widget.Toast.LENGTH_SHORT).show() } catch (e: Exception) { android.widget.Toast.makeText(this, "Couldn't save the file", android.widget.Toast.LENGTH_LONG).show() } }; return }
+        if (requestCode != PICK_PLAN) return
         val uri = data?.data ?: return
         try {
             var name = "plan.txt"
@@ -870,4 +887,161 @@ class ActivitiesActivity : Activity() {
             })
         }
     }
+
+    // ══ Phase 4: Weekly Run Notes, Import / Export / Print ══
+    private fun wrnMonday() = java.time.LocalDate.now().let { it.minusDays((it.dayOfWeek.value - 1).toLong()) }.plusWeeks(wrnOff.toLong())
+    private fun wrnLabel(): String { val m = wrnMonday(); return m.format(java.time.format.DateTimeFormatter.ofPattern("MMM d", Locale.US)) + " – " + m.plusDays(6).format(java.time.format.DateTimeFormatter.ofPattern("MMM d, yyyy", Locale.US)) }
+
+    private fun weekNotes(col: LinearLayout) {
+        val ctx = this
+        val isOpen = "wrn" in panels
+        col.addView(txt((if (isOpen) "▼" else "▶") + "  📝 Weekly Run Notes", 0xFFE67E22.toInt(), 15f, true).apply {
+            setPadding(dp(2), dp(14), 0, dp(4)); setOnClickListener { if (isOpen) panels.remove("wrn") else panels.add("wrn"); render() } })
+        if (!isOpen) return
+        val week = wrnMonday().toString()
+        val note = EditText(this).apply {
+            setText(S.weekNotes(ctx)[week] ?: ""); hint = "Reflect on this week's runs — effort, progress, how your body felt, what to focus on next week..."
+            minLines = 5; gravity = Gravity.TOP; setTextColor(Color.WHITE); setHintTextColor(RunUi.DIM); textSize = 14f
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE or android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+            background = RunUi.rounded(0xFF26302C.toInt(), dp(8).toFloat()); setPadding(dp(10), dp(8), dp(10), dp(8))
+        }
+        col.addView(RunUi.card(this).apply {
+            addView(LinearLayout(ctx).apply {
+                orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+                fun arrow(t: String, d: Int) = addView(txt(t, Color.WHITE, 16f, true).apply { background = RunUi.rounded(0xFFE67E22.toInt(), dp(6).toFloat()); setPadding(dp(12), dp(2), dp(12), dp(4))
+                    setOnClickListener { wrnOff += d; render() } })
+                arrow("‹", -1); addView(txt(wrnLabel(), 0xFFFCD34D.toInt(), 14f, true).apply { gravity = Gravity.CENTER }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f)); arrow("›", 1)
+            })
+            addView(note, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(8) })
+            addView(FlowLayout(ctx, dp(6), dp(6)).apply {
+                setPadding(0, dp(8), 0, 0)
+                pbtn(this, "💾 Save Note", 0xFFE67E22.toInt()) { S.saveWeekNote(ctx, week, note.text.toString().trim()); android.widget.Toast.makeText(ctx, "Saved ✓", android.widget.Toast.LENGTH_SHORT).show() }
+                pbtn(this, "✨ AI Weekly Run Wrap-Up", 0xFF6D28D9.toInt()) { wrapUp(week, note) }
+                pbtn(this, "🗑 Clear", 0xFF3A3F3D.toInt()) { note.setText(""); S.saveWeekNote(ctx, week, ""); android.widget.Toast.makeText(ctx, "Saved ✓", android.widget.Toast.LENGTH_SHORT).show() }
+            })
+        })
+    }
+
+    /** Same prompt and facts as the Command Center's "AI Weekly Run Wrap-Up". */
+    private fun wrapUp(week: String, note: EditText) {
+        val ctx = this
+        if (!AiFood.hasKey(this)) { android.widget.Toast.makeText(this, "Add your Anthropic key in Settings → AI food search first.", android.widget.Toast.LENGTH_LONG).show(); return }
+        val start = java.time.LocalDate.parse(week); val end = start.plusDays(6)
+        val seen = HashSet<String>()
+        val runs = S.list(this).filter { a ->
+            val d = S.str(a, "date").take(10); val rt = listOf("type", "title", "name", "workout").joinToString(" ") { S.str(a, it) }
+            if (d < start.toString() || d > end.toString() || !Regex("run", RegexOption.IGNORE_CASE).containsMatchIn(rt)) false
+            else seen.add(d + "|" + String.format(Locale.US, "%.3f", S.num(a, "distance")) + "|" + S.str(a, "duration").trim())
+        }
+        if (runs.isEmpty()) { android.widget.Toast.makeText(this, "No running activities were found for ${wrnLabel()}.", android.widget.Toast.LENGTH_LONG).show(); return }
+        var mi = 0.0; var mins = 0.0; var elev = 0.0; var cal = 0.0; var pS = 0.0; var pN = 0; var longest: JSONObject? = null
+        runs.forEach { a -> val m = S.num(a, "distance"); mi += m; mins += S.durSec(S.str(a, "duration")) / 60.0; elev += S.num(a, "elevGain"); cal += S.num(a, "calories")
+            if (S.num(a, "power") > 0) { pS += S.num(a, "power"); pN++ }; if (longest == null || m > S.num(longest!!, "distance")) longest = a }
+        fun pace(sec: Double): String { val m = Math.floor(sec / 60).toInt(); val s = Math.round(sec % 60).toInt(); return "$m:" + (if (s < 10) "0" else "") + s }
+        fun fmtMins(m: Double): String { val r = Math.round(m).toInt(); return if (r < 60) "${r}m" else "${r / 60}h ${r % 60}m" }
+        val avgPace = if (mi > 0 && mins > 0) pace(mins * 60 / mi) + "/mi" else "not available"
+        val lines = runs.sortedBy { S.str(it, "date") }.joinToString("\n") { a -> listOf(
+            S.str(a, "date").ifEmpty { "No date" }, S.str(a, "title").ifEmpty { S.str(a, "type").ifEmpty { "Run" } }, String.format(Locale.US, "%.2f mi", S.num(a, "distance")),
+            S.str(a, "duration").ifEmpty { "duration unavailable" }, S.str(a, "pace").takeIf { it.isNotEmpty() }?.let { "$it/mi" } ?: "pace unavailable",
+            if (S.num(a, "power") > 0) "${Math.round(S.num(a, "power"))} W" else "power unavailable", if (S.num(a, "heartRate") > 0) "${Math.round(S.num(a, "heartRate"))} bpm" else "heart rate unavailable",
+            if (S.num(a, "elevGain") > 0) "${Math.round(S.num(a, "elevGain"))} ft gain" else "elevation unavailable",
+            S.str(a, "notes").takeIf { it.isNotEmpty() }?.let { "notes: $it" } ?: "", S.str(a, "injuryReport").takeIf { it.isNotEmpty() }?.let { "injury report: $it" } ?: "").filter { it.isNotEmpty() }.joinToString(" | ") }
+        val prompt = "Write a concise weekly running wrap-up for ${wrnLabel()}. Use only the supplied facts and do not invent performance, recovery, injury, or health claims. Keep it encouraging, practical, and about 150-220 words. Use short headings: Week at a Glance, Strongest Session, Patterns & Recovery, and Focus for Next Week. If a conclusion is uncertain, say so. This is training reflection, not medical advice.\n\n" +
+            "SUMMARY\nRuns: ${runs.size}\nDistance: ${String.format(Locale.US, "%.2f", mi)} miles\nTime: ${fmtMins(mins)}\nAverage pace: $avgPace\nElevation gain: ${Math.round(elev)} ft\nCalories: ${Math.round(cal)}\nAverage recorded power: " +
+            (if (pN > 0) "${Math.round(pS / pN)} W" else "not available") + "\nLongest run: " + (longest?.let { (S.str(it, "title").ifEmpty { "Run" }) + ", " + String.format(Locale.US, "%.2f", S.num(it, "distance")) + " miles" } ?: "not available") + "\n\n" +
+            "ACTIVITIES\n$lines\n\nATHLETE NOTES\n" + note.text.toString().trim().ifEmpty { "No notes entered." }
+        val wait = AlertDialog.Builder(this).setMessage("⏳ Thinking...").setCancelable(false).show()
+        Thread {
+            val r = try { Result.success(AiFood.askText(ctx, prompt, 2200)) } catch (e: Exception) { Result.failure(e) }
+            runOnUiThread { wait.dismiss(); if (isFinishing) return@runOnUiThread
+                r.onSuccess { t -> note.setText(t); S.saveWeekNote(ctx, week, t.trim()); android.widget.Toast.makeText(ctx, "Saved ✓", android.widget.Toast.LENGTH_SHORT).show() }
+                 .onFailure { android.widget.Toast.makeText(ctx, "AI wrap-up could not be created: ${it.message}", android.widget.Toast.LENGTH_LONG).show() } }
+        }.start()
+    }
+
+    private val PICK_CSV = 7302; private val SAVE_CSV = 7303
+    private var csvHint = ""; private var csvText = ""
+    private fun importMenu() {
+        val opts = listOf("garmin" to "Garmin CSV", "stryd" to "Stryd CSV", "strava" to "Strava CSV (activities.csv)")
+        AlertDialog.Builder(this).setTitle("📥 Import").setItems(opts.map { it.second }.toTypedArray()) { _, i -> csvHint = opts[i].first
+            startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("*/*")
+                .putExtra(Intent.EXTRA_MIME_TYPES, arrayOf("text/csv", "text/comma-separated-values", "text/plain", "application/vnd.ms-excel")), PICK_CSV) }.show()
+    }
+    private fun onCsv(uri: android.net.Uri?) {
+        uri ?: return
+        try {
+            var name = "activities.csv"
+            contentResolver.query(uri, null, null, null, null)?.use { c -> val i = c.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME); if (i >= 0 && c.moveToFirst()) name = c.getString(i) ?: name }
+            val text = contentResolver.openInputStream(uri)?.use { String(it.readBytes()) } ?: return
+            if (text.lines().count { it.isNotBlank() } < 2) { android.widget.Toast.makeText(this, "No data rows found in CSV.", android.widget.Toast.LENGTH_LONG).show(); return }
+            if (text.length > 5_000_000) { android.widget.Toast.makeText(this, "That CSV is too large to send (over 5 MB).", android.widget.Toast.LENGTH_LONG).show(); return }
+            S.importCsv(this, text, csvHint, name)
+            android.widget.Toast.makeText(this, "Sent $name — the Command Center imports it (duplicates are skipped).", android.widget.Toast.LENGTH_LONG).show()
+        } catch (e: Exception) { android.widget.Toast.makeText(this, "The selected file could not be read.", android.widget.Toast.LENGTH_LONG).show() }
+    }
+
+    /** 💾 Export — the Command Center's CSV: same columns, same quoting. */
+    private fun exportCsv() {
+        val acts = S.list(this)
+        if (acts.isEmpty()) { android.widget.Toast.makeText(this, "No activities to export.", android.widget.Toast.LENGTH_SHORT).show(); return }
+        val headers = listOf("date", "type", "title", "distance", "duration", "pace", "power", "heartRate", "cadence", "calories", "elevGain", "routeUrl", "source", "notes")
+        csvText = (listOf(headers.joinToString(",")) + acts.map { a -> headers.joinToString(",") { h -> val v = S.str(a, h).let { if (it == "0" || it == "0.0" || it == "false") "" else it }; if (v.contains(",")) "\"$v\"" else v } }).joinToString("\n")
+        startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("text/csv")
+            .putExtra(Intent.EXTRA_TITLE, "activities_" + java.time.LocalDate.now() + ".csv"), SAVE_CSV)
+    }
+
+    /** 🖨️ Print — the Command Center's training-log export (current filters, oldest first): print / save as PDF, or copy as text for an AI. */
+    private fun printLog(all: List<JSONObject>) {
+        val ctx = this
+        val list = filtered(all).sortedBy { S.str(it, "date") }
+        if (all.isEmpty()) { android.widget.Toast.makeText(this, "No activities to print.", android.widget.Toast.LENGTH_SHORT).show(); return }
+        if (list.isEmpty()) { android.widget.Toast.makeText(this, "No activities match your current filters.", android.widget.Toast.LENGTH_SHORT).show(); return }
+        fun fd(ds: String) = try { java.time.LocalDate.parse(ds).format(java.time.format.DateTimeFormatter.ofPattern("EEE, MMM d, yyyy", Locale.US)) } catch (e: Exception) { ds }
+        fun heatIndex(t: Double, r: Double): Double { if (t < 80) return t
+            var hi = -42.379 + 2.04901523 * t + 10.14333127 * r - 0.22475541 * t * r - 0.00683783 * t * t - 0.05481717 * r * r + 0.00122874 * t * t * r + 0.00085282 * t * r * r - 0.00000199 * t * t * r * r
+            if (r < 13 && t <= 112) hi -= ((13 - r) / 4) * Math.sqrt((17 - Math.abs(t - 95)) / 17); if (r > 85 && t <= 87) hi += ((r - 85) / 10) * ((87 - t) / 5); return hi }
+        fun perf(a: JSONObject): List<String> { val p = ArrayList<String>(); val x = S.extras(this, a.opt("id")); val d = S.num(a, "distance")
+            if (d > 0) p += "${S.str(a, "distance")} mi"; S.str(a, "duration").takeIf { it.isNotEmpty() }?.let { p += it }; S.str(a, "pace").takeIf { it.isNotEmpty() }?.let { p += "$it/mi pace" }
+            if (S.num(a, "power") > 0) p += S.str(a, "power") + "W" + x.optString("pz").let { if (it.isNotEmpty()) " ($it)" else "" }
+            if (S.num(a, "heartRate") > 0) p += S.str(a, "heartRate") + " bpm" + x.optString("hz").let { if (it.isNotEmpty()) " ($it)" else "" }
+            if (S.num(a, "cadence") > 0) p += S.str(a, "cadence") + " spm"; if (S.num(a, "calories") > 0) p += S.str(a, "calories") + " cal"
+            if (S.num(a, "elevGain") > 0) p += S.str(a, "elevGain") + " ft gain" + (if (d > 0) " (${Math.round(S.num(a, "elevGain") / d)} ft/mi)" else ""); return p }
+        fun cond(a: JSONObject): List<String> { val c = ArrayList<String>()
+            S.str(a, "temp").takeIf { it.isNotEmpty() }?.let { c += "$it°F" }; if (S.num(a, "humidity") > 0) c += S.str(a, "humidity") + "% humidity"
+            (S.str(a, "airPower").takeIf { S.num(a, "airPower") > 0 } ?: S.str(a, "wind").takeIf { S.num(a, "wind") > 0 })?.let { c += "$it% air power" }
+            if (S.num(a, "aqi") > 0) c += "AQI " + S.str(a, "aqi")
+            val t = S.str(a, "temp").toDoubleOrNull(); val ps = S.paceSec(S.str(a, "pace"))
+            if (t != null && ps > 0) { val h = S.str(a, "humidity").toDoubleOrNull() ?: 30.0; val over = heatIndex(t, h) - 60
+                if (over > 0) { val pct = over * 0.4; if (pct >= 0.5) c += "est. heat/humidity impact +" + String.format(Locale.US, "%.1f", pct) + "% (" + Math.round(ps * pct / 100) + "s/mi)" } }
+            return c }
+        val miles = list.sumOf { S.num(it, "distance") }
+        val first = S.str(list.first(), "date"); val last = S.str(list.last(), "date")
+        val weeks = try { Math.max(1, Math.round(java.time.temporal.ChronoUnit.DAYS.between(java.time.LocalDate.parse(first), java.time.LocalDate.parse(last)) / 7.0).toInt() + 1) } catch (e: Exception) { 1 }
+        val s1 = "Range: " + (if (first.isNotEmpty()) fd(first) else "—") + " to " + (if (last.isNotEmpty()) fd(last) else "—") + " ($weeks week${if (weeks != 1) "s" else ""})"
+        val s2 = "Activities: ${list.size} | Total distance: ${String.format(Locale.US, "%.1f", miles)} mi | Avg/week: ${String.format(Locale.US, "%.1f", miles / weeks)} mi"
+        val plain = StringBuilder("TRAINING LOG EXPORT\nGenerated: " + java.text.DateFormat.getDateTimeInstance().format(java.util.Date()) + "\n$s1\n$s2\n\n")
+        list.forEach { a -> plain.append(fd(S.str(a, "date")) + " — " + S.str(a, "title").ifEmpty { "Activity" } + " (" + S.str(a, "type") + ")\n")
+            perf(a).takeIf { it.isNotEmpty() }?.let { plain.append("  " + it.joinToString(" | ") + "\n") }
+            cond(a).takeIf { it.isNotEmpty() }?.let { plain.append("  Conditions: " + it.joinToString(" | ") + "\n") }
+            S.str(a, "notes").takeIf { it.isNotEmpty() }?.let { plain.append("  Notes: " + it.replace(Regex("\n+"), " ") + "\n") }; plain.append("\n") }
+        AlertDialog.Builder(this).setTitle("🖨️ Training Log Export").setMessage("$s1\n$s2")
+            .setPositiveButton("🖨️ Print / Save as PDF") { _, _ ->
+                fun esc(t: String) = t.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+                val rows = list.joinToString("") { a -> "<div class='e'><div class='h'>" + esc(fd(S.str(a, "date"))) + " &mdash; " + esc(S.str(a, "title").ifEmpty { "Activity" }) + " <span class='t'>(" + esc(S.str(a, "type")) + ")</span></div>" +
+                    perf(a).let { if (it.isEmpty()) "" else "<div class='l'>" + esc(it.joinToString("  |  ")) + "</div>" } + cond(a).let { if (it.isEmpty()) "" else "<div class='l c'>" + esc(it.joinToString("  |  ")) + "</div>" } +
+                    S.str(a, "notes").let { if (it.isEmpty()) "" else "<div class='n'>" + esc(it) + "</div>" } + "</div>" }
+                val html = "<!DOCTYPE html><html><head><meta charset='utf-8'><style>body{font-family:sans-serif;color:#222;line-height:1.5;margin:24px}h1{font-size:1.3rem;margin-bottom:2px}.m{color:#555;font-size:.9rem;margin-bottom:18px}.e{border-bottom:1px solid #eee;padding:10px 0;page-break-inside:avoid}.h{font-weight:700;font-size:.95rem}.t{font-weight:400;color:#888}.l{font-size:.85rem;color:#333;margin-top:3px}.c{color:#777}.n{font-size:.83rem;color:#555;margin-top:4px;white-space:pre-wrap}</style></head><body><h1>Training Log Export</h1><div class='m'>" + esc(s1) + "<br>" + esc(s2) + "</div>" + rows + "</body></html>"
+                val wv = android.webkit.WebView(ctx)
+                wv.webViewClient = object : android.webkit.WebViewClient() {
+                    override fun onPageFinished(view: android.webkit.WebView, url: String?) {
+                        (getSystemService(PRINT_SERVICE) as android.print.PrintManager).print("Training Log Export", view.createPrintDocumentAdapter("Training Log Export"), android.print.PrintAttributes.Builder().build())
+                    } }
+                wv.loadDataWithBaseURL(null, html, "text/html", "utf-8", null); printView = wv
+            }
+            .setNeutralButton("📋 Copy as Text (for AI)") { _, _ ->
+                (getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager).setPrimaryClip(android.content.ClipData.newPlainText("Training log", plain.toString()))
+                android.widget.Toast.makeText(ctx, "Copied!", android.widget.Toast.LENGTH_SHORT).show() }
+            .setNegativeButton("Close", null).show()
+    }
+    private var printView: android.webkit.WebView? = null
 }
