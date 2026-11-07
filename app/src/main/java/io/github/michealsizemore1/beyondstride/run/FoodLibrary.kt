@@ -25,6 +25,15 @@ object FoodLibrary {
         (0 until a.length()).mapNotNull { a.optJSONObject(it) }.map { Meal(it.optString("name"), it.optString("category"), Food.parseList(it.optJSONArray("items"))) }
     } ?: emptyList()
 
+    /** (foods that need enriching, foods with AI estimates) from the Command Center. */
+    fun stats(ctx: Context): Pair<Int, Int> = lib(ctx).optJSONObject("stats")?.let { it.optInt("needEnrich") to it.optInt("estimated") } ?: (0 to 0)
+
+    /** Asks the Command Center to run a Food Database tool: enrich, undo, rescan, dedupe. */
+    fun libAction(ctx: Context, action: String) {
+        io.github.michealsizemore1.beyondstride.Hydration.queue(ctx, "libAction", JSONObject().put("action", action))
+        Thread { HydrationSync.flush(ctx.applicationContext) }.start()
+    }
+
     /** The Command Center's calorie-target settings (shared with the food database). */
     fun calSettings(ctx: Context): JSONObject? = lib(ctx).optJSONObject("calSettings")
 

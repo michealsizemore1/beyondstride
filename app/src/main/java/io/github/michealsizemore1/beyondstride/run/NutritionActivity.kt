@@ -184,7 +184,7 @@ class NutritionActivity : Activity() {
                 if (dbTab == "meals") {
                     val r = meals.filter { hit(it.name) }
                     if (r.isEmpty()) list.addView(RunUi.text(ctx, "No saved meals" + if (dbQuery.isNotBlank()) " match." else " yet — tap 💾 on a meal to save one.", RunUi.MUTED, 12f).apply { setPadding(0, dp(8), 0, 0) })
-                    r.take(dbShown).forEach { sm ->
+                    r.forEach { sm ->
                         val kcal = sm.items.sumOf { (it.cal ?: 0.0) * it.servings }.toInt()
                         list.addView(dbRow(sm.name, sm.items.joinToString(", ") { it.name }.take(80), kcal) {
                             sm.items.forEach { HydrationSync.food(ctx, "foodAdd", it.copy(id = io.github.michealsizemore1.beyondstride.Food.newId(), meal = dbMeal)) }
@@ -197,24 +197,18 @@ class NutritionActivity : Activity() {
                         "prot" -> r.sortedByDescending { it.prot ?: 0.0 }; "carbs" -> r.sortedByDescending { it.carbs ?: 0.0 }; "fat" -> r.sortedBy { it.fat ?: Double.MAX_VALUE }
                         "saved" -> r; else -> r.sortedByDescending { it.micros[dbSort] ?: 0.0 } }
                     if (r.isEmpty()) list.addView(RunUi.text(ctx, if (favs.isEmpty() && healthy.isEmpty()) "Your Command Center food database shows here once it's been opened there." else "No match.", RunUi.MUTED, 12f).apply { setPadding(0, dp(8), 0, 0) })
-                    r.take(dbShown).forEach { f ->
+                    r.take(200).forEach { f ->
                         list.addView(dbRow(f.name, f.servingLabel + " · P ${(f.prot ?: 0.0).toInt()} · C ${(f.carbs ?: 0.0).toInt()} · F ${(f.fat ?: 0.0).toInt()} g", ((f.cal ?: 0.0) * f.servings).toInt()) {
                             FoodUi.confirmAdd(this@NutritionActivity, f, dbMeal) { render() }
                         })
                     }
                 }
-                // Short list: a few at a time (search to narrow it down).
-                val total = if (dbTab == "meals") meals.count { hit(it.name) } else (when (dbTab) { "fav" -> favs; "recent" -> recent; else -> healthy }).count { hit(it.name) }
-                if (total > 6) list.addView(RunUi.text(ctx, if (dbShown < total) "Show more ▾  (${total - minOf(dbShown, total)} more)" else "Show less ▴", RunUi.ACCENT, 13f, true).apply {
-                    gravity = Gravity.CENTER; setPadding(0, dp(10), 0, dp(4))
-                    setOnClickListener { dbShown = if (dbShown < total) dbShown + 10 else 6; fill() }
-                })
             }
             addView(android.widget.EditText(ctx).apply {
                 hint = "🔍 Search saved foods…"; setText(dbQuery); setSingleLine(); setTextColor(Color.WHITE); setHintTextColor(RunUi.MUTED); textSize = 15f
                 background = RunUi.rounded(0xFF26302C.toInt(), dp(10).toFloat()); setPadding(dp(12), dp(9), dp(12), dp(9))
                 addTextChangedListener(object : android.text.TextWatcher {
-                    override fun afterTextChanged(e: android.text.Editable?) { dbQuery = e?.toString() ?: ""; dbShown = 6; fill() }
+                    override fun afterTextChanged(e: android.text.Editable?) { dbQuery = e?.toString() ?: ""; fill() }
                     override fun beforeTextChanged(s: CharSequence?, st: Int, c: Int, af: Int) {}
                     override fun onTextChanged(s: CharSequence?, st: Int, b: Int, c: Int) {}
                 })
@@ -234,7 +228,37 @@ class NutritionActivity : Activity() {
                     android.app.AlertDialog.Builder(ctx).setTitle("Add to").setItems(N.MEAL_ORDER.map { (MEAL_ICON[it] ?: "") + "  " + (MEAL_LABEL[it] ?: it) }.toTypedArray()) { _, i -> dbMeal = N.MEAL_ORDER[i]; render() }.show()
                 }
             })
-            addView(list); fill()
+            // Food Database tools (run in the Command Center, where the database lives).
+            if (dbTab == "fav" || dbTab == "healthy") {
+                val stats = FoodLibrary.stats(ctx)
+                fun tile(icon: String, title: String, sub: String, fg: Int, bg: Int, action: String, ask: String) = RunUi.text(ctx, "$icon\n$title" + (if (sub.isNotEmpty()) "\n$sub" else ""), fg, 12f, true).apply {
+                    gravity = Gravity.CENTER; background = RunUi.rounded(bg, dp(10).toFloat()); setPadding(dp(4), dp(10), dp(4), dp(10))
+                    setOnClickListener {
+                        android.app.AlertDialog.Builder(ctx).setTitle(title).setMessage(ask)
+                            .setPositiveButton("Run") { _, _ -> FoodLibrary.libAction(ctx, action)
+                                android.widget.Toast.makeText(ctx, "Sent — the Command Center runs it next time it's open", android.widget.Toast.LENGTH_LONG).show() }
+                            .setNegativeButton("Cancel", null).show()
+                    }
+                }
+                listOf(
+                    listOf(tile("🧪", "Enrich All", if (stats.first > 0) "(${stats.first} need it)" else "(all complete)", 0xFFA5B4FC.toInt(), 0xFF262A45.toInt(), "enrich",
+                        "Fill in missing nutrients in your Food Database using AI (your Command Center key). Runs one food at a time."),
+                        tile("↩️", "Undo All", "(${stats.second} foods)", 0xFFFDA4AF.toInt(), 0xFF3A2329.toInt(), "undo", "Remove every AI-estimated value from your Food Database. This can't be undone.")),
+                    listOf(tile("↻", "Rescan Foods", "", 0xFFFDBA74.toInt(), 0xFF3A2A1A.toInt(), "rescan", "Re-check every saved Nutrition day and barcode picture for healthy foods."),
+                        tile("🧹", "Remove Dupes", "", 0xFFFDBA74.toInt(), 0xFF3A2A1A.toInt(), "dedupe", "Remove duplicate foods from your saved foods."))
+                ).forEach { row ->
+                    addView(LinearLayout(ctx).apply {
+                        orientation = LinearLayout.HORIZONTAL; layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(8) }
+                        row.forEachIndexed { i, v -> addView(v, LinearLayout.LayoutParams(0, MATCH_PARENT, 1f).apply { if (i == 0) marginEnd = dp(8) }) }
+                    })
+                }
+            }
+            // The list scrolls inside the panel (about six foods tall).
+            addView(androidx.core.widget.NestedScrollView(ctx).apply {
+                isNestedScrollingEnabled = true; isVerticalScrollBarEnabled = true
+                addView(list)
+            }, LinearLayout.LayoutParams(MATCH_PARENT, dp(400)).apply { topMargin = dp(4) })
+            fill()
         })
 
         // The last 7 days.
@@ -298,7 +322,7 @@ class NutritionActivity : Activity() {
         // Keep the page where it was when it's redrawn (opening a meal, adding or editing a food…).
         val keepY = scroller?.scrollY ?: 0
         val sv = ScrollView(this).apply {
-            setBackgroundColor(RunUi.BG)
+            setBackgroundColor(RunUi.BG); isNestedScrollingEnabled = true
             addView(col, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
         }
         scroller = sv
