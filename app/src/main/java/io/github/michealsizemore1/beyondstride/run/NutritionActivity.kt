@@ -38,6 +38,9 @@ class NutritionActivity : Activity() {
 
 
     companion object {
+        /** The Command Center's sort list. */
+        val SORTS = listOf("saved" to "as saved", "prot" to "🥩 Highest protein", "carbs" to "🍞 Highest carbs", "fat" to "🥑 Lowest fat",
+            "iron" to "🩸 Highest iron", "calcium" to "🦴 Highest calcium", "vitD" to "☀️ Highest vitamin D", "magnesium" to "💪 Highest magnesium", "vitB12" to "⚡ Highest vitamin B12")
         val MEAL_ICON = mapOf("breakfast" to "🌅", "lunch" to "🥗", "dinner" to "🍽️", "snack" to "🍎", "liquids" to "💧", "sports" to "💪", "supplements" to "💊")
         val MEAL_LABEL = mapOf("breakfast" to "Breakfast", "lunch" to "Lunch", "dinner" to "Dinner", "snack" to "Snacks", "liquids" to "Liquids", "sports" to "Sports Nutrition", "supplements" to "Supplements")
         /** The Command Center's ＋ Add colors. */
@@ -109,7 +112,8 @@ class NutritionActivity : Activity() {
             val order = N.MEAL_ORDER + foods.map { it.meal }.distinct().filter { it !in N.MEAL_ORDER }
             order.forEach { m ->
                 val mine = foods.filter { it.meal == m }
-                val open = openPrefs.getBoolean("open_$m", true) && mine.isNotEmpty()
+                val picker = m == "sports" || m == "supplements"
+                val open = openPrefs.getBoolean("open_$m", true) && (mine.isNotEmpty() || picker)
                 col.addView(RunUi.card(this).apply {
                     layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(8) }
                     addView(LinearLayout(ctx).apply {
@@ -127,7 +131,7 @@ class NutritionActivity : Activity() {
                         val arrow = RunUi.text(ctx, if (open) "▾" else "▸", RunUi.MUTED, 14f).apply { setPadding(dp(8), 0, 0, 0) }
                         addView(arrow)
                         setOnClickListener {
-                            if (mine.isEmpty()) return@setOnClickListener
+                            if (mine.isEmpty() && !picker) return@setOnClickListener
                             val card = parent as LinearLayout
                             val b = card.getChildAt(1)
                             val nowOpen = b.visibility != android.view.View.VISIBLE
@@ -138,6 +142,7 @@ class NutritionActivity : Activity() {
                     })
                     val body = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL; visibility = if (open) android.view.View.VISIBLE else android.view.View.GONE }
                     addView(body)
+                    if (picker) body.addView(quickPicker(m))
                     mine.forEach { f -> body.
                         addView(LinearLayout(ctx).apply {
                             orientation = LinearLayout.HORIZONTAL
@@ -188,7 +193,9 @@ class NutritionActivity : Activity() {
                     }
                 } else {
                     var r = (when (dbTab) { "fav" -> favs; "recent" -> recent; else -> healthy }).filter { hit(it.name) }
-                    r = when (dbSort) { "az" -> r.sortedBy { it.name.lowercase() }; "kcal" -> r.sortedBy { it.cal ?: 0.0 }; "protein" -> r.sortedByDescending { it.prot ?: 0.0 }; else -> r }
+                    r = when (dbSort) {
+                        "prot" -> r.sortedByDescending { it.prot ?: 0.0 }; "carbs" -> r.sortedByDescending { it.carbs ?: 0.0 }; "fat" -> r.sortedBy { it.fat ?: Double.MAX_VALUE }
+                        "saved" -> r; else -> r.sortedByDescending { it.micros[dbSort] ?: 0.0 } }
                     if (r.isEmpty()) list.addView(RunUi.text(ctx, if (favs.isEmpty() && healthy.isEmpty()) "Your Command Center food database shows here once it's been opened there." else "No match.", RunUi.MUTED, 12f).apply { setPadding(0, dp(8), 0, 0) })
                     r.take(dbShown).forEach { f ->
                         list.addView(dbRow(f.name, f.servingLabel + " · P ${(f.prot ?: 0.0).toInt()} · C ${(f.carbs ?: 0.0).toInt()} · F ${(f.fat ?: 0.0).toInt()} g", ((f.cal ?: 0.0) * f.servings).toInt()) {
@@ -212,12 +219,12 @@ class NutritionActivity : Activity() {
                     override fun onTextChanged(s: CharSequence?, st: Int, b: Int, c: Int) {}
                 })
             }, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(10) })
-            if (dbTab == "fav" || dbTab == "healthy") addView(RunUi.text(ctx, "Sort: " + mapOf("saved" to "as saved", "az" to "A–Z", "kcal" to "lowest calories", "protein" to "most protein")[dbSort] + "  ▾", Color.WHITE, 14f).apply {
+            if (dbTab == "fav" || dbTab == "healthy") addView(RunUi.text(ctx, "Sort: " + (SORTS.firstOrNull { it.first == dbSort }?.second ?: "as saved") + "  ▾", Color.WHITE, 14f).apply {
                 background = RunUi.rounded(0xFF26302C.toInt(), dp(10).toFloat()); setPadding(dp(12), dp(9), dp(12), dp(9))
                 layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(8) }
                 setOnClickListener {
-                    val keys = listOf("saved", "az", "kcal", "protein"); val names = listOf("As saved", "A–Z", "Lowest calories", "Most protein")
-                    android.app.AlertDialog.Builder(ctx).setTitle("Sort").setItems(names.toTypedArray()) { _, i -> dbSort = keys[i]; render() }.show()
+                    android.app.AlertDialog.Builder(ctx).setTitle("Sort").setSingleChoiceItems(SORTS.map { it.second }.toTypedArray(), SORTS.indexOfFirst { it.first == dbSort }) { d, i ->
+                        dbSort = SORTS[i].first; dbShown = 6; d.dismiss(); render() }.show()
                 }
             })
             addView(RunUi.text(ctx, (MEAL_ICON[dbMeal] ?: "") + "  Add to " + (MEAL_LABEL[dbMeal] ?: dbMeal) + "  ▾", Color.WHITE, 14f).apply {
@@ -299,6 +306,55 @@ class NutritionActivity : Activity() {
         if (keepY > 0) sv.post { sv.scrollTo(0, keepY) }
     }
     private var scroller: ScrollView? = null
+
+    // Quick add (Command Center): sports nutrition by brand / type / flavor; supplements from a list.
+    private var qBrand = ""; private var qLine = ""; private var qSport = 0; private var qSupp = 0
+    private fun quickPicker(meal: String): LinearLayout = LinearLayout(this).apply {
+        val ctx = this@NutritionActivity
+        val P = io.github.michealsizemore1.beyondstride.Products
+        fun dp(v: Int) = RunUi.dp(ctx, v)
+        orientation = LinearLayout.VERTICAL
+        background = RunUi.rounded(0xFF2B2416.toInt(), dp(10).toFloat()); setPadding(dp(10), dp(8), dp(10), dp(10))
+        layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(8) }
+        fun chip(t: String, onTap: () -> Unit) = RunUi.text(ctx, "$t  ▾", Color.WHITE, 13f).apply {
+            maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END
+            background = RunUi.rounded(0xFF26302C.toInt(), dp(8).toFloat()); setPadding(dp(10), dp(8), dp(10), dp(8)); setOnClickListener { onTap() }
+        }
+        fun pick(title: String, items: List<String>, cur: Int, set: (Int) -> Unit) =
+            android.app.AlertDialog.Builder(ctx).setTitle(title).setSingleChoiceItems(items.toTypedArray(), cur) { d, i -> set(i); d.dismiss(); render() }.show()
+        val product: io.github.michealsizemore1.beyondstride.Products.Product?
+        if (meal == "sports") {
+            addView(RunUi.text(ctx, "⚡ GU / SiS / Premier Protein quick add", 0xFFF5B041.toInt(), 12f, true))
+            val lines = P.lines(qBrand); if (qLine.isNotEmpty() && qLine !in lines) qLine = ""
+            addView(LinearLayout(ctx).apply {
+                orientation = LinearLayout.HORIZONTAL; setPadding(0, dp(6), 0, 0)
+                addView(chip(P.BRANDS.first { it.first == qBrand }.second) {
+                    pick("Brand", P.BRANDS.map { it.second }, P.BRANDS.indexOfFirst { it.first == qBrand }) { qBrand = P.BRANDS[it].first; qLine = ""; qSport = 0 } },
+                    LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f).apply { marginEnd = dp(6) })
+                addView(chip(qLine.ifEmpty { "All Types" }) {
+                    pick("Type", listOf("All Types") + lines, if (qLine.isEmpty()) 0 else lines.indexOf(qLine) + 1) { qLine = if (it == 0) "" else lines[it - 1]; qSport = 0 } },
+                    LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
+            })
+            val list = P.SPORTS.filter { (qBrand.isEmpty() || it.brand == qBrand) && (qLine.isEmpty() || it.line == qLine) }
+            fun label(p: io.github.michealsizemore1.beyondstride.Products.Product) = "${p.name} (${p.cal.toInt()} cal, ${io.github.michealsizemore1.beyondstride.Food.fmt(p.carbs)}g carb" +
+                (p.micros["caffeine"]?.let { " · ${it.toInt()}mg caf" } ?: "") + ")"
+            product = list.getOrNull(qSport.coerceIn(0, maxOf(0, list.size - 1)))
+            if (product != null) addView(chip(label(product)) { pick("Product", list.map { label(it) }, list.indexOf(product)) { qSport = it } }
+                .also { it.layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(6) } })
+        } else {
+            addView(RunUi.text(ctx, "💊 Supplement quick add", 0xFFF5B041.toInt(), 12f, true))
+            product = P.SUPPLEMENTS.getOrNull(qSupp)
+            if (product != null) addView(chip("${product.brand} ${product.name}") { pick("Supplement", P.SUPPLEMENTS.map { "${it.brand} ${it.name}" }, qSupp) { qSupp = it } }
+                .also { it.layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(6) } })
+        }
+        if (product != null) {
+            addView(RunUi.text(ctx, product.preview(), 0xFFF5B041.toInt(), 12f).apply { setPadding(0, dp(6), 0, dp(6)) })
+            addView(RunUi.button(ctx, "+ Add to " + (MEAL_LABEL[meal] ?: meal), 0xFFB9770E.toInt(), Color.WHITE) {
+                HydrationSync.food(ctx, "foodAdd", product.item(meal))
+                android.widget.Toast.makeText(ctx, "Added ${product.name} to ${MEAL_LABEL[meal]}", android.widget.Toast.LENGTH_SHORT).show(); render()
+            })
+        }
+    }
 
     /** 💾 Save this meal's foods as a saved meal (also added to the Command Center's saved meals). */
     private fun saveMealDialog(meal: String, items: List<io.github.michealsizemore1.beyondstride.Food.Item>) {
