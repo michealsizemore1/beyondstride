@@ -550,7 +550,11 @@ class ActivitiesActivity : Activity() {
         val res = Math.max(1.0, max - rest); val bnd = listOf(0.5, 0.6, 0.7, 0.8, 0.9).map { Math.round(rest + res * it).toInt() }
         val hrLabels = listOf("Recovery", "Aerobic base", "Aerobic threshold", "Anaerobic", "Max effort")
         val pw = listOf(Triple(0.0, 0.55, "Recovery"), Triple(0.55, 0.75, "Aerobic / endurance"), Triple(0.75, 0.90, "Tempo"), Triple(0.90, 1.05, "Threshold"), Triple(1.05, -1.0, "VO2 max"))
-        col.addView(RunUi.section(this, "🎯 TRAINING ZONES"))
+        // Collapsible (closed each time the screen opens); the heading shows the Z2 range at a glance.
+        val zOpen = "zones" in panels
+        col.addView(txt((if (zOpen) "▼" else "▶") + "  🎯 Training Zones" + (if (!zOpen) "  (Z2 ${bnd[1]}–${bnd[2] - 1} bpm)" else ""), 0xFFE67E22.toInt(), 15f, true).apply {
+            setPadding(dp(2), dp(16), 0, dp(4)); setOnClickListener { if (zOpen) panels.remove("zones") else panels.add("zones"); render() } })
+        if (!zOpen) return
         col.addView(RunUi.card(this).apply {
             fun badge(z: String) = txt(" $z ", Color.BLACK, 11f, true).apply { background = RunUi.rounded(ZONE_COLOR[z] ?: 0xFF888888.toInt(), dp(4).toFloat()) }
             fun row(z: String, range: String, label: String) = addView(LinearLayout(ctx).apply {
