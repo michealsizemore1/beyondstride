@@ -107,7 +107,19 @@ class NutritionActivity : Activity() {
             })
         }
 
-        // Tools — the Command Center's six buttons, same colors.
+        // Micronutrients.
+        if (t != null && t.count > 0 && t.micros.isNotEmpty()) {
+            col.addView(RunUi.section(this, "MICRONUTRIENTS"))
+            col.addView(RunUi.card(this).apply {
+                addView(RunUi.text(ctx, String.format(Locale.US, "%.1f", t.microScore) + "/10 · " + t.microLabel(),
+                    N.statusColor(when { t.microScore >= 7 -> "Met"; t.microScore >= 5 -> "Close"; else -> "Low" }), 18f, true))
+                NutritionUi.micros(this@NutritionActivity, this, t, header = false)
+            })
+        }
+
+        // FOOD LOG: every meal with its foods. Tap a food to change it; ＋ to add.
+        col.addView(RunUi.section(this, "FOOD LOG"))
+        // Food log tools — the Command Center's six buttons, same colors and place (above the meals).
         run {
             fun add(action: String) = startActivity(android.content.Intent(ctx, FoodAddActivity::class.java).putExtra("meal", FoodUi.mealNow()).putExtra("action", action))
             fun tools(mode: String) = startActivity(android.content.Intent(ctx, NutritionToolsActivity::class.java).putExtra("mode", mode))
@@ -131,18 +143,7 @@ class NutritionActivity : Activity() {
             col.addView(RunUi.text(ctx, "Camera and Upload read a nutrition label; Camera, Upload and Fuel AI use your Anthropic key.", RunUi.DIM, 10f).apply { setPadding(dp(2), dp(4), 0, 0) })
         }
 
-        // Micronutrients.
-        if (t != null && t.micros.isNotEmpty()) {
-            col.addView(RunUi.section(this, "MICRONUTRIENTS"))
-            col.addView(RunUi.card(this).apply {
-                addView(RunUi.text(ctx, String.format(Locale.US, "%.1f", t.microScore) + "/10 · " + t.microLabel(),
-                    N.statusColor(when { t.microScore >= 7 -> "Met"; t.microScore >= 5 -> "Close"; else -> "Low" }), 18f, true))
-                NutritionUi.micros(this@NutritionActivity, this, t, header = false)
-            })
-        }
-
-        // FOOD LOG: every meal with its foods. Tap a food to change it; ＋ to add.
-        col.addView(RunUi.section(this, "FOOD LOG"))
+        col.addView(android.view.View(ctx), LinearLayout.LayoutParams(MATCH_PARENT, dp(6)))
         col.addView(RunUi.card(this).apply {
             val foods = t?.foods ?: emptyList()
             val order = N.MEAL_ORDER + foods.map { it.meal }.distinct().filter { it !in N.MEAL_ORDER }

@@ -1487,7 +1487,7 @@ class RunActivity : Activity() {
             })
             setOnClickListener { showFluids() }
         }
-        if (t != null && t.micros.isNotEmpty()) box {
+        if (t != null && t.count > 0 && t.micros.isNotEmpty()) box {
             addView(label("MICRONUTRIENTS", C.ACCENT, 11f, true))
             addView(label(String.format(java.util.Locale.US, "%.1f", t.microScore) + "/10 · " + t.microLabel(),
                 N.statusColor(when { t.microScore >= 7 -> "Met"; t.microScore >= 5 -> "Close"; else -> "Low" }), 14f, true))
