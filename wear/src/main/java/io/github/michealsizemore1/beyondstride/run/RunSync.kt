@@ -224,6 +224,11 @@ class RunSettingsListener : WearableListenerService() {
                 io.github.michealsizemore1.beyondstride.NutritionStore.apply(this, DataMapItem.fromDataItem(e.dataItem).dataMap)
                 return@forEach
             }
+            if (e.type == DataEvent.TYPE_CHANGED && e.dataItem.uri.path == "/aifood") {
+                val m = DataMapItem.fromDataItem(e.dataItem).dataMap
+                getSharedPreferences("aifood", 0).edit().putString("id", m.getString("id")).putString("json", m.getString("json")).putString("err", m.getString("err")).apply()
+                return@forEach
+            }
             if (e.type == DataEvent.TYPE_CHANGED && e.dataItem.uri.path == io.github.michealsizemore1.beyondstride.NutritionStore.LIB_PATH) {
                 io.github.michealsizemore1.beyondstride.NutritionStore.applyLibrary(this, DataMapItem.fromDataItem(e.dataItem).dataMap)
                 return@forEach

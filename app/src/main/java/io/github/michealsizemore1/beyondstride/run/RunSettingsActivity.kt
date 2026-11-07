@@ -23,6 +23,11 @@ class RunSettingsActivity : Activity() {
     @Deprecated("Deprecated in Java")
     override fun onBackPressed() { if (page != null) { page = null; render() } else @Suppress("DEPRECATION") super.onBackPressed() }
 
+    override fun onCreate(b: Bundle?) {
+        super.onCreate(b)
+        page = intent.getStringExtra("page")
+    }
+
     override fun onResume() {
         super.onResume()
         io.github.michealsizemore1.beyondstride.Theme.load(this, "runsettings")
@@ -37,7 +42,7 @@ class RunSettingsActivity : Activity() {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(16), dp(40), dp(16), dp(40))
         }
-        val titles = mapOf("run" to "Run options", "audio" to "Audio prompts", "zones" to "Zones & power", "cc" to "Command Center", "backup" to "Backup", "about" to "About")
+        val titles = mapOf("run" to "Run options", "audio" to "Audio prompts", "zones" to "Zones & power", "cc" to "Command Center", "ai" to "AI food search", "backup" to "Backup", "about" to "About")
         col.addView(RunUi.text(this, page?.let { titles[it] } ?: "Settings", Color.WHITE, 26f, true))
         val classic = getSharedPreferences("runsettings", 0).getString("menuStyle", "cards") == "classic"
         if (page == null && !classic) { renderList(col); return }
@@ -205,6 +210,24 @@ class RunSettingsActivity : Activity() {
             }.apply { layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(16) } })
         }
 
+        // ---- AI food search (Anthropic key, kept on this phone only)
+        if (on("ai")) {
+            val key = input("Anthropic API key", if (AiFood.hasKey(this)) "••••••••" + AiFood.key(this).takeLast(4) else "",
+                InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD, "sk-ant-…")
+            col.addView(RunUi.text(this, "Turns on ✨ AI search and 🏷 Label photo in Add food (phone and watch). Use the same key as the Command Center " +
+                "(console.anthropic.com → API keys). It stays on this phone: not in backups, not sent to the watch or the Command Center. Each search costs a fraction of a cent on your Anthropic account.",
+                RunUi.MUTED, 12f).apply { setPadding(dp(4), dp(6), 0, 0) })
+            col.addView(RunUi.button(this, "Save key", RunUi.ACCENT) {
+                val k = key.text.toString().trim()
+                if (k.startsWith("••")) { Toast.makeText(ctx, "Key unchanged", Toast.LENGTH_SHORT).show(); return@button }
+                if (!k.startsWith("sk-")) { Toast.makeText(ctx, "That doesn't look like an Anthropic key (starts with sk-ant-)", Toast.LENGTH_LONG).show(); return@button }
+                AiFood.setKey(ctx, k); Toast.makeText(ctx, "Saved", Toast.LENGTH_SHORT).show(); render()
+            }.apply { layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(16) } })
+            if (AiFood.hasKey(this)) col.addView(RunUi.button(this, "Remove key", RunUi.CARD, Color.WHITE) {
+                AiFood.setKey(ctx, ""); Toast.makeText(ctx, "Removed", Toast.LENGTH_SHORT).show(); render()
+            }.apply { layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(8) } })
+        }
+
         // (Stryd account sign-in removed: Stryd only has runs after the pod's offline sync, which isn't used.
         //  The pod itself still pairs with the watch for pace, distance, power and cadence.)
         getSharedPreferences("strydcloud", 0).edit().clear().apply()   // forget any old Stryd login
@@ -328,6 +351,7 @@ class RunSettingsActivity : Activity() {
         row("◉", "LiveTrack", if (Live.db(ctx).isBlank()) "Not set up" else if (p.getBoolean("liveOn", false)) "On · ${Live.contacts(ctx).size} contact(s)" else "Off") {
             startActivity(Intent(ctx, LiveTrackActivity::class.java)) }
         row("⌂", "Command Center", try { Uri.parse(RunSettings.ccUrl(ctx)).host ?: "" } catch (e: Exception) { "" }) { page = "cc"; render() }
+        row("✨", "AI food search", if (AiFood.hasKey(ctx)) "Key saved · AI search and label photos on" else "Add your Anthropic key") { page = "ai"; render() }
         row("⇪", "Backup", Backup.lastAt(ctx).takeIf { it > 0 }?.let { "Last: " + java.text.SimpleDateFormat("MMM d, h:mm a", java.util.Locale.getDefault()).format(java.util.Date(it)) +
             (if (Backup.auto(ctx) && Backup.uri(ctx) != null) " · auto" else "") } ?: "Not set up") { page = "backup"; render() }
         row("ⓘ", "About", "Phone app " + packageManager.getPackageInfo(packageName, 0).versionName) { page = "about"; render() }

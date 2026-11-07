@@ -1275,6 +1275,7 @@ class RunActivity : Activity() {
     /** Quick add (watch): a favorite or recent food into a meal; the phone logs it and tells the Command Center. */
     private var quickMeal = "snack"
     private var quickQuery = ""
+    private var quickSource = "OPEN FOOD FACTS"
     private var quickOnline: List<io.github.michealsizemore1.beyondstride.Food.Item>? = null
     private fun defaultMeal() = when (java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)) {
         in 4..10 -> "breakfast"; in 11..14 -> "lunch"; in 17..21 -> "dinner"; else -> "snack" }
@@ -1302,18 +1303,43 @@ class RunActivity : Activity() {
         if (quickQuery.isNotEmpty()) col.addView(LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(5) }
-            addView(label("🔎 Online", Color.WHITE, 11f, true).apply {
+            addView(label("🔎 Web", Color.WHITE, 11f, true).apply {
                 background = rounded(C.CARD, 14); setPadding(0, dp(5), 0, dp(5))
                 setOnClickListener {
                     quickOnline = emptyList(); flash("Searching…")
                     val q = quickQuery; val m = quickMeal
                     Thread {
                         val r = io.github.michealsizemore1.beyondstride.FoodSearch.search(q, m)
-                        runOnUiThread { if (overlayOpen) { quickOnline = r; if (r.isEmpty()) flash("Nothing found online"); showQuickAdd() } }
+                        runOnUiThread { if (overlayOpen) { quickOnline = r; quickSource = "OPEN FOOD FACTS"; if (r.isEmpty()) flash("Nothing found online"); showQuickAdd() } }
                     }.start()
                 }
             }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f).apply { marginEnd = dp(4) })
-            addView(label("✕ Clear", C.MUTED, 11f, true).apply {
+            addView(label("✨ AI", Color.WHITE, 11f, true).apply {
+                background = rounded(0xFF3B3172.toInt(), 14); setPadding(0, dp(5), 0, dp(5))
+                setOnClickListener {
+                    // The phone runs the AI search (your key stays there) and sends the results back.
+                    val id = System.currentTimeMillis().toString(); val q = quickQuery; val m = quickMeal
+                    quickOnline = emptyList(); flash("Asking AI…")
+                    val msg = org.json.JSONObject().put("id", id).put("q", q).put("meal", m).toString()
+                    RunSync.tellPhone(this@RunActivity, "/cmd/aifood", msg.toByteArray()) { ok ->
+                        if (!ok) { flash("Phone not connected"); return@tellPhone }
+                        Thread {
+                            val sp = getSharedPreferences("aifood", 0)
+                            var waited = 0
+                            while (waited < 45_000 && sp.getString("id", "") != id) { Thread.sleep(500); waited += 500 }
+                            val got = sp.getString("id", "") == id
+                            val res = if (got) io.github.michealsizemore1.beyondstride.Food.parseList(org.json.JSONArray(sp.getString("json", "[]"))) else emptyList()
+                            val err = if (got) sp.getString("err", "") ?: "" else "No answer from the phone"
+                            runOnUiThread {
+                                if (!overlayOpen) return@runOnUiThread
+                                if (err.isNotEmpty()) flash(err) else if (res.isEmpty()) flash("AI found nothing")
+                                quickOnline = res; quickSource = "AI ESTIMATE"; showQuickAdd()
+                            }
+                        }.start()
+                    }
+                }
+            }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f).apply { marginEnd = dp(4) })
+            addView(label("✕", C.MUTED, 11f, true).apply {
                 background = rounded(C.CARD, 14); setPadding(0, dp(5), 0, dp(5))
                 setOnClickListener { quickQuery = ""; quickOnline = null; showQuickAdd() }
             }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
@@ -1324,7 +1350,7 @@ class RunActivity : Activity() {
         val foods = quickOnline?.takeIf { it.isNotEmpty() }
             ?: if (quickQuery.isEmpty()) (S.quick(this) + recent).filter { it.name.isNotBlank() && seen.add(it.name.lowercase().trim()) }.take(40)
             else (S.quick(this) + recent + S.library(this)).filter { it.name.isNotBlank() && hit(it.name) && seen.add(it.name.lowercase().trim()) }.take(30)
-        if (quickOnline?.isNotEmpty() == true) col.addView(label("OPEN FOOD FACTS", C.ACCENT, 9f, true).apply { setPadding(0, dp(6), 0, 0) })
+        if (quickOnline?.isNotEmpty() == true) col.addView(label(quickSource, C.ACCENT, 9f, true).apply { setPadding(0, dp(6), 0, 0) })
         if (foods.isEmpty()) col.addView(label(if (quickQuery.isEmpty()) "Log a few foods on the phone first — favorites and recent foods show here."
             else "No match in your foods — tap 🔎 Online.", C.MUTED, 10f).apply { setPadding(0, dp(6), 0, 0) })
         foods.forEach { f ->

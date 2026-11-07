@@ -75,6 +75,20 @@ object PhoneStatus {
             // Watch finished a morning check: send last night's sleep (needs background access to Health Connect).
             "/cmd/fluid" -> HydrationSync.fromWatch(ctx, data)
             "/cmd/food" -> HydrationSync.foodFromWatch(ctx, data)
+            // AI food search asked from the watch: run it here (the key stays on the phone) and send the results back.
+            "/cmd/aifood" -> Thread {
+                val app = ctx.applicationContext
+                val o = try { org.json.JSONObject(String(data)) } catch (e: Exception) { return@Thread }
+                val (res, err) = if (!AiFood.hasKey(app)) emptyList<io.github.michealsizemore1.beyondstride.Food.Item>() to "Add your Anthropic key on the phone (Settings → AI food search)"
+                    else try { AiFood.search(app, o.optString("q"), o.optString("meal", "snack")) to "" } catch (e: Exception) { emptyList<io.github.michealsizemore1.beyondstride.Food.Item>() to (e.message ?: "AI search failed") }
+                try {
+                    val req = com.google.android.gms.wearable.PutDataMapRequest.create("/aifood").apply {
+                        dataMap.putString("id", o.optString("id")); dataMap.putString("err", err)
+                        dataMap.putString("json", io.github.michealsizemore1.beyondstride.Food.listJson(res).toString()); dataMap.putLong("at", System.currentTimeMillis())
+                    }.asPutDataRequest().setUrgent()
+                    com.google.android.gms.tasks.Tasks.await(com.google.android.gms.wearable.Wearable.getDataClient(app).putDataItem(req))
+                } catch (e: Exception) { }
+            }.start()
             "/cmd/sleep" -> Thread { SleepData.refresh(ctx.applicationContext, 7) }.start()
             "/cmd/livestart" -> Live.started(ctx)
             "/cmd/livealert" -> Live.alert(ctx, String(data))

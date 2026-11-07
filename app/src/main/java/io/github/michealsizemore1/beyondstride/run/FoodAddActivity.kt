@@ -19,6 +19,8 @@ class FoodAddActivity : Activity() {
     private var query = ""
     private var online: List<Food.Item>? = null
     private var searching = false
+    private var onlineTitle = "ONLINE · OPEN FOOD FACTS"
+    private var photoUri: android.net.Uri? = null
     private lateinit var list: LinearLayout
     private var tab = "recent"
 
@@ -75,6 +77,13 @@ class FoodAddActivity : Activity() {
             btn("🔎 Online") { searchOnline() }
             btn("✎ Manual") { FoodUi.manual(this@FoodAddActivity, meal) { } }
         })
+        // AI (your Anthropic key, set in Settings → AI food search).
+        col.addView(LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL; setPadding(0, dp(6), 0, 0)
+            fun btn(t: String, go: () -> Unit) = addView(RunUi.button(ctx, t, 0xFF3B3172.toInt(), Color.WHITE, go), LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f).apply { marginEnd = dp(6) })
+            btn("✨ AI search") { aiSearch() }
+            btn("🏷 Label photo") { labelPhoto() }
+        })
 
         // Tabs: Recent · My foods · Meals.
         col.addView(LinearLayout(this).apply {
@@ -114,7 +123,7 @@ class FoodAddActivity : Activity() {
         if (!::list.isInitialized) return
         list.removeAllViews()
         online?.let { res ->
-            list.addView(RunUi.section(this, "ONLINE · OPEN FOOD FACTS"))
+            list.addView(RunUi.section(this, onlineTitle))
             if (res.isEmpty()) note("Nothing found for “$query”. Try fewer words, the brand name, or Manual.")
             res.forEach { list.addView(row(it)) }
             return
@@ -166,7 +175,68 @@ class FoodAddActivity : Activity() {
         searching = true; online = null; fill()
         Thread {
             val r = FoodLibrary.search(q, meal)
-            runOnUiThread { searching = false; online = r; if (!isFinishing) fill() }
+            runOnUiThread { searching = false; onlineTitle = "ONLINE · OPEN FOOD FACTS"; online = r; if (!isFinishing) fill() }
+        }.start()
+    }
+
+    private fun needKey(): Boolean {
+        if (AiFood.hasKey(this)) return false
+        android.app.AlertDialog.Builder(this).setTitle("Add your Anthropic key")
+            .setMessage("AI search and label photos use your Anthropic API key (the same one the Command Center uses). Add it in Settings → AI food search.")
+            .setPositiveButton("Open Settings") { _, _ -> startActivity(android.content.Intent(this, RunSettingsActivity::class.java).putExtra("page", "ai")) }
+            .setNegativeButton("Cancel", null).show()
+        return true
+    }
+
+    /** AI search: any food or drink, any wording ("grande oat latte", "2 eggs scrambled in butter"). */
+    private fun aiSearch() {
+        if (needKey()) return
+        val q = query.trim()
+        if (q.length < 2) { Toast.makeText(this, "Type what you ate first", Toast.LENGTH_SHORT).show(); return }
+        searching = true; online = null; fill()
+        Thread {
+            val (r, err) = try { AiFood.search(this, q, meal) to null } catch (e: Exception) { emptyList<Food.Item>() to (e.message ?: "AI search failed") }
+            runOnUiThread {
+                searching = false; onlineTitle = "AI ESTIMATE · CHECK BEFORE ADDING"; online = r
+                if (err != null) Toast.makeText(this, err, Toast.LENGTH_LONG).show()
+                if (!isFinishing) fill()
+            }
+        }.start()
+    }
+
+    /** Nutrition label: take a photo or choose one (screenshots of apps or menus work too). */
+    private fun labelPhoto() {
+        if (needKey()) return
+        android.app.AlertDialog.Builder(this).setTitle("Nutrition label")
+            .setItems(arrayOf("Take a photo", "Choose a picture")) { _, which ->
+                if (which == 0) {
+                    val dir = java.io.File(cacheDir, "photos").apply { mkdirs() }
+                    val f = java.io.File(dir, "label.jpg")
+                    val uri = androidx.core.content.FileProvider.getUriForFile(this, "$packageName.files", f)
+                    photoUri = uri
+                    try {
+                        startActivityForResult(android.content.Intent(android.provider.MediaStore.ACTION_IMAGE_CAPTURE).putExtra(android.provider.MediaStore.EXTRA_OUTPUT, uri)
+                            .addFlags(android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION or android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION), 41)
+                    } catch (e: Exception) { Toast.makeText(this, "No camera app", Toast.LENGTH_SHORT).show() }
+                } else startActivityForResult(android.content.Intent(android.content.Intent.ACTION_GET_CONTENT).setType("image/*"), 42)
+            }.show()
+    }
+
+    @Deprecated("Activity result")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: android.content.Intent?) {
+        @Suppress("DEPRECATION") super.onActivityResult(requestCode, resultCode, data)
+        if (resultCode != RESULT_OK) return
+        val uri = (if (requestCode == 41) photoUri else data?.data) ?: return
+        Toast.makeText(this, "Reading the label…", Toast.LENGTH_SHORT).show()
+        Thread {
+            val bytes = AiFood.jpeg(this, uri)
+            val (f, err) = if (bytes == null) null to "Couldn't open that picture" else
+                try { AiFood.label(this, bytes, meal) to null } catch (e: Exception) { null to (e.message ?: "Couldn't read the label") }
+            runOnUiThread {
+                if (isFinishing) return@runOnUiThread
+                if (f == null) Toast.makeText(this, err ?: "Couldn't read the label", Toast.LENGTH_LONG).show()
+                else FoodUi.confirmAdd(this, f, meal) { }
+            }
         }.start()
     }
 
