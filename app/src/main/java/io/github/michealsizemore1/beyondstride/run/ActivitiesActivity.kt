@@ -72,8 +72,7 @@ class ActivitiesActivity : Activity() {
         // Collapsible sections, most-used first: how training is going → records / race times → conditions →
         // notes → setup and gear (zones, shoes, plan upload). Each starts closed.
         ActivityAnalysis(this, panels) { render() }.apply {
-            metrics(col, all); charts(col, all); prs(col, all); racePredictor(col, all)
-            heatAcclimation(col, all); cardioDrift(col, all); humidity(col, all)
+            metrics(col, all); charts(col, all); racePredictor(col, all); heatHumidity(col, all)
         }
         weekNotes(col)
         zones(col); shoes(col)

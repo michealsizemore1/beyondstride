@@ -195,8 +195,15 @@ class ActivityAnalysis(private val act: Activity, private val open: MutableSet<S
     }
     private fun hrZone(hr: Double) = zones().let { z -> if (hr < z[0].second.first) null else z.last { hr >= it.second.first } }
 
-    fun cardioDrift(col: LinearLayout, all: List<JSONObject>) {
-        if (!toggle(col, "cvd", "❤️🌡️ Cardiovascular Drift")) return
+    /** 🌡️ Heat & Humidity: heat acclimation, cardiovascular drift and humidity impact in one section. */
+    fun heatHumidity(col: LinearLayout, all: List<JSONObject>) {
+        if (!toggle(col, "heat", "🌡️ Heat & Humidity")) return
+        heatAcclimation(col, all, true); cardioDrift(col, all, true); humidity(col, all, true)
+    }
+    private fun sub(col: LinearLayout, t: String) = col.addView(txt(t, Color.WHITE, 15f, true).apply { setPadding(dp(2), dp(12), 0, 0) })
+
+    fun cardioDrift(col: LinearLayout, all: List<JSONObject>, nested: Boolean = false) {
+        if (nested) sub(col, "❤️🌡️ Cardiovascular Drift") else if (!toggle(col, "cvd", "❤️🌡️ Cardiovascular Drift")) return
         val box = card(col, 4)
         box.addView(txt("Average heart rate by temperature, measured against your heart-rate training zones. Heat makes the heart work harder to cool the body, so a climb across these bars is expected — a climb that keeps getting steeper over time can be an early sign of heat strain or fading heat acclimation.", RunUi.MUTED, 11f))
         val acts = all.filter { S.str(it, "type") != "Rest Day" && S.num(it, "heartRate") > 0 && S.str(it, "temp").toDoubleOrNull() != null }
@@ -230,8 +237,8 @@ class ActivityAnalysis(private val act: Activity, private val open: MutableSet<S
     }
 
     // ── 🌡️💧 Heat Acclimation ──
-    fun heatAcclimation(col: LinearLayout, all: List<JSONObject>) {
-        if (!toggle(col, "ha", "🌡️💧 Heat Acclimation")) return
+    fun heatAcclimation(col: LinearLayout, all: List<JSONObject>, nested: Boolean = false) {
+        if (nested) sub(col, "🌡️💧 Heat Acclimation") else if (!toggle(col, "ha", "🌡️💧 Heat Acclimation")) return
         val box = card(col, 4)
         box.addView(txt("Estimated from the temperature and duration you log on each activity — similar to the Heat Acclimation status on higher-end Garmin watches (Enduro, Fenix, Epix), but built from your logged data rather than a core-temperature sensor. It builds up with repeated time spent training in the heat and fades within a couple of weeks without it.", RunUi.MUTED, 11f))
         fun factor(t: Double) = if (t <= 70) 0.0 else if (t >= 95) 1.0 else (t - 70) / 25
@@ -275,8 +282,8 @@ class ActivityAnalysis(private val act: Activity, private val open: MutableSet<S
     }
 
     // ── 💧📊 Humidity Impact ──
-    fun humidity(col: LinearLayout, all: List<JSONObject>) {
-        if (!toggle(col, "hum", "💧📊 Humidity Impact")) return
+    fun humidity(col: LinearLayout, all: List<JSONObject>, nested: Boolean = false) {
+        if (nested) sub(col, "💧📊 Humidity Impact") else if (!toggle(col, "hum", "💧📊 Humidity Impact")) return
         val box = card(col, 4)
         box.addView(txt("Average pace grouped by the humidity you logged for each run. Humid air makes it harder for sweat to evaporate and cool the body, so pace tends to slow as humidity climbs — this is a rough correlation across your own logged runs, not a controlled comparison (temperature and effort still vary run to run).", RunUi.MUTED, 11f))
         val acts = all.filter { S.str(it, "type") != "Rest Day" && S.str(it, "humidity").toDoubleOrNull() != null && S.paceSec(S.str(it, "pace")) > 0 }
@@ -328,7 +335,7 @@ class ActivityAnalysis(private val act: Activity, private val open: MutableSet<S
         fun m(icon: String, l: String, v: String, s: String) { cells += Triple("$icon $l", v, s) }
         m("🏃", "Total Runs", runs.size.toString(), "all time"); m("📏", "Total Miles", f1(tm) + " mi", "all time")
         m("🏆", "Longest Run", f2(long[0]) + " mi", longA?.let { (S.str(it, "title").takeIf { t -> t.isNotEmpty() }?.let { t -> "$t • " } ?: "") + fmtD(date(it), "MMM d, yyyy") } ?: "")
-        m("⚡", "Best Pace", if (bestP > 0) fmtPace(bestP.toDouble()) + "/mi" else "-", if (bestP > 0) sub(bestA) else "")
+        m("🏆", "Best Pace", if (bestP > 0) fmtPace(bestP.toDouble()) + "/mi" else "-", if (bestP > 0) sub(bestA) else "")
         m("⏱", "Avg Pace", if (pN > 0) fmtPace(pS / pN) + "/mi" else "-", "per run"); m("📐", "Avg Distance", f2(if (runs.isNotEmpty()) tm / runs.size else 0.0) + " mi", "per run")
         m("🦵", "Average Cadence", if (cadN > 0) "${Math.round(cadS / cadN)} spm" else "-", if (cadN > 0) "$cadN run${if (cadN != 1) "s" else ""} averaged" else "No cadence recorded yet")
         val avgAir = if (air.isNotEmpty()) Math.round(air.average() * 10) / 10.0 else 0.0
@@ -340,9 +347,9 @@ class ActivityAnalysis(private val act: Activity, private val open: MutableSet<S
         m("⏳", "Total Time", if (ts > 0) fmtS(ts) else "-", "all runs"); m("📅", "This Month", f1(mm) + " mi", ""); m("📆", "This Year", f1(ym) + " mi", "")
         m("📈", "Highest Mileage Week", hw?.let { f1(it.value) + " mi" } ?: "-", hw?.let { fmtD(it.key, "MMM d") + " - " + fmtD(it.key.plusDays(6), "MMM d") } ?: "No mileage recorded yet")
         m("🗓️", "Highest Mileage Month", hm?.let { f1(it.value) + " mi" } ?: "-", hm?.let { LocalDate.parse(it.key + "-01").format(DateTimeFormatter.ofPattern("MMMM yyyy", Locale.US)) } ?: "No mileage recorded yet")
-        maxA("power")?.let { m("⚡", "Peak Average Watt", "${Math.round(S.num(it, "power"))} W", sub(it)) }
-        maxA("elevGain")?.let { m("⛰", "Most Elevation Gain", comma(S.num(it, "elevGain")) + " ft", sub(it)) }
-        maxA("calories")?.let { m("🔥", "Most Calories Burned", comma(S.num(it, "calories")) + " cal", sub(it)) }
+        maxA("power")?.let { m("🏆", "Peak Average Watt", "${Math.round(S.num(it, "power"))} W", sub(it)) }
+        maxA("elevGain")?.let { m("🏆", "Most Elevation Gain", comma(S.num(it, "elevGain")) + " ft", sub(it)) }
+        maxA("calories")?.let { m("🏆", "Most Calories Burned", comma(S.num(it, "calories")) + " cal", sub(it)) }
         if (hrN > 0) m("❤", "Avg Heart Rate", "${Math.round(hrS / hrN)} bpm", "$hrN run${if (hrN != 1) "s" else ""} averaged")
         if (te > 0) m("⛰", "Total Elevation", comma(te) + " ft", "all runs")
         cells.chunked(2).forEach { row -> box.addView(LinearLayout(act).apply {
