@@ -1152,6 +1152,77 @@ class RunActivity : Activity() {
     }
 
     /** Nutrition (from the Command Center via the phone): today's calories vs target, macros, meals, last few days. */
+    /** Fluids (± a cup) and wake-up / post-run weight for today, like the phone. Sent to the phone, then the Command Center. */
+    private var wakeEdit = 0.0; private var postEdit = 0.0
+    private fun showFluids(fresh: Boolean = true): Unit = overlay { col ->
+        val N = io.github.michealsizemore1.beyondstride.Nutrition
+        val H = io.github.michealsizemore1.beyondstride.Hydration
+        val date = io.github.michealsizemore1.beyondstride.Readiness.today()
+        val days = io.github.michealsizemore1.beyondstride.NutritionStore.days(this)
+        val t = days.lastOrNull { it.date == date }
+        if (fresh) {
+            val lastW = days.lastOrNull { it.weight > 0 }?.weight ?: 170.0
+            wakeEdit = t?.weight?.takeIf { it > 0 } ?: 0.0
+            postEdit = t?.postWeight?.takeIf { it > 0 } ?: 0.0
+            if (lastW > 0) prefs.edit().putFloat("lastWeight", lastW.toFloat()).apply()
+        }
+        col.addView(label("Fluids & weight", Color.WHITE, 17f, true))
+        col.addView(label("${t?.waterOz ?: 0} oz today", N.WATER, 13f, true))
+        fun stepper(name: String, value: String, minus: () -> Unit, plus: () -> Unit) = col.addView(LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+            background = rounded(C.CARD, 16); setPadding(dp(4), dp(4), dp(4), dp(4))
+            layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(5) }
+            addView(label("−", C.ACCENT, 22f, true).apply { setOnClickListener { minus() } }, LinearLayout.LayoutParams(dp(36), WRAP_CONTENT))
+            addView(column().apply {
+                addView(label(name, C.MUTED, 10f)); addView(label(value, Color.WHITE, 14f, true))
+            }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
+            addView(label("+", C.ACCENT, 22f, true).apply { setOnClickListener { plus() } }, LinearLayout.LayoutParams(dp(36), WRAP_CONTENT))
+        })
+        val names = mapOf("water" to "Water", "sports" to "Sports drinks", "other" to "Other drinks")
+        H.FLUIDS.forEach { f ->
+            val v = when (f) { "water" -> t?.water; "sports" -> t?.sportsOz; else -> t?.otherOz } ?: 0
+            stepper(names[f]!!, "$v oz", { watchFluid(f, -H.STEP) }, { watchFluid(f, H.STEP) })
+        }
+        val start = prefs.getFloat("lastWeight", 170f).toDouble()
+        fun step(cur: Double, d: Double) = Math.round(((if (cur > 0) cur else start) + d) * 10) / 10.0
+        stepper("Wake-up weight", if (wakeEdit > 0) "${H.lb(wakeEdit)} lb" else "— tap + / −", { wakeEdit = step(wakeEdit, -0.2); showFluids(false) }, { wakeEdit = step(wakeEdit, 0.2); showFluids(false) })
+        stepper("Post-run weight", if (postEdit > 0) "${H.lb(postEdit)} lb" else "— tap + / −", { postEdit = step(postEdit, -0.2); showFluids(false) }, { postEdit = step(postEdit, 0.2); showFluids(false) })
+        val changed = wakeEdit != (t?.weight ?: 0.0) || postEdit != (t?.postWeight ?: 0.0)
+        if (changed) col.addView(label("Save weights", Color.BLACK, 14f, true).apply {
+            background = rounded(C.ACCENT, 24); setPadding(0, dp(8), 0, dp(8))
+            layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(8) }
+            setOnClickListener {
+                if (wakeEdit != (t?.weight ?: 0.0)) watchFluid("weight", value = wakeEdit, redraw = false)
+                if (postEdit != (t?.postWeight ?: 0.0)) watchFluid("postWeight", value = postEdit, redraw = false)
+                flash("Weights saved"); showFluids()
+            }
+        })
+        col.addView(label("Back", C.MUTED, 13f, true).apply {
+            setPadding(0, dp(12), 0, dp(4)); setOnClickListener { showNutrition() }
+        })
+    }
+
+    /** Shows the change at once and sends it to the phone (which saves it and passes it to the Command Center). */
+    private fun watchFluid(f: String, delta: Int = 0, value: Double = 0.0, redraw: Boolean = true) {
+        val H = io.github.michealsizemore1.beyondstride.Hydration
+        val S = io.github.michealsizemore1.beyondstride.NutritionStore
+        val date = io.github.michealsizemore1.beyondstride.Readiness.today()
+        val days = S.days(this)
+        val cur = days.lastOrNull { it.date == date } ?: H.blank(date)
+        var d = delta
+        val upd = when (f) {
+            "water" -> { val n = (cur.water + delta).coerceAtLeast(0); d = n - cur.water; cur.copy(water = n) }
+            "sports" -> { val n = (cur.sportsOz + delta).coerceAtLeast(0); d = n - cur.sportsOz; cur.copy(sportsOz = n) }
+            "other" -> { val n = (cur.otherOz + delta).coerceAtLeast(0); d = n - cur.otherOz; cur.copy(otherOz = n) }
+            "weight" -> cur.copy(weight = value)
+            else -> cur.copy(postWeight = value)
+        }.let { it.copy(waterOz = it.water + it.sportsOz + it.otherOz) }
+        if (f in H.FLUIDS && d == 0) return
+        S.putLocal(this, (days.filter { it.date != date } + upd).sortedBy { it.date })
+        RunSync.tellPhone(this, "/cmd/fluid", H.encode(date, f, d, value).toByteArray()) { ok -> if (!ok) flash("Phone not connected — not saved") }
+        if (redraw) showFluids(false)
+    }
+
     private fun showNutrition() {
         overlayOpen = true; startBuilt = false
         val N = io.github.michealsizemore1.beyondstride.Nutrition
@@ -1173,15 +1244,14 @@ class RunActivity : Activity() {
                     if (t.left >= 0) 0xFF5FD38D.toInt() else 0xFFF2C94C.toInt(), 12f, true))
                 addView(label(N.macros(t), C.MUTED, 11f))
             }
-            // Fluids and post-run rehydration, part of Today.
-            if (t != null && (t.waterOz > 0 || N.rehydrate(t) != null)) {
-                addView(label("Fluids ${t.waterOz} oz", Color.WHITE, 12f, true).apply { setPadding(0, dp(4), 0, 0) })
-                if (t.water + t.sportsOz + t.otherOz > 0) addView(label(N.fluids(t), C.MUTED, 10f))
-                N.rehydrate(t)?.let { h ->
-                    addView(label("Lost ${String.format(java.util.Locale.US, "%.1f", h.lostLb)} lb → ~${h.targetOz} oz", C.MUTED, 10f))
-                    addView(label(if (h.needOz == 0) "Rehydrated ✓" else "Drink ~${h.needOz} oz more", if (h.needOz == 0) 0xFF5FD38D.toInt() else N.WATER, 12f, true))
-                }
+            // Fluids and post-run rehydration, part of Today. Tap to add a cup or enter weights.
+            addView(label("Fluids ${t?.waterOz ?: 0} oz  ＋", Color.WHITE, 12f, true).apply { setPadding(0, dp(4), 0, 0) })
+            if (t != null && t.water + t.sportsOz + t.otherOz > 0) addView(label(N.fluids(t), C.MUTED, 10f))
+            N.rehydrate(t)?.let { h ->
+                addView(label("Lost ${String.format(java.util.Locale.US, "%.1f", h.lostLb)} lb → ~${h.targetOz} oz", C.MUTED, 10f))
+                addView(label(if (h.needOz == 0) "Rehydrated ✓" else "Drink ~${h.needOz} oz more", if (h.needOz == 0) 0xFF5FD38D.toInt() else N.WATER, 12f, true))
             }
+            setOnClickListener { showFluids() }
         }
         if (t != null && t.micros.isNotEmpty()) box {
             addView(label("MICRONUTRIENTS", C.ACCENT, 11f, true))

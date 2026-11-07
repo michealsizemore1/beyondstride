@@ -39,6 +39,9 @@ object NutritionSync {
     fun fetch(ctx: Context): Boolean {
         if (!ready(ctx)) return false
         val sp = ctx.getSharedPreferences("nutrition", 0)
+        // Fluids / weights entered here: send any waiting, and drop the ones the Command Center has taken (first,
+        // so the days read below already include them).
+        HydrationSync.reconcile(ctx)
         return try {
             val url = Live.db(ctx) + "/nutrition/" + key(ctx) + "/days.json?orderBy=%22%24key%22&limitToLast=21"
             val c = (URL(url).openConnection() as HttpURLConnection).apply { connectTimeout = 12_000; readTimeout = 15_000 }
@@ -48,7 +51,8 @@ object NutritionSync {
                 return false
             }
             val body = c.inputStream.bufferedReader().readText()
-            val days = Nutrition.parse(body)
+            val days = synchronized(io.github.michealsizemore1.beyondstride.Hydration) {
+                io.github.michealsizemore1.beyondstride.Hydration.overlay(ctx, Nutrition.parse(body)) }
             val before = Nutrition.json(NutritionStore.days(ctx))
             sp.edit().putString("err", "").apply()
             NutritionStore.save(ctx, days)

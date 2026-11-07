@@ -29,6 +29,10 @@ object NutritionStore {
         }.start()
     }
 
+    /** Watch: shows a change right away (the phone sends the real day back a moment later). */
+    fun putLocal(ctx: Context, days: List<Nutrition.Day>) =
+        p(ctx).edit().putString("days", Nutrition.json(days.takeLast(21))).apply()
+
     /** Watch: data from the phone. */
     fun apply(ctx: Context, m: DataMap) {
         val s = m.getString("json") ?: return
