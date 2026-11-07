@@ -107,7 +107,8 @@ class ActivitiesActivity : Activity() {
         col.addView(statsBox, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(10) })
         // Phase 4: the Command Center's analysis, in its order.
         ActivityAnalysis(this, panels) { render() }.apply {
-            streakLoad(col, all); acwr(col, all); prs(col, all); racePredictor(col, all); volume(col, all); dailyMiles(col, all)
+            // Charts together under the 12-week streak chart (12 weeks → 26 weeks → daily miles), then the rest.
+            streakLoad(col, all); volume(col, all); dailyMiles(col, all); acwr(col, all); prs(col, all); racePredictor(col, all)
             cardioDrift(col, all); heatAcclimation(col, all); humidity(col, all)
         }
 
