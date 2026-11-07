@@ -224,7 +224,7 @@ open class RunsActivity : Activity() {
                                             setPadding(dp(6), dp(4), dp(6), dp(4))
                                             addView(RunUi.text(ctx, m.name.replace("Vitamin ", "Vit "), RunUi.MUTED, 10f))
                                             addView(RunUi.text(ctx, m.shown(), Color.WHITE, 12f, true))
-                                            addView(RunUi.text(ctx, "${m.pct.toInt()}% · ${m.status}", N.statusColor(m.status), 10f, true))
+                                            addView(RunUi.text(ctx, "${m.pct.toInt()}% · ${m.status}", N.statusColor(m.status), 12f, true))
                                         }, LinearLayout.LayoutParams(0, MATCH_PARENT, 1f).apply { if (i < 2) marginEnd = dp(4) })
                                     }
                                     repeat(3 - row.size) { addView(android.view.View(ctx), LinearLayout.LayoutParams(0, 1, 1f)) }
