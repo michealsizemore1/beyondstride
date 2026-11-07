@@ -317,10 +317,10 @@ class RunActivity : Activity() {
     }
 
     /** Miles and runs since the start of this week, from the runs saved on the watch. */
-    private fun weekTotals(): Pair<Double, Int> {
+    private fun weekTotals(month: Boolean = false): Pair<Double, Int> {
         val cal = java.util.Calendar.getInstance().apply {
             set(java.util.Calendar.HOUR_OF_DAY, 0); set(java.util.Calendar.MINUTE, 0); set(java.util.Calendar.SECOND, 0)
-            set(java.util.Calendar.DAY_OF_WEEK, firstDayOfWeek)
+            if (month) set(java.util.Calendar.DAY_OF_MONTH, 1) else set(java.util.Calendar.DAY_OF_WEEK, firstDayOfWeek)
         }
         val from = cal.timeInMillis
         var meters = 0.0; var n = 0
@@ -361,7 +361,8 @@ class RunActivity : Activity() {
         col.addView(card().apply {
             addView(head("TODAY"))
             val ready = label("", C.ACCENT, 15f, true); val readySub = label("", C.MUTED, 10f)
-            addView(ready); addView(readySub)
+            val readyAdvice = label("", Color.WHITE, 10f).apply { visibility = View.GONE }
+            addView(ready); addView(readySub); addView(readyAdvice)
             ready.setOnClickListener { startActivity(Intent(this@RunActivity, MorningCheckActivity::class.java).putExtra("start", !Recovery.checkedToday(this@RunActivity))) }
             readySub.setOnClickListener { ready.performClick() }
             addView(View(this@RunActivity).apply { setBackgroundColor(0x22FFFFFF) }, LinearLayout.LayoutParams(MATCH_PARENT, dp(1)).apply { topMargin = dp(6); bottomMargin = dp(6) })
@@ -369,17 +370,39 @@ class RunActivity : Activity() {
             addView(label("", Color.WHITE, 15f, true).also { startValues["workout"] = it; it.setOnClickListener { openW() } })
             addView(label("", C.MUTED, 10f).apply { startValues["workoutOutline"] = this; visibility = View.GONE; setOnClickListener { openW() } })
             addView(label("", 0xFF46C46E.toInt(), 11f, true).apply { startValues["trailLine"] = this; visibility = View.GONE })
-            io.github.michealsizemore1.beyondstride.Nutrition.today(io.github.michealsizemore1.beyondstride.NutritionStore.days(this@RunActivity))
-                ?.takeIf { it.count > 0 }?.let { nd ->
-                    addView(label("Fuel " + io.github.michealsizemore1.beyondstride.Nutrition.line(nd), C.MUTED, 10f).apply { setOnClickListener { showNutrition() } })
+            // FUEL — same lines as the phone's Today card.
+            addView(View(this@RunActivity).apply { setBackgroundColor(0x22FFFFFF) }, LinearLayout.LayoutParams(MATCH_PARENT, dp(1)).apply { topMargin = dp(6); bottomMargin = dp(6) })
+            addView(column().apply {
+                val N = io.github.michealsizemore1.beyondstride.Nutrition
+                val nd = N.today(io.github.michealsizemore1.beyondstride.NutritionStore.days(this@RunActivity))
+                addView(head("FUEL"))
+                if (nd == null || nd.count == 0) addView(label("No food logged today yet", C.MUTED, 10f))
+                else {
+                    addView(label(N.line(nd), if (nd.target > 0 && nd.left < 0) 0xFFF2C94C.toInt() else Color.WHITE, 11f, true))
+                    val (pp, cp, fp) = nd.ratios()
+                    addView(label(N.macros(nd) + "  ($pp/$cp/$fp%)", C.MUTED, 9f))
+                    if (nd.micros.isNotEmpty()) {
+                        val low = nd.micros.count { it.status == "Low" }; val high = nd.micros.count { it.status == "High" }
+                        addView(label("Micronutrients " + String.format(java.util.Locale.US, "%.1f", nd.microScore) + "/10 · " + nd.microLabel() +
+                            (if (low > 0) " · $low low" else "") + (if (high > 0) " · $high high" else ""),
+                            N.statusColor(when { nd.microScore >= 7 -> "Met"; nd.microScore >= 5 -> "Close"; else -> "Low" }), 9f, true))
+                    }
                 }
+                if (nd != null && nd.waterOz > 0) addView(label("Fluids ${nd.waterOz} oz", C.MUTED, 9f))
+                N.rehydrate(nd)?.let { h ->
+                    addView(label("Lost ${String.format(java.util.Locale.US, "%.1f", h.lostLb)} lb → ~${h.targetOz} oz · " + (if (h.needOz == 0) "caught up ✓" else "drink ~${h.needOz} oz more"),
+                        if (h.needOz == 0) 0xFF5FD38D.toInt() else N.WATER, 9f, true))
+                }
+                setOnClickListener { showNutrition() }
+            })
             Thread {
                 val r = try { Recovery.result(this@RunActivity) } catch (e: Exception) { null }
                 val checked = Recovery.checkedToday(this@RunActivity)
                 runOnUiThread {
+                    if (r != null) { readyAdvice.text = r.advice.substringBefore(". ") + "."; readyAdvice.visibility = View.VISIBLE }
                     if (r != null && checked) {
-                        ready.text = "Readiness ${r.score} · ${r.label}"; ready.setTextColor(r.color)
-                        readySub.text = r.parts.filter { it.name == "HRV" || it.name == "Sleep" }.joinToString(" · ") { "${it.name} ${it.value}" }
+                        ready.text = "${r.score}  ${r.label}"; ready.setTextColor(r.color)
+                        readySub.text = r.parts.filter { it.pts >= 0 }.joinToString(" · ") { "${it.name} ${it.value}" }
                     } else {
                         ready.text = "Morning check ▸"; ready.setTextColor(C.ACCENT)
                         readySub.text = r?.let { "${it.score} · ${it.label} without HRV" } ?: "2½ min lying still with your strap"
@@ -395,30 +418,7 @@ class RunActivity : Activity() {
             setOnClickListener { startRun() }
         })
 
-        // 2. THIS WEEK: miles, runs, training load.
-        val (meters, runs) = weekTotals()
-        col.addView(card().apply {
-            addView(head("THIS WEEK"))
-            addView(LinearLayout(this@RunActivity).apply {
-                orientation = LinearLayout.HORIZONTAL
-                addView(column().apply { addView(label(Run.miles(meters), Color.WHITE, 18f, true)); addView(label("miles", C.MUTED, 9f)) }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
-                addView(column().apply { addView(label("$runs", Color.WHITE, 18f, true)); addView(label("runs", C.MUTED, 9f)) }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
-            })
-            val loadL = label("", Color.WHITE, 12f, true).apply { visibility = View.GONE }
-            addView(loadL)
-            Thread {
-                val now = System.currentTimeMillis()
-                val rs = RunStore.list(this@RunActivity).mapNotNull { RunStore.read(it) }.filter { now - it.optLong("start") < 56 * 86_400_000L }
-                if (rs.isEmpty()) return@Thread
-                val ld = I.load(rs, now)
-                runOnUiThread {
-                    loadL.text = "Load: ${ld.status}" + (ld.ratio?.let { String.format(java.util.Locale.US, " · %.2f", it) } ?: "")
-                    loadL.setTextColor(ld.color); loadL.visibility = View.VISIBLE
-                }
-            }.start()
-        })
-
-        // 3. Command Center + LiveTrack (same buttons as the phone).
+        // 2. Command Center + LiveTrack (same buttons as the phone).
         val ps = getSharedPreferences("phonestatus", 0)
         col.addView(LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -454,7 +454,56 @@ class RunActivity : Activity() {
             }, lp(true))
         })
 
-        // 5. Sensors, compact.
+        // 3. THIS WEEK: miles, runs, training load.
+        val (meters, runs) = weekTotals()
+        val (monthMeters, _) = weekTotals(month = true)
+        col.addView(card().apply {
+            addView(head("THIS WEEK"))
+            addView(LinearLayout(this@RunActivity).apply {
+                orientation = LinearLayout.HORIZONTAL
+                addView(column().apply { addView(label(Run.miles(meters), Color.WHITE, 18f, true)); addView(label("miles", C.MUTED, 9f)) }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
+                addView(column().apply { addView(label("$runs", Color.WHITE, 18f, true)); addView(label("runs", C.MUTED, 9f)) }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
+                addView(column().apply { addView(label(Run.miles(monthMeters), Color.WHITE, 18f, true)); addView(label("this month", C.MUTED, 9f)) }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
+            })
+            val loadL = label("", Color.WHITE, 12f, true).apply { visibility = View.GONE }
+            addView(loadL)
+            Thread {
+                val now = System.currentTimeMillis()
+                val rs = RunStore.list(this@RunActivity).mapNotNull { RunStore.read(it) }.filter { now - it.optLong("start") < 56 * 86_400_000L }
+                if (rs.isEmpty()) return@Thread
+                val ld = I.load(rs, now)
+                runOnUiThread {
+                    loadL.text = "Load: ${ld.status}" + (ld.ratio?.let { String.format(java.util.Locale.US, " · ratio %.2f", it) } ?: "") + " · ${ld.acute} stress, 7 days"
+                    loadL.setTextColor(ld.color); loadL.visibility = View.VISIBLE
+                }
+            }.start()
+        })
+
+        // 4. LAST RUN (same as the phone's).
+        RunStore.list(this).maxByOrNull { it.nameWithoutExtension.toLongOrNull() ?: 0L }?.let { RunStore.read(it) }?.let { run ->
+            col.addView(card().apply {
+                addView(head("LAST RUN"))
+                val st = run.optLong("start")
+                val title = run.optJSONObject("workout")?.optString("name")?.takeIf { it.isNotBlank() && it != "Free run" }
+                    ?: run.optJSONObject("trail")?.optString("name")?.takeIf { it.isNotBlank() }
+                    ?: when (java.util.Calendar.getInstance().apply { timeInMillis = st }.get(java.util.Calendar.HOUR_OF_DAY)) {
+                        in 4..11 -> "Morning Run"; in 12..16 -> "Afternoon Run"; in 17..20 -> "Evening Run"; else -> "Night Run" }
+                addView(label(title, Color.WHITE, 13f, true))
+                addView(label(java.text.SimpleDateFormat("EEE, MMM d · h:mm a", java.util.Locale.getDefault()).format(java.util.Date(st)), C.MUTED, 9f))
+                val dist = run.optDouble("distance"); val secs = run.optInt("movingSeconds")
+                addView(LinearLayout(this@RunActivity).apply {
+                    orientation = LinearLayout.HORIZONTAL; setPadding(0, dp(4), 0, 0)
+                    fun stat(v: String, l: String, c: Int = Color.WHITE) = addView(column().apply { addView(label(v, c, 13f, true)); addView(label(l, C.MUTED, 8f)) }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
+                    stat(Run.miles(dist), "miles"); stat(io.github.michealsizemore1.beyondstride.RunMath.clock(secs), "time")
+                    stat(io.github.michealsizemore1.beyondstride.RunMath.paceFor(secs, dist), "pace /mi")
+                })
+                val extra = listOfNotNull(run.optInt("avgHr").takeIf { it > 0 }?.let { "HR $it" }, run.optInt("avgPower").takeIf { it > 0 }?.let { "$it W" }).joinToString(" · ")
+                if (extra.isNotEmpty()) addView(label(extra, C.MUTED, 10f))
+                setOnClickListener { startActivity(Intent(this@RunActivity, RunHistoryActivity::class.java)) }
+            })
+        }
+
+        // 5. Sensors, compact (watch only).
         col.addView(card().apply {
             fun row(name: String, key: String) = LinearLayout(this@RunActivity).apply {
                 orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
@@ -1237,44 +1286,58 @@ class RunActivity : Activity() {
         val t = N.today(days)
         box {
             addView(label("TODAY", C.ACCENT, 11f, true))
-            if (t == null || t.count == 0) addView(label("Nothing logged yet.\nLog food in Nutrition on the phone.", C.MUTED, 11f))
+            if (t == null || t.count == 0) addView(label("No food logged today yet", C.MUTED, 11f))
             else {
                 addView(label(N.kcal(t.cal) + " kcal", Color.WHITE, 20f, true))
                 if (t.target > 0) addView(label(if (t.left >= 0) "${N.kcal(t.left)} left of ${N.kcal(t.target)}" else "${N.kcal(-t.left)} over ${N.kcal(t.target)}",
                     if (t.left >= 0) 0xFF5FD38D.toInt() else 0xFFF2C94C.toInt(), 12f, true))
-                addView(label(N.macros(t), C.MUTED, 11f))
+                val (pp, cp, fp) = t.ratios()
+                addView(label(N.macros(t) + "  ($pp/$cp/$fp%)", C.MUTED, 10f))
+                if (t.active > 0) addView(label("Target includes ${N.kcal(t.active)} active kcal", C.DIM, 9f))
             }
             // Fluids and post-run rehydration, part of Today. Tap to add a cup or enter weights.
-            addView(label("Fluids ${t?.waterOz ?: 0} oz  ＋", Color.WHITE, 12f, true).apply { setPadding(0, dp(4), 0, 0) })
+            addView(label("Fluids ${t?.waterOz ?: 0} oz", Color.WHITE, 12f, true).apply { setPadding(0, dp(4), 0, 0) })
             if (t != null && t.water + t.sportsOz + t.otherOz > 0) addView(label(N.fluids(t), C.MUTED, 10f))
             N.rehydrate(t)?.let { h ->
                 addView(label("Lost ${String.format(java.util.Locale.US, "%.1f", h.lostLb)} lb → ~${h.targetOz} oz", C.MUTED, 10f))
                 addView(label(if (h.needOz == 0) "Rehydrated ✓" else "Drink ~${h.needOz} oz more", if (h.needOz == 0) 0xFF5FD38D.toInt() else N.WATER, 12f, true))
             }
+            addView(label("💧 Fluids & weight ▸", N.WATER, 11f, true).apply {
+                background = rounded(0xFF26302C.toInt(), 14); setPadding(0, dp(5), 0, dp(5))
+                layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(5) }
+            })
             setOnClickListener { showFluids() }
         }
         if (t != null && t.micros.isNotEmpty()) box {
             addView(label("MICRONUTRIENTS", C.ACCENT, 11f, true))
-            addView(label(String.format(java.util.Locale.US, "%.1f", t.microScore) + "/10 · " + t.microLabel(), Color.WHITE, 13f, true))
+            addView(label(String.format(java.util.Locale.US, "%.1f", t.microScore) + "/10 · " + t.microLabel(),
+                N.statusColor(when { t.microScore >= 7 -> "Met"; t.microScore >= 5 -> "Close"; else -> "Low" }), 14f, true))
             t.microsByNeed().forEach { m ->
-                addView(label("${m.name.replace("Vitamin ", "Vit ")}  ${m.shown()} · ${m.pct.toInt()}%", N.statusColor(m.status), 11f))
+                addView(label("${m.name.replace("Vitamin ", "Vit ")}  ${m.shown()}", Color.WHITE, 10f).apply { setPadding(0, dp(2), 0, 0) })
+                addView(label("${m.pct.toInt()}% · ${m.status}", N.statusColor(m.status), 11f, true))
             }
         }
-        if (t != null && t.meals.isNotEmpty()) box {
+        if (t != null && t.count > 0) box {
             addView(label("MEALS", C.ACCENT, 11f, true))
-            N.MEAL_ORDER.filter { (t.meals[it] ?: 0) > 0 }.forEach { m ->
-                addView(label("${N.MEAL_NAMES[m] ?: m}  ${N.kcal(t.meals[m] ?: 0)}", Color.WHITE, 12f))
+            (N.MEAL_ORDER + t.meals.keys.filter { it !in N.MEAL_ORDER }).filter { (t.meals[it] ?: 0) > 0 || t.items.any { i -> i.meal == it } }.forEach { m ->
+                addView(label("${N.MEAL_NAMES[m] ?: m}  ${N.kcal(t.meals[m] ?: 0)} kcal", Color.WHITE, 12f, true).apply { setPadding(0, dp(4), 0, 0) })
+                t.items.filter { it.meal == m }.forEach { i -> addView(label("${i.name} · ${N.kcal(i.cal)}", C.MUTED, 9f)) }
             }
         }
-        val recent = days.filter { it.count > 0 && it.date != t?.date }.takeLast(3).reversed()
-        if (recent.isNotEmpty()) box {
-            addView(label("RECENT DAYS", C.ACCENT, 11f, true))
-            recent.forEach { d ->
-                val dd = java.time.LocalDate.parse(d.date)
-                addView(label(dd.dayOfWeek.name.take(3).lowercase().replaceFirstChar { it.uppercase() } + "  " + N.kcal(d.cal) +
-                    (if (d.target > 0) " / ${N.kcal(d.target)}" else "") + " kcal", Color.WHITE, 12f))
-            }
+        val week = days.filter { it.count > 0 }.takeLast(7)
+        if (week.isNotEmpty()) box {
+            addView(label("LAST 7 DAYS", C.ACCENT, 11f, true))
+            val maxCal = maxOf(week.maxOf { maxOf(it.cal, it.target) }, 1)
+            addView(bars(week.map { d ->
+                val ok = d.target <= 0 || d.cal.toDouble() / d.target in 0.85..1.15
+                Triple("${(d.cal + 50) / 100 / 10.0}k", java.time.LocalDate.parse(d.date).dayOfWeek.name.take(1),
+                    (6 + d.cal * 30 / maxCal) to (if (ok) 0xFF5FD38D.toInt() else 0xFFF2C94C.toInt()))
+            }))
+            val withT = week.filter { it.target > 0 }
+            addView(label("Avg ${N.kcal(week.map { it.cal }.average().toInt())} kcal" + (if (withT.isNotEmpty()) " · target ${N.kcal(withT.map { it.target }.average().toInt())}" else ""), Color.WHITE, 10f))
+            addView(label("P ${week.map { it.prot }.average().toInt()} · C ${week.map { it.carbs }.average().toInt()} · F ${week.map { it.fat }.average().toInt()} g a day", C.MUTED, 9f))
         }
+        col.addView(label("Log food in the Command Center on the phone.", C.DIM, 9f).apply { setPadding(0, dp(8), 0, 0) })
         col.addView(View(this).apply { setBackgroundColor(0x22FFFFFF) }, LinearLayout.LayoutParams(MATCH_PARENT, dp(1)).apply { topMargin = dp(10) })
         col.addView(menuRow(2))
         root.removeAllViews()
@@ -1305,68 +1368,149 @@ class RunActivity : Activity() {
     }
 
     /** Fitness page (like the phone's Fitness tab): readiness, then Zone 2, decoupling, CP, load and personal bests. */
+    /** Small bar chart (watch): one bar per item with a value on top and a label under it. */
+    private fun bars(items: List<Triple<String, String, Pair<Int, Int>>>) = LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL; gravity = Gravity.BOTTOM
+        setPadding(0, dp(6), 0, dp(2))
+        items.forEach { (top, bottom, hc) ->
+            addView(column().apply {
+                gravity = Gravity.CENTER_HORIZONTAL or Gravity.BOTTOM
+                if (top.isNotEmpty()) addView(label(top, C.MUTED, 7f))
+                addView(View(this@RunActivity).apply { background = rounded(hc.second, 2) }, LinearLayout.LayoutParams(dp(7), dp(hc.first)))
+                if (bottom.isNotEmpty()) addView(label(bottom, C.DIM, 7f))
+            }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
+        }
+    }
+
+    /** Fitness — same sections, in the same order, as the phone's Fitness tab. */
     private fun showFitness() {
         overlayOpen = true; startBuilt = false
         val w = resources.displayMetrics.widthPixels
         val col = column().apply { setPadding(w / 9, w / 8, w / 9, w / 5) }
         val I = io.github.michealsizemore1.beyondstride.Insights
         val RM = io.github.michealsizemore1.beyondstride.RunMath
+        val D = io.github.michealsizemore1.beyondstride.Decoupling
+        val R = io.github.michealsizemore1.beyondstride.Readiness
         fun card() = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(12), dp(8), dp(12), dp(8))
             background = rounded(C.CARD, 16)
             layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(6) }
         }
-        fun head(t: String) = label(t, C.ACCENT, 11f, true).apply { letterSpacing = 0.08f }
+        fun head(t: String) = label(t, C.ACCENT, 11f, true).apply { letterSpacing = 0.08f; setPadding(0, dp(8), 0, 0) }
         col.addView(label("Fitness", Color.WHITE, 20f, true))
-        // Resting heart rate trend (sleeping HR, last 7 nights vs the week before).
-        io.github.michealsizemore1.beyondstride.Readiness.rhrTrend(io.github.michealsizemore1.beyondstride.ReadinessSync.nights(this))?.let { tr ->
-            col.addView(card().apply {
-                addView(head("RESTING HR"))
-                addView(label(String.format(java.util.Locale.US, "%.1f bpm", tr.recent) +
-                    (tr.change?.let { String.format(java.util.Locale.US, " · %s%.1f", if (it > 0) "+" else "", it) } ?: ""), Color.WHITE, 15f, true))
-                addView(label(tr.note, tr.color, 10f))
-            })
-        }
-        // Zone 2, decoupling, CP, personal bests.
-        col.addView(card().apply {
-            visibility = View.GONE
-            addView(head("TRENDS"))
-            val z2L = label("", Color.WHITE, 12f, true); val decL = label("", Color.WHITE, 12f, true)
-            val cpL = label("", Color.WHITE, 12f, true); val pbL = label("", 0xFFF2C94C.toInt(), 10f)
-            listOf(z2L, decL, cpL, pbL).forEach { it.visibility = View.GONE; addView(it) }
-            val box = this
-            Thread {
-                val now = System.currentTimeMillis()
-                val allRuns = RunStore.list(this@RunActivity).mapNotNull { RunStore.read(it) }
-                if (allRuns.isEmpty()) return@Thread
-                val runs = allRuns.filter { now - it.optLong("start") < 56 * 86_400_000L }
-                // Personal bests from every run (saved, so a new best is announced right away).
-                val recMap = I.records(allRuns)
-                val rec = org.json.JSONObject().also { o -> recMap.forEach { (k, v) -> o.put(k, org.json.JSONObject().put("sec", v.sec).put("start", v.start)) } }
-                prefs.edit().putString("pbRecords", rec.toString()).apply()
-                val (z2now, z2before) = I.z2Trend(runs, Run.hrMax, Run.hrRest, now)
-                val D = io.github.michealsizemore1.beyondstride.Decoupling
-                val dec = allRuns.filter { now - it.optLong("start") < 28 * 86_400_000L }
-                    .mapNotNull { r -> D.of(r)?.takeIf { it.steady && it.minutes >= 30 && it.main != null }?.main }
-                val cpE = try { io.github.michealsizemore1.beyondstride.CriticalPower.estimate(allRuns, now, currentCp = Run.criticalPower) } catch (e: Exception) { null }
-                runOnUiThread {
-                    z2now?.let { n ->
-                        z2L.text = "Zone 2 " + RM.paceFor(n, RM.METERS_PER_MILE) + "/mi" +
-                            (z2before?.let { b -> val d = b - n; if (d >= 0) " · ${d}s faster" else " · ${-d}s slower" } ?: "")
-                        z2L.visibility = View.VISIBLE
-                    }
-                    if (dec.isNotEmpty()) { val a = dec.average()
-                        decL.text = "Decoupling " + D.text(a) + " · " + D.rating(a); decL.setTextColor(D.color(a)); decL.visibility = View.VISIBLE }
-                    cpL.text = "CP ${Run.criticalPower} W" + (cpE?.cp?.let { e -> if (kotlin.math.abs(e - Run.criticalPower) >= 3) " · runs say $e" else " · ✓" } ?: "")
-                    cpL.visibility = View.VISIBLE
-                    pbL.text = I.PB_DISTANCES.mapNotNull { (k, _) -> rec.optJSONObject(k)?.let { I.pbName(k).replace("Half marathon", "Half") + " " + I.clock(it.optInt("sec")) } }
-                        .joinToString(" · ").let { if (it.isBlank()) "" else "PBs  $it" }
-                    pbL.visibility = if (pbL.text.isNullOrBlank()) View.GONE else View.VISIBLE
-                    box.visibility = View.VISIBLE
+        val body = column(); col.addView(body)
+        val wait = label("Loading…", C.DIM, 10f); body.addView(wait)
+        val md = java.text.SimpleDateFormat("M/d", java.util.Locale.US); val mmmd = java.text.SimpleDateFormat("MMM d", java.util.Locale.US)
+        Thread {
+            val now = System.currentTimeMillis()
+            val all = RunStore.list(this@RunActivity).take(200).mapNotNull { RunStore.read(it) }
+            val (z2now, z2before) = I.z2Trend(all, Run.hrMax, Run.hrRest, now)
+            val dec = all.take(120).filter { now - it.optLong("start") < 28 * 86_400_000L }
+                .mapNotNull { r -> D.of(r)?.takeIf { it.steady && it.minutes >= 30 && it.main != null }?.main }
+            val cpE = try { io.github.michealsizemore1.beyondstride.CriticalPower.estimate(all, now, currentCp = Run.criticalPower) } catch (e: Exception) { null }
+            val rec = I.records(all)
+            // Personal bests saved so a new best is announced right away.
+            prefs.edit().putString("pbRecords", org.json.JSONObject().also { o -> rec.forEach { (k, v) -> o.put(k, org.json.JSONObject().put("sec", v.sec).put("start", v.start)) } }.toString()).apply()
+            val ld = if (all.isNotEmpty()) I.load(all, now) else null
+            val z2 = all.mapNotNull { r -> I.zone2(r, Run.hrMax, Run.hrRest)?.let { r.optLong("start") to it } }.take(8)
+            val decPts = all.take(120).mapNotNull { r -> D.of(r)?.takeIf { it.steady && it.minutes >= 30 && it.main != null }?.let { r.optLong("start") to it.main!! } }.take(8)
+            val nights = io.github.michealsizemore1.beyondstride.ReadinessSync.nights(this@RunActivity)
+                .filter { it.sleepHr > 0 && R.daysBetween(it.day, R.today()) in 0..13 }.sortedBy { it.day }
+            runOnUiThread {
+                body.removeAllViews()
+                // OVERVIEW: the phone's four tiles.
+                body.addView(head("OVERVIEW"))
+                fun tile(t: String, v: String, sub: String, color: Int) = LinearLayout(this@RunActivity).apply {
+                    orientation = LinearLayout.VERTICAL; background = rounded(C.CARD, 14); setPadding(dp(6), dp(6), dp(6), dp(6))
+                    addView(label(t, C.MUTED, 8f, true)); addView(label(v, color, 13f, true)); addView(label(sub, C.MUTED, 8f))
                 }
-            }.start()
-        })
+                fun row(a: View, b: View) = body.addView(LinearLayout(this@RunActivity).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(5) }
+                    addView(a, LinearLayout.LayoutParams(0, MATCH_PARENT, 1f).apply { marginEnd = dp(4) }); addView(b, LinearLayout.LayoutParams(0, MATCH_PARENT, 1f))
+                })
+                val latestPb = rec.maxByOrNull { it.value.start }
+                row(tile("ZONE 2 PACE", z2now?.let { RM.paceFor(it, RM.METERS_PER_MILE) + "/mi" } ?: "—",
+                        z2now?.let { n -> z2before?.let { b -> val d = b - n; if (d >= 0) "${d}s faster" else "${-d}s slower" } ?: "last 4 weeks" } ?: "no Z2 runs yet", Color.WHITE),
+                    tile("DECOUPLING", if (dec.isEmpty()) "—" else D.text(dec.average()), if (dec.isEmpty()) "needs 30+ min steady" else D.rating(dec.average()),
+                        if (dec.isEmpty()) Color.WHITE else D.color(dec.average())))
+                row(tile("CRITICAL POWER", "${Run.criticalPower} W", cpE?.cp?.let { if (kotlin.math.abs(it - Run.criticalPower) >= 3) "runs say $it W" else "matches runs" } ?: "needs a hard effort", Color.WHITE),
+                    tile("PERSONAL BESTS", latestPb?.let { I.clock(it.value.sec) } ?: "—",
+                        latestPb?.let { I.pbName(it.key).replace("Half marathon", "Half") + " · " + mmmd.format(java.util.Date(it.value.start)) } ?: "after first runs",
+                        if (latestPb != null) 0xFFF2C94C.toInt() else Color.WHITE))
+
+                // RESTING HEART RATE: sleeping HR by night.
+                body.addView(head("RESTING HEART RATE"))
+                body.addView(card().apply {
+                    if (nights.isEmpty()) addView(label("From sleeping heart rate in Samsung Health (phone: Readiness → Connect sleep).", C.MUTED, 10f))
+                    else {
+                        val tr = R.rhrTrend(nights)
+                        addView(label(String.format(java.util.Locale.US, "%.1f bpm", tr?.recent ?: nights.last().sleepHr.toDouble()), Color.WHITE, 15f, true))
+                        addView(label("7-night average" + (tr?.change?.let { String.format(java.util.Locale.US, " · %s%.1f", if (it > 0) "+" else "", it) } ?: ""), C.MUTED, 9f))
+                        val shown = nights.takeLast(7)
+                        val lo = shown.minOf { it.sleepHr } - 3; val hi = maxOf(shown.maxOf { it.sleepHr }, lo + 6)
+                        addView(bars(shown.mapIndexed { i, n -> Triple("${n.sleepHr}", if (i == 0 || i == shown.lastIndex) n.day.substring(5).replace("-", "/") else "",
+                            (6 + (n.sleepHr - lo) * 28 / (hi - lo)) to 0xFFFF6B6B.toInt()) }))
+                        tr?.let { addView(label(it.note, it.color, 9f)) }
+                    }
+                })
+
+                if (ld != null) {
+                    // TRAINING LOAD.
+                    body.addView(head("TRAINING LOAD"))
+                    body.addView(card().apply {
+                        addView(label(ld.status, ld.color, 14f, true))
+                        addView(label("${ld.acute} stress · " + String.format(java.util.Locale.US, "%.1f", ld.milesWeek) + " mi, last 7 days", Color.WHITE, 10f))
+                        ld.ratio?.let { addView(label(String.format(java.util.Locale.US, "Ratio %.2f (0.8–1.3 healthy) · usual %.1f mi", it, ld.milesAvg), ld.color, 9f)) }
+                        addView(label(ld.advice, C.MUTED, 9f).apply { setPadding(0, dp(2), 0, 0) })
+                        addView(label("Critical power ${Run.criticalPower} W" + (cpE?.cp?.let { if (kotlin.math.abs(it - Run.criticalPower) >= 3) " · runs say $it W" else " · matches your runs" } ?: ""),
+                            0xFFB18CFF.toInt(), 10f, true).apply { setPadding(0, dp(4), 0, 0) })
+                    })
+                }
+
+                // ZONE 2 FITNESS: pace at Zone 2 heart rate, run by run.
+                if (z2.isNotEmpty()) {
+                    body.addView(head("ZONE 2 FITNESS"))
+                    body.addView(card().apply {
+                        z2now?.let { n -> addView(label("Zone 2 pace " + RM.paceFor(n, RM.METERS_PER_MILE) + " /mi", Color.WHITE, 12f, true)) }
+                        addView(label(z2now?.let { n -> z2before?.let { b -> val d = b - n; if (d >= 0) "$d s/mi faster than the 4 weeks before" else "${-d} s/mi slower than the 4 weeks before" } }
+                            ?: "Faster at the same heart rate = fitter.", C.MUTED, 9f))
+                        val paces = z2.map { it.second.secPerMile }; val slow = paces.max() + 15; val fast = paces.min() - 15
+                        addView(bars(z2.reversed().map { (st, z) -> Triple(RM.paceFor(z.secPerMile, RM.METERS_PER_MILE), md.format(java.util.Date(st)),
+                            (6 + (slow - z.secPerMile) * 28 / maxOf(1, slow - fast)) to 0xFF22C55E.toInt()) }))
+                    })
+                }
+
+                // PERSONAL BESTS.
+                if (rec.isNotEmpty()) {
+                    body.addView(head("PERSONAL BESTS"))
+                    body.addView(card().apply {
+                        rec.forEach { (k, pb) ->
+                            addView(LinearLayout(this@RunActivity).apply {
+                                orientation = LinearLayout.HORIZONTAL; setPadding(0, dp(2), 0, dp(2))
+                                addView(label(I.pbName(k).replace("Half marathon", "Half"), Color.WHITE, 11f, true).apply { gravity = Gravity.START }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
+                                addView(label(I.clock(pb.sec) + "  " + mmmd.format(java.util.Date(pb.start)), 0xFFF2C94C.toInt(), 11f, true).apply { gravity = Gravity.END },
+                                    LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT))
+                            })
+                        }
+                    })
+                }
+
+                // AEROBIC DECOUPLING · STEADY RUNS.
+                if (decPts.size >= 2) {
+                    body.addView(head("DECOUPLING"))
+                    body.addView(card().apply {
+                        val recent = decPts.filter { now - it.first < 28 * 86_400_000L }.map { it.second }
+                        if (recent.isNotEmpty()) addView(label(D.text(recent.average()) + " average, 4 weeks", D.color(recent.average()), 12f, true))
+                        addView(label("Steady runs of 30+ min", C.MUTED, 9f))
+                        addView(bars(decPts.reversed().map { (st, v) -> Triple(String.format(java.util.Locale.US, "%.0f", v), md.format(java.util.Date(st)),
+                            (4 + v.coerceIn(0.0, 15.0) * 2).toInt() to D.color(v)) }))
+                    })
+                }
+                if (all.isEmpty()) body.addView(label("Finish a run and your fitness shows here.", C.MUTED, 11f))
+            }
+        }.start()
 
         col.addView(View(this).apply { setBackgroundColor(0x22FFFFFF) }, LinearLayout.LayoutParams(MATCH_PARENT, dp(1)).apply { topMargin = dp(10) })
         col.addView(menuRow(1))
