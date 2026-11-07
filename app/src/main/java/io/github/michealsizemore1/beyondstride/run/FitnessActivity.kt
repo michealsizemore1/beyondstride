@@ -122,39 +122,6 @@ class FitnessActivity : Activity() {
             })
         }
 
-        // Nutrition: the last 7 days from the Command Center (calories vs target, macros).
-        run {
-            val N = io.github.michealsizemore1.beyondstride.Nutrition
-            val days = io.github.michealsizemore1.beyondstride.NutritionStore.days(this).filter { it.count > 0 }.takeLast(7)
-            col.addView(RunUi.section(this, "NUTRITION"))
-            col.addView(RunUi.card(this).apply {
-                if (days.isEmpty()) addView(RunUi.text(ctx, "No food logged yet. Log meals in the 🍎 Nutrition tab (or the Command Center) and they'll show here.", RunUi.MUTED, 13f))
-                else {
-                    val maxCal = maxOf(days.maxOf { maxOf(it.cal, it.target) }, 1)
-                    addView(LinearLayout(ctx).apply {
-                        orientation = LinearLayout.HORIZONTAL; gravity = Gravity.BOTTOM
-                        days.forEach { d ->
-                            addView(LinearLayout(ctx).apply {
-                                orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_HORIZONTAL or Gravity.BOTTOM
-                                val ok = d.target <= 0 || d.cal.toDouble() / d.target in 0.85..1.15
-                                addView(RunUi.text(ctx, "${(d.cal + 50) / 100 / 10.0}k", RunUi.MUTED, 10f).apply { gravity = Gravity.CENTER })
-                                addView(android.view.View(ctx).apply { background = RunUi.rounded(if (ok) 0xFF5FD38D.toInt() else 0xFFF2C94C.toInt(), dp(3).toFloat()) },
-                                    LinearLayout.LayoutParams(dp(16), dp(8 + d.cal * 70 / maxCal)))
-                                addView(RunUi.text(ctx, d.date.substring(5).replace("-", "/").trimStart('0'), RunUi.DIM, 9f).apply { gravity = Gravity.CENTER })
-                            }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
-                        }
-                    })
-                    val avgCal = days.map { it.cal }.average().toInt()
-                    val avgP = days.map { it.prot }.average(); val avgC = days.map { it.carbs }.average()
-                    val withT = days.filter { it.target > 0 }
-                    addView(RunUi.text(ctx, "Average ${N.kcal(avgCal)} kcal/day" + (if (withT.isNotEmpty()) " · target ${N.kcal(withT.map { it.target }.average().toInt())}" else "") +
-                        "\nProtein ${avgP.toInt()} g · carbs ${avgC.toInt()} g a day", Color.WHITE, 13f).apply { setPadding(0, dp(8), 0, 0) })
-                    addView(RunUi.text(ctx, "Green = within 15% of that day's target. Tap for Nutrition.", RunUi.DIM, 11f).apply { setPadding(0, dp(4), 0, 0) })
-                }
-                setOnClickListener { startActivity(Intent(ctx, NutritionActivity::class.java)) }
-            })
-        }
-
         // Training load, Zone 2 fitness, personal bests.
         run {
             val all = PhoneRuns.list(this).take(200).mapNotNull { PhoneRuns.read(it) }

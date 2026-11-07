@@ -78,7 +78,7 @@ class NutritionActivity : Activity() {
         // The last 7 days.
         val week = days.filter { it.count > 0 }.takeLast(7)
         if (week.isNotEmpty()) {
-            col.addView(RunUi.section(this, "THIS WEEK"))
+            col.addView(RunUi.section(this, "LAST 7 DAYS"))
             col.addView(RunUi.card(this).apply {
                 val maxCal = maxOf(week.maxOf { maxOf(it.cal, it.target) }, 1)
                 addView(LinearLayout(ctx).apply {
@@ -91,7 +91,7 @@ class NutritionActivity : Activity() {
                             addView(android.view.View(ctx).apply { background = RunUi.rounded(if (ok) 0xFF5FD38D.toInt() else 0xFFF2C94C.toInt(), dp(3).toFloat()) },
                                 LinearLayout.LayoutParams(dp(16), dp(8 + d.cal * 80 / maxCal)))
                             val dd = java.time.LocalDate.parse(d.date)
-                            addView(RunUi.text(ctx, dd.dayOfWeek.name.take(3).lowercase().replaceFirstChar { it.uppercase() }, RunUi.DIM, 10f).apply { gravity = Gravity.CENTER })
+                            addView(RunUi.text(ctx, dd.dayOfWeek.name.take(3).lowercase().replaceFirstChar { it.uppercase() } + "\n" + d.date.substring(5).replace("-", "/"), RunUi.DIM, 10f).apply { gravity = Gravity.CENTER })
                         }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
                     }
                 })
