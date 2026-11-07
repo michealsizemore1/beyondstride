@@ -63,12 +63,11 @@ class ActivitiesActivity : Activity() {
 
         // The Command Center's order: plans, mileage, zones, shoes, plan upload, today's workout, the log, archived plans.
         val plans = PlanStore.data(this)
+        // The Command Center's arrangement: today's workout on top; the active / upcoming plans below the activities.
         planWaiting(col)
-        plans.optJSONObject("current")?.let { planCard(col, it, "current") }
-        plans.optJSONObject("upcoming")?.let { planCard(col, it, "upcoming") }
+        plans.optJSONObject("current")?.let { todayWorkout(col, it, plans.optBoolean("collapsed")) }
         mileage(col, all); zones(col); shoes(col)
         uploadPlan(col)
-        plans.optJSONObject("current")?.let { todayWorkout(col, it, plans.optBoolean("collapsed")) }
         // 🏃 Activities: collapsed each time the screen opens, like the Command Center's Activities section.
         col.addView(txt((if (logOpen) "▼" else "▶") + "  🏃 Activities" + (if (all.isNotEmpty()) "  (${all.size})" else ""), 0xFFE67E22.toInt(), 17f, true).apply {
             background = RunUi.rounded(RunUi.CARD, dp(10).toFloat()); setPadding(dp(12), dp(12), dp(12), dp(12))
@@ -156,6 +155,8 @@ class ActivitiesActivity : Activity() {
         col.addView(listBox)
         fill()
         if (!logOpen) for (i in logFrom until col.childCount) col.getChildAt(i).visibility = View.GONE
+        plans.optJSONObject("current")?.let { planCard(col, it, "current") }
+        plans.optJSONObject("upcoming")?.let { planCard(col, it, "upcoming") }
         archived(col, plans.optJSONArray("archived"))
 
         val keepY = scroller?.scrollY ?: 0
