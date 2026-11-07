@@ -276,7 +276,7 @@ class NutritionActivity : Activity() {
             fill()
         })
 
-        // LIQUIDS — like the Command Center's: Water, Sports Nutrition Drinks, Other Drinks (tap ± for a cup, hold for 1 oz), and weights.
+        // LIQUIDS — like the Command Center's: Water, Sports Nutrition Drinks, Other Drinks (tap ± for a cup, hold for 1 oz).
         col.addView(RunUi.section(this, "LIQUIDS"))
         run {
             val H = io.github.michealsizemore1.beyondstride.Hydration
@@ -303,15 +303,6 @@ class NutritionActivity : Activity() {
             row("💧", "Water Intake", null, "water", t?.water ?: 0)
             row("🏃", "Sports Nutrition Drinks", null, "sports", t?.sportsOz ?: 0)
             row("🥤", "Other Drinks", "coffee, tea, juice, soda, etc.", "other", t?.otherOz ?: 0)
-            col.addView(RunUi.card(this).apply {
-                layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(8) }
-                addView(RunUi.text(ctx, "⚖  Weight: wake-up ${io.github.michealsizemore1.beyondstride.Hydration.lb(t?.weight ?: 0.0)} · post-run ${io.github.michealsizemore1.beyondstride.Hydration.lb(t?.postWeight ?: 0.0)} lb  ▸", Color.WHITE, 15f, true))
-                Nutrition.rehydrate(t)?.let { h ->
-                    addView(RunUi.text(ctx, "Lost ${String.format(Locale.US, "%.1f", h.lostLb)} lb → ~${h.targetOz} oz to rehydrate · " + if (h.needOz == 0) "caught up ✓" else "drink ~${h.needOz} oz more",
-                        if (h.needOz == 0) 0xFF5FD38D.toInt() else Nutrition.WATER, 12f, true).apply { setPadding(0, dp(4), 0, 0) })
-                }
-                setOnClickListener { NutritionUi.fluidDialog(this@NutritionActivity) { render() } }
-            })
             col.addView(RunUi.text(ctx, "Tap − / + for a cup (8 oz); press and hold for 1 oz.", RunUi.DIM, 10f).apply { setPadding(dp(2), dp(4), 0, 0) })
         }
 

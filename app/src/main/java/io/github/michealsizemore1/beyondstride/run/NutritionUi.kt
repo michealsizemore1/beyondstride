@@ -59,6 +59,9 @@ object NutritionUi {
                 setOnClickListener { act.startActivity(android.content.Intent(act, NutritionToolsActivity::class.java).putExtra("mode", "target")) }
             })
         } catch (e: Exception) { }
+        // Weigh-ins (Nutrition tab): tap to enter wake-up and post-run weight.
+        if (big) col.addView(RunUi.text(ctx, "⚖ Weight: wake-up ${io.github.michealsizemore1.beyondstride.Hydration.lb(nd?.weight ?: 0.0)} · post-run ${io.github.michealsizemore1.beyondstride.Hydration.lb(nd?.postWeight ?: 0.0)} lb  ▸",
+            Color.WHITE, 13f, true).apply { setPadding(0, dp(6), 0, dp(2)); setOnClickListener { fluidDialog(act, refresh) } })
         fluids(act, col, nd, refresh, chips)
         if (withMicros && nd != null && nd.micros.isNotEmpty()) micros(act, col, nd)
     }
