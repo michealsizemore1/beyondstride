@@ -157,6 +157,7 @@ open class RunsActivity : Activity() {
                     if (!rd.checkedToday) addView(RunUi.text(ctx, "No morning check yet — based on sleep and training", RunUi.MUTED, 12f))
                     addView(RunUi.text(ctx, rd.parts.filter { it.pts >= 0 }.joinToString(" · ") { "${it.name} ${it.value}" }, RunUi.MUTED, 12f))
                     addView(RunUi.text(ctx, rd.advice.substringBefore(". ") + ".", Color.WHITE, 13f).apply { setPadding(0, dp(4), 0, 0) })
+                    addView(RunUi.text(ctx, "Details, sleep, resting HR and critical power ▸", RunUi.ACCENT, 12f, true).apply { setPadding(0, dp(6), 0, 0) })
                 }
                 setOnClickListener { startActivity(Intent(ctx, ReadinessActivity::class.java)) }
             })

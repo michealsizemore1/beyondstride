@@ -29,17 +29,6 @@ class FitnessActivity : Activity() {
         val runs = PhoneRuns.list(this).mapNotNull { PhoneRuns.read(it) }
         val I = io.github.michealsizemore1.beyondstride.Insights
         val hrMax = RunSettings.hrMax(this); val hrRest = RunSettings.hrRest(this)
-        // Readiness (tap for details).
-        io.github.michealsizemore1.beyondstride.Readiness.compute(io.github.michealsizemore1.beyondstride.ReadinessSync.checks(this),
-            io.github.michealsizemore1.beyondstride.ReadinessSync.nights(this), runs.take(120), io.github.michealsizemore1.beyondstride.Readiness.today(), fuelYesterday = io.github.michealsizemore1.beyondstride.NutritionStore.yesterday(this))?.let { rd ->
-            col.addView(RunUi.section(this, "READINESS"))
-            col.addView(RunUi.card(this).apply {
-                addView(RunUi.text(ctx, "${rd.score}  ${rd.label}", rd.color, 22f, true))
-                addView(RunUi.text(ctx, rd.parts.filter { it.pts >= 0 }.joinToString(" · ") { "${it.name} ${it.value}" }, RunUi.MUTED, 12f))
-                addView(RunUi.text(ctx, "Details, sleep, resting HR and critical power ▸", RunUi.ACCENT, 13f, true).apply { setPadding(0, dp(6), 0, 0) })
-                setOnClickListener { startActivity(Intent(ctx, ReadinessActivity::class.java)) }
-            })
-        }
         col.addView(RunUi.section(this, "OVERVIEW"))
         // Overview tiles (charts below).
         if (runs.isNotEmpty()) {
