@@ -32,6 +32,8 @@ object Nutrition {
         val weight: Double = 0.0, val postWeight: Double = 0.0,
         /** Every food with its serving and per-serving values (for the food log). */
         val foods: List<Food.Item> = emptyList(),
+        /** Training that day, for food quality (from the Command Center): a run day, and which hard workout ("long", "tempo"…). */
+        val qRun: Boolean = false, val qHard: String = "",
     ) {
         fun microLabel() = when { microScore >= 9 -> "Excellent"; microScore >= 7 -> "Good"; microScore >= 5 -> "Fair"; microScore >= 3 -> "Low"; else -> "Poor" }
         /** Lowest first (Low, then High, Close, Met), like the Command Center's breakdown. */
@@ -75,7 +77,7 @@ object Nutrition {
         return Day(date, o.optInt("cal"), o.optDouble("prot", 0.0), o.optDouble("carbs", 0.0), o.optDouble("fat", 0.0),
             o.optDouble("fiber", 0.0), o.optInt("sodium"), o.optInt("waterOz"), o.optInt("target"), o.optInt("range"), o.optInt("active"),
             meals, items, o.optInt("count", items.size), o.optLong("updated"), micros, o.optDouble("microScore", 0.0),
-            o.optInt("water"), o.optInt("sportsOz"), o.optInt("otherOz"), o.optDouble("weight", 0.0), o.optDouble("postWeight", 0.0), foods)
+            o.optInt("water"), o.optInt("sportsOz"), o.optInt("otherOz"), o.optDouble("weight", 0.0), o.optDouble("postWeight", 0.0), foods, o.optBoolean("qrun"), o.optString("qhard"))
     }
 
     /** Firebase's {"2026-11-06": {...}, ...} (or null) → days, oldest first. */
@@ -93,7 +95,7 @@ object Nutrition {
                 .put("items", JSONArray().apply { d.items.forEach { put(JSONObject().put("meal", it.meal).put("name", it.name).put("cal", it.cal).put("prot", it.prot).put("carbs", it.carbs).put("fat", it.fat)) } })
                 .put("microScore", d.microScore)
                 .put("foods", Food.listJson(d.foods))
-                .put("water", d.water).put("sportsOz", d.sportsOz).put("otherOz", d.otherOz).put("weight", d.weight).put("postWeight", d.postWeight)
+                .put("water", d.water).put("sportsOz", d.sportsOz).put("otherOz", d.otherOz).put("weight", d.weight).put("postWeight", d.postWeight).put("qrun", d.qRun).put("qhard", d.qHard)
                 .put("micros", JSONArray().apply { d.micros.forEach { put(JSONObject().put("n", it.name).put("f", it.field).put("v", it.value).put("t", it.target).put("mx", it.max).put("u", it.unit)) } }))
         }
     }.toString()

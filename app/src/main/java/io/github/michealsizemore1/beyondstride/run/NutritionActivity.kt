@@ -84,8 +84,6 @@ class NutritionActivity : Activity() {
         if (t != null && t.count > 0 && t.micros.isNotEmpty()) {
             col.addView(RunUi.section(this, "MICRONUTRIENTS"))
             col.addView(RunUi.card(this).apply {
-                addView(RunUi.text(ctx, String.format(Locale.US, "%.1f", t.microScore) + "/10 · " + t.microLabel(),
-                    N.statusColor(when { t.microScore >= 7 -> "Met"; t.microScore >= 5 -> "Close"; else -> "Low" }), 18f, true))
                 NutritionUi.micros(this@NutritionActivity, this, t, header = false)
             })
         }

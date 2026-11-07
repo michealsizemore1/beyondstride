@@ -37,13 +37,9 @@ object NutritionUi {
             })
             val (pp, cp, fp) = nd.ratios()
             col.addView(RunUi.text(ctx, N.macros(nd) + "  ($pp / $cp / $fp %)", RunUi.MUTED, 12f))
-            if (summary && nd.micros.isNotEmpty()) {
-                // One line instead of the tiles (the Nutrition tab has them).
-                val low = nd.micros.count { it.status == "Low" }; val high = nd.micros.count { it.status == "High" }
-                col.addView(RunUi.text(ctx, "Micronutrients " + String.format(Locale.US, "%.1f", nd.microScore) + "/10 · " + nd.microLabel() +
-                    (if (low > 0) " · $low low" else "") + (if (high > 0) " · $high high" else ""),
-                    N.statusColor(when { nd.microScore >= 7 -> "Met"; nd.microScore >= 5 -> "Close"; else -> "Low" }), 12f, true).apply { setPadding(0, dp(4), 0, 0) })
-            }
+            // The Command Center's two quality bars: Daily food quality and Top 7 micronutrient quality (notes on the Nutrition tab).
+            io.github.michealsizemore1.beyondstride.Food.dayQuality(nd)?.let { q -> qualityBar(act, col, "Daily food quality", q.score, q.label, if (big) q.note else null) }
+            if (nd.micros.isNotEmpty()) qualityBar(act, col, "Top 7 micronutrient quality", nd.microScore, nd.microLabel(), if (big) microNote(nd) else null)
         }
         // One line for the calorie target; tap for the breakdown and settings.
         if (big) try {
@@ -64,6 +60,41 @@ object NutritionUi {
             Color.WHITE, 13f, true).apply { setPadding(0, dp(6), 0, dp(2)); setOnClickListener { fluidDialog(act, refresh) } })
         fluids(act, col, nd, refresh, chips)
         if (withMicros && nd != null && nd.micros.isNotEmpty()) micros(act, col, nd)
+    }
+
+    /** A 1–10 score on the red → green bar with a marker, like the Command Center's. */
+    fun qualityBar(act: Activity, col: LinearLayout, title: String, score: Double, label: String, note: String?) {
+        val ctx = act
+        fun dp(v: Int) = RunUi.dp(ctx, v)
+        col.addView(LinearLayout(ctx).apply {
+            orientation = LinearLayout.HORIZONTAL; setPadding(0, dp(10), 0, 0)
+            addView(RunUi.text(ctx, title, Color.WHITE, 13f, true), LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
+            addView(RunUi.text(ctx, String.format(Locale.US, "%.1f", score) + "/10 · " + label, Nutrition.statusColor(when { score >= 7 -> "Met"; score >= 5 -> "Close"; else -> "Low" }), 13f, true))
+        })
+        val pct = ((score - 1) / 9).coerceIn(0.0, 1.0).toFloat()
+        col.addView(object : android.view.View(ctx) {
+            override fun onDraw(c: android.graphics.Canvas) {
+                val p = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG); val h = height.toFloat(); val r = h / 2; val bh = h * 0.6f
+                p.shader = android.graphics.LinearGradient(0f, 0f, width.toFloat(), 0f, intArrayOf(0xFFDC2626.toInt(), 0xFFF97316.toInt(), 0xFFFACC15.toInt(), 0xFF84CC16.toInt(), 0xFF16A34A.toInt()), null, android.graphics.Shader.TileMode.CLAMP)
+                c.drawRoundRect(0f, (h - bh) / 2, width.toFloat(), (h + bh) / 2, bh / 2, bh / 2, p); p.shader = null
+                val x = (width * pct).coerceIn(r, width - r)
+                p.color = Color.WHITE; c.drawCircle(x, h / 2, r * 0.92f, p)
+                p.color = 0xFF0F172A.toInt(); p.style = android.graphics.Paint.Style.STROKE; p.strokeWidth = r * 0.32f; c.drawCircle(x, h / 2, r * 0.76f, p)
+            }
+        }, LinearLayout.LayoutParams(MATCH_PARENT, dp(20)).apply { topMargin = dp(4) })
+        note?.let { col.addView(RunUi.text(ctx, it, RunUi.MUTED, 11f).apply { setPadding(0, dp(3), 0, 0) }) }
+    }
+
+    /** The Command Center's note under the micronutrient bar: targets, today's sugar ceiling and the lowest nutrient. */
+    fun microNote(nd: Nutrition.Day): String {
+        val F = io.github.michealsizemore1.beyondstride.Food
+        val sports = nd.foods.filter { it.meal == "sports" }.sumOf { it.total(it.micros["sugar"]) }
+        val natural = nd.foods.filter { F.naturalSugar(it) }.sumOf { it.total(it.micros["sugar"]) }
+        val ceiling = nd.micros.firstOrNull { it.field == "sugar" }?.target ?: (36 + sports + natural)
+        val sNote = if (sports > 0 || natural > 0) " (36g" + (if (sports > 0) " + ${Math.round(sports)}g fueling" else "") + (if (natural > 0) " + ${Math.round(natural)}g fruit/dairy" else "") + " today)" else ""
+        val low = nd.micros.minByOrNull { m -> if (m.max > 0 && m.value > m.max) Math.max(0.0, 1 - (m.value - m.max) / m.max) else Math.max(0.0, Math.min(1.0, m.value / m.target)) }
+        return "Targets for a 53-year-old male distance runner: iron 14mg · calcium 1,000mg · vitamin D 15mcg · magnesium 483mg · vitamin B12 2.4mcg · sodium 2,300–4,000mg · potassium 3,400mg · zinc 15mg · vitamin C 90mg · fiber 28g · sugar ≤${Math.round(ceiling)}g$sNote · caffeine ≤400mg (a single race-day dose can push this higher by design, not a red flag)" +
+            (low?.let { " · lowest today: ${it.name} ${Math.round(it.value)}${it.unit}" } ?: "")
     }
 
     /** Fluids line, rehydration after a run, and the quick-tap row. */
