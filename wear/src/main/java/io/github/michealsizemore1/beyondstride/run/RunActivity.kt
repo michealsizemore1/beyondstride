@@ -378,16 +378,14 @@ class RunActivity : Activity() {
                 addView(head("FUEL"))
                 if (nd == null || nd.count == 0) addView(label("No food logged today yet", C.MUTED, 10f))
                 else {
+                    // A glance (same as the phone's Today card): calories, both scores on one line; the rest is on Nutrition.
                     addView(label(N.line(nd), if (nd.target > 0 && nd.left < 0) 0xFFF2C94C.toInt() else Color.WHITE, 11f, true))
-                    val (pp, cp, fp) = nd.ratios()
-                    addView(label(N.macros(nd) + "  ($pp/$cp/$fp%)", C.MUTED, 9f))
-                    qualityBars(this, nd)
+                    fun sc(v: Double) = N.statusColor(when { v >= 7 -> "Met"; v >= 5 -> "Close"; else -> "Low" })
+                    val q = io.github.michealsizemore1.beyondstride.Food.dayQuality(nd)
+                    val parts = listOfNotNull(q?.let { "Food " + String.format(java.util.Locale.US, "%.1f", it.score) }, if (nd.micros.isNotEmpty()) "Micros " + String.format(java.util.Locale.US, "%.1f", nd.microScore) else null)
+                    if (parts.isNotEmpty()) addView(label(parts.joinToString(" · ") + " ▸", sc(listOfNotNull(q?.score, nd.microScore.takeIf { nd.micros.isNotEmpty() }).minOrNull() ?: 5.0), 10f, true))
                 }
-                if (nd != null && nd.waterOz > 0) addView(label("Fluids ${nd.waterOz} oz", C.MUTED, 9f))
-                N.rehydrate(nd)?.let { h ->
-                    addView(label("Lost ${String.format(java.util.Locale.US, "%.1f", h.lostLb)} lb → ~${h.targetOz} oz · " + (if (h.needOz == 0) "caught up ✓" else "drink ~${h.needOz} oz more"),
-                        if (h.needOz == 0) 0xFF5FD38D.toInt() else N.WATER, 9f, true))
-                }
+                N.rehydrate(nd)?.takeIf { it.needOz > 0 }?.let { h -> addView(label("💧 Drink ~${h.needOz} oz more", N.WATER, 10f, true)) }
                 setOnClickListener { showNutrition() }
             })
             Thread {

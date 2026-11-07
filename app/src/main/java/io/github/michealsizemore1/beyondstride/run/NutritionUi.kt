@@ -62,6 +62,35 @@ object NutritionUi {
         if (withMicros && nd != null && nd.micros.isNotEmpty()) micros(act, col, nd)
     }
 
+    /** Today tab's Fuel card — a glance: calories with the bar, both quality scores on one line, and a rehydration
+     *  reminder only while one is due. Everything else is on the Nutrition tab. */
+    fun glance(act: Activity, col: LinearLayout) {
+        val ctx = act
+        fun dp(v: Int) = RunUi.dp(ctx, v)
+        val N = Nutrition
+        val nd = N.today(NutritionStore.days(ctx))
+        if (!NutritionSync.ready(ctx)) { col.addView(RunUi.text(ctx, "Set up LiveTrack first — nutrition is shared through the same database.", RunUi.MUTED, 12f)); return }
+        if (nd == null || nd.count == 0) col.addView(RunUi.text(ctx, "No food logged today yet  ▸", RunUi.MUTED, 13f))
+        else {
+            val over = nd.target > 0 && nd.left < 0
+            col.addView(RunUi.text(ctx, N.line(nd), if (over) 0xFFF2C94C.toInt() else Color.WHITE, 16f, true))
+            if (nd.target > 0) col.addView(android.widget.ProgressBar(ctx, null, android.R.attr.progressBarStyleHorizontal).apply {
+                max = nd.target; progress = nd.cal.coerceAtMost(nd.target)
+                progressTintList = android.content.res.ColorStateList.valueOf(if (over) 0xFFF2C94C.toInt() else 0xFF5FD38D.toInt())
+                layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, dp(8)).apply { topMargin = dp(4); bottomMargin = dp(4) }
+            })
+            fun col(sc: Double) = N.statusColor(when { sc >= 7 -> "Met"; sc >= 5 -> "Close"; else -> "Low" })
+            val sb = android.text.SpannableStringBuilder()
+            fun part(t: String, c: Int) { val st = sb.length; sb.append(t); sb.setSpan(android.text.style.ForegroundColorSpan(c), st, sb.length, 0) }
+            io.github.michealsizemore1.beyondstride.Food.dayQuality(nd)?.let { q -> part("Food " + String.format(Locale.US, "%.1f", q.score) + " " + q.label, col(q.score)) }
+            if (nd.micros.isNotEmpty()) { if (sb.isNotEmpty()) part("  ·  ", RunUi.MUTED); part("Micros " + String.format(Locale.US, "%.1f", nd.microScore) + " " + nd.microLabel(), col(nd.microScore)) }
+            if (sb.isNotEmpty()) { part("  ▸", RunUi.MUTED); col.addView(RunUi.text(ctx, "", Color.WHITE, 13f, true).apply { text = sb }) }
+        }
+        N.rehydrate(nd)?.takeIf { it.needOz > 0 }?.let { h ->
+            col.addView(RunUi.text(ctx, "💧 Drink ~${h.needOz} oz more to rehydrate after your run", N.WATER, 12f, true).apply { setPadding(0, dp(4), 0, 0) })
+        }
+    }
+
     /** A 1–10 score on the red → green bar with a marker, like the Command Center's. */
     fun qualityBar(act: Activity, col: LinearLayout, title: String, score: Double, label: String, note: String?) {
         val ctx = act
