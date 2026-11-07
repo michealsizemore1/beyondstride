@@ -71,7 +71,12 @@ class ActivitiesActivity : Activity() {
         mileage(col, all); zones(col); shoes(col)
         uploadPlan(col)
         // 📊 Run Metrics Summary, then 📈 Charts — their own sections, outside the collapsed log.
-        ActivityAnalysis(this, panels) { render() }.apply { metrics(col, all); prs(col, all); racePredictor(col, all); charts(col, all) }
+        // Analysis sections (each collapsible): metrics, records, race times, charts, heat / humidity, then Weekly Run Notes.
+        ActivityAnalysis(this, panels) { render() }.apply {
+            metrics(col, all); prs(col, all); racePredictor(col, all); charts(col, all)
+            cardioDrift(col, all); heatAcclimation(col, all); humidity(col, all)
+        }
+        weekNotes(col)
         // 🏃 Activities: collapsed each time the screen opens, like the Command Center's Activities section.
         col.addView(txt((if (logOpen) "▼" else "▶") + "  🏃 Activities" + (if (all.isNotEmpty()) "  (${all.size})" else ""), 0xFFE67E22.toInt(), 17f, true).apply {
             background = RunUi.rounded(RunUi.CARD, dp(10).toFloat()); setPadding(dp(12), dp(12), dp(12), dp(12))
@@ -107,11 +112,6 @@ class ActivitiesActivity : Activity() {
         // Stats bar (filtered).
         statsBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         col.addView(statsBox, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(10) })
-        // Phase 4: the Command Center's analysis, in its order.
-        ActivityAnalysis(this, panels) { render() }.apply {
-            // Run Metrics, records, race times and charts are their own sections above; Training Load Ratio is on Fitness.
-            cardioDrift(col, all); heatAcclimation(col, all); humidity(col, all)
-        }
 
         // Filters.
         col.addView(RunUi.card(this).apply {
@@ -150,7 +150,6 @@ class ActivitiesActivity : Activity() {
                 addView(txt((if (groupByDay) "☑" else "☐") + " Group by day", Color.WHITE, 13f).apply { setPadding(dp(6), dp(7), dp(6), dp(7)); setOnClickListener { groupByDay = !groupByDay; fill() } })
             })
         })
-        weekNotes(col)
         showing = txt("", RunUi.MUTED, 12f).apply { setPadding(dp(2), dp(8), 0, 0) }
         col.addView(showing)
         listBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
