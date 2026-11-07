@@ -30,7 +30,7 @@ class FoodAddActivity : Activity() {
         io.github.michealsizemore1.beyondstride.Theme.load(this, "runsettings")
         meal = intent.getStringExtra("meal") ?: "snack"
         build()
-        Thread { if (FoodLibrary.refresh(this)) runOnUiThread { if (!isFinishing) fill() } }.start()
+        
         // Opened from a Nutrition tile: go straight to the camera, a picture, or the barcode scanner.
         if (b == null) when (intent.getStringExtra("action")) {
             "camera" -> takePhoto(); "upload" -> choosePhoto(); "barcode" -> scan()
@@ -61,16 +61,16 @@ class FoodAddActivity : Activity() {
 
         // Search box: filters your foods as you type; Search online for anything else.
         val search = EditText(this).apply {
-            hint = "Search foods"; setText(query); setSingleLine(); textSize = 16f
+            hint = "What did you eat?"; setText(query); setSingleLine(); textSize = 16f
             setTextColor(Color.WHITE); setHintTextColor(RunUi.MUTED)
             background = RunUi.rounded(RunUi.CARD, dp(12).toFloat()); setPadding(dp(14), dp(10), dp(14), dp(10))
             imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH
             addTextChangedListener(object : android.text.TextWatcher {
-                override fun afterTextChanged(e: android.text.Editable?) { query = e?.toString() ?: ""; online = null; fill() }
+                override fun afterTextChanged(e: android.text.Editable?) { query = e?.toString() ?: "" }
                 override fun beforeTextChanged(s: CharSequence?, st: Int, c: Int, af: Int) {}
                 override fun onTextChanged(s: CharSequence?, st: Int, b: Int, c: Int) {}
             })
-            setOnEditorActionListener { _, _, _ -> searchOnline(); true }
+            setOnEditorActionListener { _, _, _ -> if (AiFood.hasKey(this@FoodAddActivity)) aiSearch() else searchOnline(); true }
         }
         col.addView(search, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(8) })
 
@@ -86,28 +86,6 @@ class FoodAddActivity : Activity() {
             Triple("✎ Manual", RunUi.CARD) { FoodUi.manual(this@FoodAddActivity, meal) { } })
         btnRow(Triple("✨ AI search", 0xFF3B3172.toInt()) { aiSearch() }, Triple("🔎 Online", RunUi.CARD) { searchOnline() })
 
-        // Tabs like the Command Center: Recent · Food Database · Healthy 7+ · Saved Meals.
-        val tabs = listOf("recent" to "🕘 Recent", "fav" to "⭐ Food Database (${FoodLibrary.favorites(this).size})",
-            "healthy" to "✅ Healthy 7+ (${FoodLibrary.healthy(this).size})", "meals" to "🍲 Saved Meals (${FoodLibrary.meals(this).size})")
-        tabs.chunked(2).forEach { row ->
-            col.addView(LinearLayout(this).apply {
-                orientation = LinearLayout.HORIZONTAL; setPadding(0, dp(8), 0, 0)
-                row.forEachIndexed { i, (k, n) ->
-                    addView(RunUi.text(ctx, n, Color.WHITE, 13f, true).apply {
-                        gravity = Gravity.CENTER; background = RunUi.rounded(if (tab == k) 0xFF8A5A0E.toInt() else RunUi.CARD, dp(10).toFloat())
-                        setPadding(dp(4), dp(9), dp(4), dp(9)); setOnClickListener { tab = k; online = null; build() }
-                    }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f).apply { if (i == 0) marginEnd = dp(6) })
-                }
-            })
-        }
-        if (tab == "fav" || tab == "healthy") col.addView(RunUi.text(this, "Sort: " + mapOf("saved" to "as saved", "az" to "A–Z", "kcal" to "lowest calories", "protein" to "most protein")[sort] + "  ▾", Color.WHITE, 14f).apply {
-            background = RunUi.rounded(RunUi.CARD, dp(10).toFloat()); setPadding(dp(12), dp(9), dp(12), dp(9))
-            layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(8) }
-            setOnClickListener {
-                val keys = listOf("saved", "az", "kcal", "protein")
-                android.app.AlertDialog.Builder(ctx).setTitle("Sort").setItems(arrayOf("As saved", "A–Z", "Lowest calories", "Most protein")) { _, i -> sort = keys[i]; build() }.show()
-            }
-        })
         list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         col.addView(list)
         fill()
@@ -142,45 +120,7 @@ class FoodAddActivity : Activity() {
             return
         }
         if (searching) { note("Searching…"); return }
-        when (tab) {
-            "recent" -> {
-                val r = FoodLibrary.recent(this).filter { matches(it.name) }
-                if (r.isEmpty()) note(if (query.isBlank()) "Foods you log show here." else "No recent match — try My foods or 🔎 Online.")
-                r.forEach { list.addView(row(it.copy(servings = it.servings))) }
-            }
-            "fav", "healthy" -> {
-                var r = (if (tab == "fav") FoodLibrary.favorites(this) else FoodLibrary.healthy(this)).filter { matches(it.name) }
-                r = when (sort) { "az" -> r.sortedBy { it.name.lowercase() }; "kcal" -> r.sortedBy { it.cal ?: 0.0 }; "protein" -> r.sortedByDescending { it.prot ?: 0.0 }; else -> r }
-                if (r.isEmpty()) note(if (NutritionSync.ready(this)) "Your Command Center food database shows here once it's been opened there (Nutrition tab)." else "Set up LiveTrack first — your food database comes through the same database.")
-                r.take(150).forEach { list.addView(row(it)) }
-            }
-            else -> {
-                val r = FoodLibrary.meals(this).filter { matches(it.name) }
-                if (r.isEmpty()) note("Meals you save in the Command Center show here.")
-                r.forEach { m ->
-                    val kcal = m.items.sumOf { (it.cal ?: 0.0) * it.servings }.toInt()
-                    list.addView(LinearLayout(this).apply {
-                        orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
-                        background = RunUi.rounded(RunUi.CARD, dp(12).toFloat()); setPadding(dp(12), dp(8), dp(12), dp(8))
-                        layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(6) }
-                        addView(LinearLayout(this@FoodAddActivity).apply {
-                            orientation = LinearLayout.VERTICAL
-                            addView(RunUi.text(this@FoodAddActivity, m.name, Color.WHITE, 14f, true))
-                            addView(RunUi.text(this@FoodAddActivity, m.items.joinToString(", ") { it.name }.take(90), RunUi.MUTED, 11f))
-                        }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
-                        addView(RunUi.text(this@FoodAddActivity, "$kcal  ＋", RunUi.ACCENT, 14f, true))
-                        setOnClickListener {
-                            android.app.AlertDialog.Builder(this@FoodAddActivity).setTitle(m.name)
-                                .setMessage(m.items.joinToString("\n") { "• ${it.name} (${Food.fmt(it.servings)} × ${it.servingLabel})" } + "\n\n$kcal kcal")
-                                .setPositiveButton("Add all to ${Nutrition.MEAL_NAMES[meal] ?: meal}") { _, _ ->
-                                    m.items.forEach { HydrationSync.food(this@FoodAddActivity, "foodAdd", it.copy(id = Food.newId(), meal = meal)) }
-                                    Toast.makeText(this@FoodAddActivity, "Added ${m.name}", Toast.LENGTH_SHORT).show()
-                                }.setNegativeButton("Cancel", null).show()
-                        }
-                    })
-                }
-            }
-        }
+        note("New food: type what you ate, then tap ✨ AI search or 🔎 Online — or use Barcode, Label or Manual.\n\nFoods you've had before are on the Nutrition tab under your meals (Recent, Food Database, Healthy 7+, Saved Meals).")
     }
 
     private fun searchOnline() {
