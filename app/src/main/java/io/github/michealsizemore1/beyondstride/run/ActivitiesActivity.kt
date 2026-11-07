@@ -57,9 +57,13 @@ class ActivitiesActivity : Activity() {
         if (S.fetchedAt(this) == 0L) col.addView(txt(if (NutritionSync.ready(this)) "Open the Command Center once (after reloading it) so it can share your Activities." else "Set up LiveTrack first — Activities come through the same database.", 0xFFF2C94C.toInt(), 12f).apply { setPadding(0, dp(6), 0, 0) })
         if (all.isEmpty() && S.status(this).isNotEmpty()) col.addView(txt(S.status(this), RunUi.MUTED, 11f).apply { setPadding(0, dp(4), 0, 0) })
 
+        // Phase 2: mileage summary, training zones, shoe tracker (the Command Center's order, above the log).
+        mileage(col, all); zones(col); shoes(col)
+        col.addView(RunUi.section(this, "ACTIVITIES LOG"))
+
         // Buttons.
         col.addView(FlowLayout(this, dp(6), dp(6)).apply {
-            setPadding(0, dp(10), 0, 0)
+            setPadding(0, dp(4), 0, 0)
             fun btn(t: String, bg: Int, fg: Int = Color.WHITE, go: () -> Unit) = addView(txt(t, fg, 13f, true).apply {
                 background = RunUi.rounded(bg, dp(8).toFloat()); setPadding(dp(12), dp(7), dp(12), dp(7)); setOnClickListener { go() } })
             btn("+ Add", 0xFFE67E22.toInt()) { startActivity(Intent(ctx, ActivityEditActivity::class.java)) }
@@ -412,5 +416,207 @@ class ActivitiesActivity : Activity() {
             .setView(android.widget.HorizontalScrollView(this).apply { addView(LinearLayout(this@ActivitiesActivity).apply {
                 orientation = LinearLayout.VERTICAL; addView(table); addView(txt("🏆 = best value among the selected activities for that metric.", RunUi.MUTED, 11f).apply { setPadding(dp(16), 0, dp(16), dp(8)) }) }) })
             .setPositiveButton("Close", null).show()
+    }
+
+    // ── Mileage summary: This Week · Last Week · Month to Date · Year to Date (the Command Center's math) ──
+    private fun mileage(col: LinearLayout, all: List<JSONObject>) {
+        val ctx = this
+        val today = java.time.LocalDate.now()
+        val mon = today.minusDays((today.dayOfWeek.value - 1).toLong()); val lastMon = mon.minusDays(7)
+        val mtd = today.withDayOfMonth(1); val ytd = today.withDayOfYear(1)
+        class B { var mi = 0.0; var pace = 0; var paceN = 0; var w = 0.0; var wN = 0; var mins = 0.0 }
+        val b = linkedMapOf("ThisWeek" to B(), "LastWeek" to B(), "MTD" to B(), "YTD" to B())
+        fun inP(k: String, d: java.time.LocalDate) = when (k) { "ThisWeek" -> !d.isBefore(mon); "LastWeek" -> !d.isBefore(lastMon) && d.isBefore(mon); "MTD" -> !d.isBefore(mtd); else -> !d.isBefore(ytd) }
+        all.forEach { a ->
+            val d = try { java.time.LocalDate.parse(S.str(a, "date")) } catch (e: Exception) { return@forEach }
+            b.forEach { (k, x) -> if (inP(k, d)) {
+                x.mi += S.num(a, "distance"); S.paceSec(S.str(a, "pace")).takeIf { it > 0 }?.let { x.pace += it; x.paceN++ }
+                S.num(a, "power").takeIf { it > 0 }?.let { x.w += it; x.wN++ }; x.mins += S.durSec(S.str(a, "duration")) / 60.0 } }
+        }
+        val covered = all.filter { S.num(it, "distance") > 0 }.map { S.str(it, "date") }.toSet()
+        S.exMiles(this).forEach { (ds, m) -> if (ds !in covered) { val d = try { java.time.LocalDate.parse(ds) } catch (e: Exception) { return@forEach }; b.forEach { (k, x) -> if (inP(k, d)) x.mi += m } } }
+        val st = S.settings(this)
+        fun fmtMins(m: Double): String { val r = Math.round(m).toInt(); return if (r < 60) "${r}m" else "${r / 60}h ${r % 60}m" }
+        fun numIn(v: Double, hint: String, commit: (Double) -> Unit) = EditText(ctx).apply {
+            if (v > 0) setText(if (v == Math.floor(v)) v.toLong().toString() else v.toString()); this.hint = hint; setSingleLine(); textSize = 14f
+            setTextColor(Color.WHITE); setHintTextColor(RunUi.DIM); gravity = Gravity.END
+            inputType = android.text.InputType.TYPE_CLASS_NUMBER or android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL
+            background = RunUi.rounded(0xFF26302C.toInt(), dp(6).toFloat()); setPadding(dp(8), dp(4), dp(8), dp(4))
+            imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_DONE
+            var last = v
+            fun go() { val n = text.toString().trim().toDoubleOrNull() ?: 0.0; if (n != last) { last = n; commit(n) } }
+            setOnEditorActionListener { _, _, _ -> go(); false }
+            setOnFocusChangeListener { _, has -> if (!has) go() }
+        }
+        val titles = mapOf("ThisWeek" to "This Week", "LastWeek" to "Last Week", "MTD" to "Month to Date", "YTD" to "Year to Date")
+        val goalKey = mapOf("ThisWeek" to "week", "MTD" to "month", "YTD" to "year")
+        val goalUnit = mapOf("week" to "mi/wk", "month" to "mi/mo", "year" to "mi/yr")
+        col.addView(RunUi.section(this, "MILEAGE"))
+        b.entries.chunked(2).forEach { pair ->
+            col.addView(LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(8) }
+                pair.forEachIndexed { i, (k, x) ->
+                    addView(LinearLayout(ctx).apply {
+                        orientation = LinearLayout.VERTICAL; background = RunUi.rounded(RunUi.CARD, dp(12).toFloat()); setPadding(dp(12), dp(10), dp(12), dp(10))
+                        addView(txt(titles[k]!!, 0xFFE67E22.toInt(), 13f, true))
+                        addView(txt(String.format(Locale.US, "%.1f", x.mi), Color.WHITE, 26f, true)); addView(txt("miles", RunUi.MUTED, 11f))
+                        fun line(l: String, v: String) = addView(LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; setPadding(0, dp(3), 0, 0)
+                            addView(txt(l, RunUi.MUTED, 11f), LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f)); addView(txt(v, Color.WHITE, 12f, true)) })
+                        line("Avg pace", if (x.paceN > 0) (x.pace / x.paceN).let { "${it / 60}:${String.format(Locale.US, "%02d", it % 60)}/mi" } else "—")
+                        line("Avg power", if (x.wN > 0) "${Math.round(x.w / x.wN)} W" else "—")
+                        line("Exercise time", if (x.mins > 0) fmtMins(x.mins) else "—")
+                        if (k == "ThisWeek") {
+                            fun inLine(l: String, v: Double, hint: String, key: String) = addView(LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(0, dp(3), 0, 0)
+                                addView(txt(l, RunUi.MUTED, 11f), LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
+                                addView(numIn(v, hint) { n -> setZone(key, n) }, LinearLayout.LayoutParams(dp(64), WRAP_CONTENT)) })
+                            inLine("Critical power", st.optDouble("cp", 0.0), "280", "cp")
+                            inLine("Max heart rate", st.optDouble("maxHr", 0.0), "174", "maxHr")
+                            inLine("Resting HR (30-day avg)", st.optDouble("restHr", 0.0), "55", "restHr")
+                        }
+                        goalKey[k]?.let { gk ->
+                            val goal = S.goal(ctx, gk)
+                            addView(LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(0, dp(6), 0, 0)
+                                addView(txt("Goal:", RunUi.MUTED, 11f, true), LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
+                                addView(numIn(goal, mapOf("week" to "20", "month" to "80", "year" to "1000")[gk]!!) { n -> S.saveSettings(ctx, JSONObject().put("goal_$gk", n)); render() }, LinearLayout.LayoutParams(dp(64), WRAP_CONTENT))
+                                addView(txt(" " + goalUnit[gk], RunUi.MUTED, 11f)) })
+                            if (goal > 0) {
+                                val pct = Math.min(100, Math.round(x.mi / goal * 100).toInt())
+                                addView(android.widget.ProgressBar(ctx, null, android.R.attr.progressBarStyleHorizontal).apply { max = 100; progress = pct
+                                    progressTintList = android.content.res.ColorStateList.valueOf(if (pct >= 100) 0xFF27AE60.toInt() else 0xFFE67E22.toInt())
+                                    layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, dp(8)).apply { topMargin = dp(4) } })
+                                addView(txt(String.format(Locale.US, "%.1f / %s mi (%d%%)", x.mi, fmtNum(goal), pct), RunUi.MUTED, 11f))
+                            }
+                        }
+                    }, LinearLayout.LayoutParams(0, MATCH_PARENT, 1f).apply { if (i == 0) marginEnd = dp(8) })
+                }
+            })
+        }
+        // BeyondStride's own zones (watch alerts, readiness) — offer to match if they differ.
+        val bsMax = RunSettings.hrMax(this); val bsRest = RunSettings.hrRest(this); val bsCp = RunSettings.cp(this)
+        if (st.has("cp") && (st.optDouble("maxHr") != bsMax || st.optDouble("restHr") != bsRest || st.optDouble("cp").toInt() != bsCp)) {
+            col.addView(txt("BeyondStride's watch zones use Max ${fmtNum(bsMax)} · Rest ${fmtNum(bsRest)} · CP $bsCp.  Use these in both ▸", 0xFFF2C94C.toInt(), 12f, true).apply {
+                setPadding(dp(2), dp(6), 0, 0)
+                setOnClickListener { S.saveSettings(ctx, JSONObject().put("cp", bsCp).put("maxHr", bsMax).put("restHr", bsRest)); render() }
+            })
+        }
+    }
+
+    /** CP / max HR / resting HR: saved in the Command Center and in BeyondStride's own zones (watch). */
+    private fun setZone(key: String, v: Double) {
+        if (v <= 0) return
+        S.saveSettings(this, JSONObject().put(key, v))
+        RunSettings.save(this, if (key == "maxHr") v else RunSettings.hrMax(this), if (key == "restHr") v else RunSettings.hrRest(this),
+            if (key == "cp") v.toInt() else RunSettings.cp(this), RunSettings.cal(this), RunSettings.ccUrl(this))
+        render()
+    }
+
+    // ── Training zones: Heart Rate (Karvonen) and Power, from the Command Center's settings ──
+    private fun zones(col: LinearLayout) {
+        val ctx = this
+        val st = S.settings(this)
+        val max = st.optDouble("maxHr", RunSettings.hrMax(this)); val rest = st.optDouble("restHr", RunSettings.hrRest(this)); val cp = st.optDouble("cp", 0.0)
+        val res = Math.max(1.0, max - rest); val bnd = listOf(0.5, 0.6, 0.7, 0.8, 0.9).map { Math.round(rest + res * it).toInt() }
+        val hrLabels = listOf("Recovery", "Aerobic base", "Aerobic threshold", "Anaerobic", "Max effort")
+        val pw = listOf(Triple(0.0, 0.55, "Recovery"), Triple(0.55, 0.75, "Aerobic / endurance"), Triple(0.75, 0.90, "Tempo"), Triple(0.90, 1.05, "Threshold"), Triple(1.05, -1.0, "VO2 max"))
+        col.addView(RunUi.section(this, "🎯 TRAINING ZONES"))
+        col.addView(RunUi.card(this).apply {
+            fun badge(z: String) = txt(" $z ", Color.BLACK, 11f, true).apply { background = RunUi.rounded(ZONE_COLOR[z] ?: 0xFF888888.toInt(), dp(4).toFloat()) }
+            fun row(z: String, range: String, label: String) = addView(LinearLayout(ctx).apply {
+                orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(0, dp(3), 0, dp(3))
+                addView(badge(z)); addView(txt("  $range", Color.WHITE, 13f), LinearLayout.LayoutParams(dp(130), WRAP_CONTENT)); addView(txt(label, RunUi.MUTED, 12f))
+            })
+            addView(txt("❤️ Heart Rate (Karvonen)", Color.WHITE, 14f, true))
+            addView(txt("Max HR ${fmtNum(max)} bpm · Resting HR ${fmtNum(rest)} bpm" + st.optString("zonesNote").let { if (it.isNotEmpty()) " · $it" else "" }, RunUi.MUTED, 11f))
+            (0 until 5).forEach { i -> row("Z${i + 1}", if (i < 4) "${bnd[i]}–${bnd[i + 1] - 1} bpm" else "${bnd[4]}+ bpm", hrLabels[i]) }
+            addView(txt("⚡ Power", Color.WHITE, 14f, true).apply { setPadding(0, dp(10), 0, 0) })
+            if (cp <= 0) addView(txt("Set Critical Power above to see your power zone ranges.", RunUi.MUTED, 12f))
+            else pw.forEachIndexed { i, (lo, hi, l) -> row("Z${i + 1}", if (hi > 0) "${Math.round(cp * lo)}–${Math.round(cp * hi)} W" else "${Math.round(cp * lo)}+ W", l) }
+        })
+    }
+
+    // ── Shoe tracker ──
+    private fun shoes(col: LinearLayout) {
+        val ctx = this
+        val prefs = getSharedPreferences("activitiesUi", 0)
+        val open = prefs.getBoolean("shoesOpen", false)
+        val list = S.shoes(this)
+        col.addView(txt((if (open) "▼" else "▶") + "  👟 Shoe Tracker" + (if (list.isNotEmpty()) "  (${list.count { !it.optBoolean("retired") }} active)" else ""), 0xFFE67E22.toInt(), 15f, true).apply {
+            setPadding(dp(2), dp(16), 0, dp(4)); setOnClickListener { prefs.edit().putBoolean("shoesOpen", !open).apply(); render() }
+        })
+        if (!open) return
+        col.addView(txt("+ Add Shoe", Color.WHITE, 13f, true).apply {
+            background = RunUi.rounded(0xFFE67E22.toInt(), dp(8).toFloat()); setPadding(dp(12), dp(7), dp(12), dp(7))
+            layoutParams = LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { topMargin = dp(4) }
+            setOnClickListener { shoeDialog(null) }
+        })
+        if (list.isEmpty()) col.addView(txt("No shoes yet — add one to track its miles.", RunUi.MUTED, 13f).apply { setPadding(0, dp(8), 0, 0) })
+        (list.filter { !it.optBoolean("retired") } + list.filter { it.optBoolean("retired") }).forEach { sh ->
+            val miles = S.shoeMiles(this, sh); val max = sh.optDouble("maxMiles", 500.0).takeIf { it > 0 } ?: 500.0
+            val pct = Math.min(Math.round(miles / max * 100).toInt(), 100)
+            val bar = if (pct < 60) 0xFF22C55E.toInt() else if (pct < 85) 0xFFF59E0B.toInt() else 0xFFEF4444.toInt()
+            val retired = sh.optBoolean("retired"); val remaining = Math.max(0.0, Math.round((max - miles) * 10) / 10.0)
+            val status = if (retired) "RETIRED" else if (pct >= 100) "⚠️ REPLACE" else "ACTIVE"
+            val stColor = if (retired) 0xFF94A3B8.toInt() else if (pct >= 100) 0xFFEF4444.toInt() else 0xFF22C55E.toInt()
+            col.addView(RunUi.card(this).apply {
+                alpha = if (retired) 0.7f else 1f
+                layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(8) }
+                addView(LinearLayout(ctx).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    addView(LinearLayout(ctx).apply {
+                        orientation = LinearLayout.VERTICAL
+                        addView(txt("👟 " + sh.optString("name"), Color.WHITE, 15f, true))
+                        val bc = listOf(sh.optString("brand"), sh.optString("color")).filter { it.isNotEmpty() }.joinToString(" · ")
+                        if (bc.isNotEmpty()) addView(txt(bc, RunUi.MUTED, 12f))
+                        addView(txt(status, Color.WHITE, 10f, true).apply { background = RunUi.rounded(stColor, dp(10).toFloat()); setPadding(dp(7), dp(2), dp(7), dp(2))
+                            layoutParams = LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { topMargin = dp(4) } })
+                    }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
+                    fun b(t: String, bg: Int, fg: Int, go: () -> Unit) = addView(txt(t, fg, 12f, true).apply { background = RunUi.rounded(bg, dp(6).toFloat()); setPadding(dp(8), dp(4), dp(8), dp(4))
+                        layoutParams = LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { marginStart = dp(5) }; setOnClickListener { go() } })
+                    b("✏️", 0xFF26302C.toInt(), Color.WHITE) { shoeDialog(sh) }
+                    b(if (retired) "↩" else "📦", 0xFF3A2A1A.toInt(), 0xFFFCD34D.toInt()) { S.saveShoe(ctx, JSONObject(sh.toString()).put("retired", !retired)); render() }
+                    b("🗑", 0xFF3A1E1E.toInt(), 0xFFF87171.toInt()) { AlertDialog.Builder(ctx).setMessage("Delete this shoe?").setPositiveButton("Delete") { _, _ -> S.deleteShoe(ctx, sh.optString("id")); render() }.setNegativeButton("Cancel", null).show() }
+                })
+                addView(LinearLayout(ctx).apply {
+                    orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(0, dp(8), 0, dp(4))
+                    addView(android.widget.ProgressBar(ctx, null, android.R.attr.progressBarStyleHorizontal).apply { this.max = 100; progress = pct
+                        progressTintList = android.content.res.ColorStateList.valueOf(bar) }, LinearLayout.LayoutParams(0, dp(10), 1f))
+                    addView(txt("  $pct%", bar, 12f, true))
+                })
+                addView(LinearLayout(ctx).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    fun stat(v: String, l: String, c: Int = Color.WHITE) = addView(LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_HORIZONTAL
+                        addView(txt(v, c, 15f, true)); addView(txt(l, RunUi.MUTED, 9f)) }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
+                    stat(String.format(Locale.US, "%.1f", miles), "CURRENT MI"); stat(fmtNum(max), "MAX MI", RunUi.MUTED)
+                    if (!retired) stat(fmtNum(remaining), "REMAINING", if (remaining < 50) 0xFFEF4444.toInt() else 0xFF22C55E.toInt())
+                    sh.optString("startDate").takeIf { it.isNotEmpty() }?.let { stat(try { java.time.LocalDate.parse(it).format(java.time.format.DateTimeFormatter.ofPattern("M/d/yyyy")) } catch (e: Exception) { it }, "DATE ADDED") }
+                })
+                sh.optString("notes").takeIf { it.isNotEmpty() }?.let { addView(txt(it, RunUi.MUTED, 12f).apply { setPadding(0, dp(6), 0, 0) }) }
+            })
+        }
+    }
+
+    private fun shoeDialog(sh: JSONObject?) {
+        val ctx = this
+        val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(20), dp(8), dp(20), 0) }
+        fun f(label: String, v: String, kind: Int = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_CAP_WORDS) = EditText(ctx).apply {
+            hint = label; setText(v); inputType = kind }.also { box.addView(TextView(ctx).apply { text = label; textSize = 12f; setPadding(0, dp(6), 0, 0) }); box.addView(it) }
+        val num = android.text.InputType.TYPE_CLASS_NUMBER or android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL
+        val name = f("Shoe name", sh?.optString("name") ?: ""); val brand = f("Brand", sh?.optString("brand") ?: ""); val color = f("Color", sh?.optString("color") ?: "")
+        val start = f("Start date (YYYY-MM-DD)", sh?.optString("startDate")?.ifEmpty { null } ?: java.time.LocalDate.now().toString(), android.text.InputType.TYPE_CLASS_DATETIME)
+        val maxM = f("Max miles", fmtNum(sh?.optDouble("maxMiles", 500.0) ?: 500.0), num)
+        val off = f("Starting miles (already on the shoe)", fmtNum(sh?.optDouble("offsetMiles", 0.0) ?: 0.0), num)
+        val notes = f("Notes", sh?.optString("notes") ?: "", android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES)
+        AlertDialog.Builder(this).setTitle(if (sh == null) "👟 Add Shoe" else "✏️ Edit Shoe").setView(ScrollView(this).apply { addView(box) })
+            .setPositiveButton("Save") { _, _ ->
+                val n = name.text.toString().trim()
+                if (n.isEmpty()) { android.widget.Toast.makeText(ctx, "Please enter a shoe name.", android.widget.Toast.LENGTH_SHORT).show(); return@setPositiveButton }
+                val o = JSONObject().put("id", sh?.optString("id")?.ifEmpty { null } ?: System.currentTimeMillis().toString()).put("name", n)
+                    .put("brand", brand.text.toString().trim()).put("color", color.text.toString().trim())
+                    .put("startDate", start.text.toString().trim().ifEmpty { java.time.LocalDate.now().toString() })
+                    .put("maxMiles", maxM.text.toString().toDoubleOrNull() ?: 500.0).put("offsetMiles", off.text.toString().toDoubleOrNull() ?: 0.0)
+                    .put("notes", notes.text.toString().trim()).put("retired", sh?.optBoolean("retired") ?: false)
+                S.saveShoe(ctx, o); render()
+            }.setNegativeButton("Cancel", null).show()
     }
 }

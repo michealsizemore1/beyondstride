@@ -16,7 +16,7 @@ object Hydration {
 
     /** A change waiting for the Command Center. [id] is Firebase's key once posted. */
     data class Change(val date: String, val f: String, val d: Int, val v: Double, val at: Long, val id: String?, val x: String? = null)
-    val FOOD_OPS = listOf("foodAdd", "foodEdit", "foodDel", "mealSave", "calSettings", "libAction", "libDelete", "actSave", "actDel")
+    val FOOD_OPS = listOf("foodAdd", "foodEdit", "foodDel", "mealSave", "calSettings", "libAction", "libDelete", "actSave", "actDel", "actSettings", "shoeSave", "shoeDel")
 
     /** Queues a change that isn't tied to the day's values (a saved meal, calorie-target settings). */
     @Synchronized fun queue(ctx: Context, f: String, x: JSONObject, date: String = Readiness.today()) =
@@ -42,7 +42,7 @@ object Hydration {
 
     /** Drops local values for days with nothing still waiting (the Command Center's copy has them now). */
     fun settle(ctx: Context) {
-        val waiting = changes(ctx).filter { it.f != "mealSave" && it.f != "calSettings" && it.f != "libAction" && it.f != "libDelete" && it.f != "actSave" && it.f != "actDel" }.map { it.date }.toSet()
+        val waiting = changes(ctx).filter { it.f != "mealSave" && it.f != "calSettings" && it.f != "libAction" && it.f != "libDelete" && it.f != "actSave" && it.f != "actDel" && it.f != "actSettings" && it.f != "shoeSave" && it.f != "shoeDel" }.map { it.date }.toSet()
         val l = local(ctx); val drop = l.keys().asSequence().filter { it !in waiting }.toList()
         if (drop.isEmpty()) return
         drop.forEach { l.remove(it) }

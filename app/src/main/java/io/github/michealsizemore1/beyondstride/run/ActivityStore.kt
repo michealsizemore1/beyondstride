@@ -52,7 +52,46 @@ object ActivityStore {
         val raw = idStr(id)
         return ex.optJSONObject(raw.replace(Regex("[.$#\\[\\]/]"), "_").ifEmpty { "_" }) ?: ex.optJSONObject(raw) ?: JSONObject()
     }
-    fun settings(ctx: Context): JSONObject = raw(ctx).optJSONObject("settings") ?: JSONObject()
+    private fun pending(ctx: Context, vararg ops: String) = Hydration.changes(ctx).filter { it.f in ops }.sortedBy { it.at }
+        .mapNotNull { c -> try { c.f to JSONObject(c.x ?: "{}") } catch (e: Exception) { null } }
+
+    /** CP / max HR / resting HR the Command Center uses (with changes made here on top). */
+    fun settings(ctx: Context): JSONObject {
+        val o = JSONObject((raw(ctx).optJSONObject("settings") ?: JSONObject()).toString())
+        pending(ctx, "actSettings").forEach { (_, x) -> listOf("cp", "maxHr", "restHr").forEach { k -> if (x.optDouble(k, 0.0) > 0) o.put(k, x.getDouble(k)) } }
+        return o
+    }
+    /** Mileage goals: week / month / year (0 = none). */
+    fun goal(ctx: Context, period: String): Double {
+        var g = raw(ctx).optJSONObject("goals")?.optDouble(period, 0.0) ?: 0.0
+        pending(ctx, "actSettings").forEach { (_, x) -> if (x.has("goal_$period")) g = x.optDouble("goal_$period", 0.0) }
+        return g
+    }
+    /** Journal miles on days with no activity (the Command Center's mileage summary counts them). */
+    fun exMiles(ctx: Context): Map<String, Double> = raw(ctx).optJSONObject("exMiles")?.let { o -> o.keys().asSequence().associateWith { o.optDouble(it, 0.0) } } ?: emptyMap()
+
+    /** Shoes (with changes made here on top). */
+    fun shoes(ctx: Context): List<JSONObject> {
+        val a = raw(ctx).optJSONArray("shoes") ?: JSONArray()
+        val out = (0 until a.length()).mapNotNull { a.optJSONObject(it) }.toMutableList()
+        pending(ctx, "shoeSave", "shoeDel").forEach { (f, x) ->
+            val id = x.optString("id"); val i = out.indexOfFirst { it.optString("id") == id }
+            if (f == "shoeDel") { if (i >= 0) out.removeAt(i) }
+            else x.optJSONObject("shoe")?.let { sh -> if (i >= 0) { val k = out[i]; sh.keys().forEach { key -> k.put(key, sh.get(key)) } } else out += JSONObject(sh.toString()) }
+        }
+        return out
+    }
+    fun saveSettings(ctx: Context, x: JSONObject) { Hydration.queue(ctx, "actSettings", x); Thread { HydrationSync.flush(ctx.applicationContext) }.start() }
+    fun saveShoe(ctx: Context, shoe: JSONObject) { Hydration.queue(ctx, "shoeSave", JSONObject().put("id", shoe.optString("id")).put("shoe", shoe)); Thread { HydrationSync.flush(ctx.applicationContext) }.start() }
+    fun deleteShoe(ctx: Context, id: String) { Hydration.queue(ctx, "shoeDel", JSONObject().put("id", id)); Thread { HydrationSync.flush(ctx.applicationContext) }.start() }
+
+    /** Miles on a shoe: every activity on or after its start date, plus its starting miles (the Command Center's shoeCalcMiles). */
+    fun shoeMiles(ctx: Context, shoe: JSONObject): Double {
+        val start = shoe.optString("startDate")
+        val tot = list(ctx).filter { val d = str(it, "date"); d.isNotEmpty() && (start.isEmpty() || d >= start) }
+            .sumOf { num(it, "distance") * (if (str(it, "distUnit").lowercase() == "km") 0.621371 else 1.0) }
+        return Math.round((tot + shoe.optDouble("offsetMiles", 0.0)) * 100) / 100.0
+    }
 
     /** Saves an activity (new or changed). [clear]: fields emptied. */
     fun save(ctx: Context, act: JSONObject, clear: List<String> = emptyList()) {
