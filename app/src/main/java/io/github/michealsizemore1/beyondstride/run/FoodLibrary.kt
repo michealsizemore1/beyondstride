@@ -19,7 +19,41 @@ object FoodLibrary {
     private fun p(ctx: Context) = ctx.getSharedPreferences("foodlib", 0)
     private fun lib(ctx: Context): JSONObject = try { JSONObject(p(ctx).getString("lib", "{}")) } catch (e: Exception) { JSONObject() }
 
-    fun favorites(ctx: Context) = Food.parseList(lib(ctx).optJSONArray("favorites"))
+    fun favorites(ctx: Context): List<Food.Item> {
+        val l = Food.parseList(lib(ctx).optJSONArray("favorites"))
+        // ⭐ tapped here but not in the Command Center's list yet: show them already.
+        val names = l.map { it.name.lowercase().trim() }.toSet()
+        val pend = io.github.michealsizemore1.beyondstride.Hydration.changes(ctx).filter { it.f == "favAdd" }
+            .mapNotNull { c -> try { Food.fromJson(JSONObject(c.x ?: "{}")) } catch (e: Exception) { null } }.filter { it.name.lowercase().trim() !in names }
+        return l + pend
+    }
+    fun isFavorite(ctx: Context, name: String) = favorites(ctx).any { it.name.lowercase().trim() == name.lowercase().trim() }
+    /** ⭐ Adds a food to Favorites (the Command Center's Food Database), with its picture. */
+    fun addFavorite(ctx: Context, f: Food.Item) {
+        val img = imageFor(ctx, f)
+        val x = Food.toJson(f.copy(image = img), withId = false, withPhoto = true).put("servings", 1)
+        io.github.michealsizemore1.beyondstride.Hydration.queue(ctx, "favAdd", x)
+        Thread { HydrationSync.flush(ctx.applicationContext) }.start()
+    }
+    fun toggleFavorite(ctx: Context, f: Food.Item): Boolean {
+        val fav = favorites(ctx).firstOrNull { it.name.lowercase().trim() == f.name.lowercase().trim() }
+        return if (fav != null) {
+            // Not sent yet? Just drop the waiting ⭐.
+            val ch = io.github.michealsizemore1.beyondstride.Hydration.changes(ctx)
+            val waiting = ch.firstOrNull { it.f == "favAdd" && it.id == null && (try { JSONObject(it.x ?: "{}").optString("name") } catch (e: Exception) { "" }).equals(f.name, true) }
+            if (waiting != null) io.github.michealsizemore1.beyondstride.Hydration.saveChanges(ctx, ch - waiting) else delete(ctx, "fav", fav.name)
+            false
+        } else { addFavorite(ctx, f); true }
+    }
+
+    /** Photos taken here for foods in a meal: by food id and by name (so the same food shows it again). */
+    private fun photos(ctx: Context): JSONObject = try { JSONObject(p(ctx).getString("photos", "{}")) } catch (e: Exception) { JSONObject() }
+    fun setPhoto(ctx: Context, f: Food.Item, dataUrl: String, date: String) {
+        val ph = photos(ctx).put("id:" + f.id, dataUrl).put("n:" + f.name.lowercase().trim(), dataUrl)
+        p(ctx).edit().putString("photos", ph.toString()).apply()
+        io.github.michealsizemore1.beyondstride.Hydration.queue(ctx, "foodPhoto", JSONObject().put("id", f.id).put("image", dataUrl), date)
+        Thread { HydrationSync.flush(ctx.applicationContext) }.start()
+    }
     fun healthy(ctx: Context) = Food.parseList(lib(ctx).optJSONArray("healthy"))
     fun meals(ctx: Context): List<Meal> = lib(ctx).optJSONArray("meals")?.let { a ->
         (0 until a.length()).mapNotNull { a.optJSONObject(it) }.map { Meal(it.optString("name"), it.optString("category"), Food.parseList(it.optJSONArray("items"))) }
@@ -47,6 +81,7 @@ object FoodLibrary {
     private var picCache: Pair<String, Map<String, String>>? = null
     fun imageFor(ctx: Context, f: Food.Item): String {
         if (f.image.isNotEmpty()) return f.image
+        photos(ctx).let { ph -> (ph.optString("id:" + f.id).ifEmpty { ph.optString("n:" + f.name.lowercase().trim()) }).takeIf { it.isNotEmpty() }?.let { return it } }
         val raw = p(ctx).getString("lib", "") ?: ""
         val map = picCache?.takeIf { it.first.length == raw.length }?.second ?: run {
             val m = HashMap<String, String>()

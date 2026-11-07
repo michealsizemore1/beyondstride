@@ -202,6 +202,13 @@ class NutritionActivity : Activity() {
                                     " · P ${f.total(f.prot).toInt()} · C ${f.total(f.carbs).toInt()} · F ${f.total(f.fat).toInt()} g", RunUi.DIM, 11f))
                             }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
                             addView(RunUi.text(ctx, N.kcal(f.kcal), RunUi.MUTED, 13f, true))
+                            // ⭐ favorite (Food Database) and 📷 photo for this food.
+                            val fav = FoodLibrary.isFavorite(ctx, f.name)
+                            addView(RunUi.text(ctx, if (fav) "★" else "☆", if (fav) 0xFFF2C94C.toInt() else RunUi.MUTED, 20f, true).apply {
+                                setPadding(dp(10), dp(2), dp(4), dp(2))
+                                setOnClickListener { val now = FoodLibrary.toggleFavorite(ctx, f)
+                                    android.widget.Toast.makeText(ctx, if (now) "★ Added ${f.name} to Favorites" else "Removed ${f.name} from Favorites", android.widget.Toast.LENGTH_SHORT).show(); render() } })
+                            addView(RunUi.text(ctx, "📷", Color.WHITE, 16f).apply { setPadding(dp(6), dp(2), dp(2), dp(2)); setOnClickListener { photoFor(f) } })
                             setOnClickListener { FoodUi.edit(this@NutritionActivity, f) { render() } }
                         })
                     }
@@ -493,5 +500,48 @@ class NutritionActivity : Activity() {
                 FoodLibrary.saveMeal(ctx, n, meal, items)
                 android.widget.Toast.makeText(ctx, "Saved “$n” — in Add food → Saved meals", android.widget.Toast.LENGTH_SHORT).show()
             }.setNegativeButton("Cancel", null).show()
+    }
+
+    // ── 📷 A photo for a food already in a meal (thumbnail here and in the Command Center) ──
+    private var photoFood: io.github.michealsizemore1.beyondstride.Food.Item? = null
+    private var photoDate = ""
+    private var photoUri: android.net.Uri? = null
+    private fun photoFor(f: io.github.michealsizemore1.beyondstride.Food.Item) {
+        photoFood = f; photoDate = NutriDay.date()
+        android.app.AlertDialog.Builder(this).setTitle("Photo · " + f.name).setItems(arrayOf("Take a photo", "Choose a picture")) { _, w ->
+            if (w == 0) {
+                val dir = java.io.File(cacheDir, "photos").apply { mkdirs() }
+                val uri = androidx.core.content.FileProvider.getUriForFile(this, "$packageName.files", java.io.File(dir, "food.jpg")); photoUri = uri
+                try { startActivityForResult(android.content.Intent(android.provider.MediaStore.ACTION_IMAGE_CAPTURE).putExtra(android.provider.MediaStore.EXTRA_OUTPUT, uri)
+                    .addFlags(android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION or android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION), 51) }
+                catch (e: Exception) { android.widget.Toast.makeText(this, "No camera app", android.widget.Toast.LENGTH_SHORT).show() }
+            } else startActivityForResult(android.content.Intent(android.content.Intent.ACTION_GET_CONTENT).setType("image/*"), 52)
+        }.show()
+    }
+
+    @Deprecated("Activity result")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: android.content.Intent?) {
+        @Suppress("DEPRECATION") super.onActivityResult(requestCode, resultCode, data)
+        if (resultCode != RESULT_OK || (requestCode != 51 && requestCode != 52)) return
+        val f = photoFood ?: return
+        val uri = (if (requestCode == 51) photoUri else data?.data) ?: return
+        Thread {
+            // A small square-ish thumbnail like the Command Center's (180 px JPEG).
+            val url = try {
+                val o = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                contentResolver.openInputStream(uri)?.use { android.graphics.BitmapFactory.decodeStream(it, null, o) }
+                var smp = 1; while (maxOf(o.outWidth, o.outHeight) / smp > 720) smp *= 2
+                val bm = contentResolver.openInputStream(uri)?.use { android.graphics.BitmapFactory.decodeStream(it, null, android.graphics.BitmapFactory.Options().apply { inSampleSize = smp }) }!!
+                val sc = minOf(1.0, 180.0 / maxOf(bm.width, bm.height))
+                val sm = android.graphics.Bitmap.createScaledBitmap(bm, maxOf(1, (bm.width * sc).toInt()), maxOf(1, (bm.height * sc).toInt()), true)
+                "data:image/jpeg;base64," + android.util.Base64.encodeToString(java.io.ByteArrayOutputStream().also { sm.compress(android.graphics.Bitmap.CompressFormat.JPEG, 72, it) }.toByteArray(), android.util.Base64.NO_WRAP)
+            } catch (e: Exception) { null }
+            runOnUiThread {
+                if (isFinishing) return@runOnUiThread
+                if (url == null) { android.widget.Toast.makeText(this, "Couldn't open that picture", android.widget.Toast.LENGTH_SHORT).show(); return@runOnUiThread }
+                FoodLibrary.setPhoto(this, f, url, photoDate)
+                android.widget.Toast.makeText(this, "Photo added to ${f.name}", android.widget.Toast.LENGTH_SHORT).show(); render()
+            }
+        }.start()
     }
 }

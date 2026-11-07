@@ -16,7 +16,7 @@ object Hydration {
 
     /** A change waiting for the Command Center. [id] is Firebase's key once posted. */
     data class Change(val date: String, val f: String, val d: Int, val v: Double, val at: Long, val id: String?, val x: String? = null)
-    val FOOD_OPS = listOf("foodAdd", "foodEdit", "foodDel", "mealSave", "calSettings", "libAction", "libDelete", "actSave", "actDel", "actSettings", "shoeSave", "shoeDel", "planAction", "wrnSave", "actImport", "dayRequest")
+    val FOOD_OPS = listOf("foodAdd", "foodEdit", "foodDel", "mealSave", "calSettings", "libAction", "libDelete", "actSave", "actDel", "actSettings", "shoeSave", "shoeDel", "planAction", "wrnSave", "actImport", "dayRequest", "foodPhoto", "favAdd")
 
     /** Queues a change that isn't tied to the day's values (a saved meal, calorie-target settings). */
     @Synchronized fun queue(ctx: Context, f: String, x: JSONObject, date: String = Readiness.today()) =
