@@ -1565,10 +1565,11 @@ class RunActivity : Activity() {
         col.addView(LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(5) }
-            addView(label("🥗 Ideas", Color.WHITE, 11f, true).apply { background = rounded(0xFF059669.toInt(), 14); setPadding(0, dp(6), 0, dp(6)); setOnClickListener { showMealIdeas() } },
-                LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f).apply { marginEnd = dp(4) })
-            addView(label("📅 Copy day", Color.WHITE, 11f, true).apply { background = rounded(0xFF16A085.toInt(), 14); setPadding(0, dp(6), 0, dp(6)); setOnClickListener { showCopyDay() } },
-                LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
+            // Same size and layout: icon on top, name under it.
+            addView(label("🥗\nIdeas", Color.WHITE, 11f, true).apply { background = rounded(0xFF059669.toInt(), 14); setPadding(0, dp(6), 0, dp(6)); setOnClickListener { showMealIdeas() } },
+                LinearLayout.LayoutParams(0, MATCH_PARENT, 1f).apply { marginEnd = dp(4) })
+            addView(label("📅\nCopy day", Color.WHITE, 11f, true).apply { background = rounded(0xFF16A085.toInt(), 14); setPadding(0, dp(6), 0, dp(6)); setOnClickListener { showCopyDay() } },
+                LinearLayout.LayoutParams(0, MATCH_PARENT, 1f))
         })
         if (t != null && t.count > 0) box {
             addView(label("MEALS", C.ACCENT, 11f, true))
