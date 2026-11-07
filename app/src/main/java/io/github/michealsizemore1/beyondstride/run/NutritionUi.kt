@@ -124,36 +124,19 @@ object NutritionUi {
         val ctx = act
         fun dp(v: Int) = RunUi.dp(ctx, v)
         val box = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(20), dp(8), dp(20), 0) }
-        val names = mapOf("water" to "Water", "sports" to "Sports drinks", "other" to "Other drinks")
-        fun value(f: String) = HydrationSync.today(ctx).let { d -> when (f) { "water" -> d?.water; "sports" -> d?.sportsOz; else -> d?.otherOz } ?: 0 }
-        Hydration.FLUIDS.forEach { f ->
-            box.addView(LinearLayout(ctx).apply {
-                orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
-                setPadding(0, dp(6), 0, dp(6))
-                addView(android.widget.TextView(ctx).apply { text = names[f]; textSize = 16f }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
-                val v = android.widget.TextView(ctx).apply { text = "${value(f)} oz"; textSize = 16f; gravity = Gravity.CENTER; setTypeface(typeface, android.graphics.Typeface.BOLD) }
-                fun btn(t: String, d: Int) = android.widget.Button(ctx).apply {
-                    text = t; minWidth = 0; minimumWidth = 0
-                    setOnClickListener { HydrationSync.change(ctx, f, d); v.text = "${value(f)} oz" }
-                }
-                addView(btn("−8", -Hydration.STEP), LinearLayout.LayoutParams(dp(56), WRAP_CONTENT))
-                addView(v, LinearLayout.LayoutParams(dp(72), WRAP_CONTENT))
-                addView(btn("+8", Hydration.STEP), LinearLayout.LayoutParams(dp(56), WRAP_CONTENT))
-            })
-        }
         val today = HydrationSync.today(ctx)
         fun field(hint: String, v: Double) = android.widget.EditText(ctx).apply {
             this.hint = hint; inputType = android.text.InputType.TYPE_CLASS_NUMBER or android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL
             if (v > 0) setText(Hydration.lb(v))
         }
-        box.addView(android.widget.TextView(ctx).apply { text = "Wake-up weight (lb)"; setPadding(0, dp(12), 0, 0) })
+        box.addView(android.widget.TextView(ctx).apply { text = "Wake-up weight (lb)"; setPadding(0, dp(4), 0, 0) })
         val wake = field("e.g. 172.4", today?.weight ?: 0.0); box.addView(wake)
         box.addView(android.widget.TextView(ctx).apply { text = "Post-run weight (lb)"; setPadding(0, dp(8), 0, 0) })
         val post = field("e.g. 171.2", today?.postWeight ?: 0.0); box.addView(post)
         box.addView(android.widget.TextView(ctx).apply {
-            text = "Also goes to the Command Center (its Nutrition and Wellness fields)."; textSize = 12f; setPadding(0, dp(8), 0, 0)
+            text = "Also goes to the Command Center (its Wellness weight fields). Drinks are in Liquids on the Nutrition tab."; textSize = 12f; setPadding(0, dp(8), 0, 0)
         })
-        android.app.AlertDialog.Builder(ctx).setTitle("Fluids & weight · today").setView(ScrollView(ctx).apply { addView(box) })
+        android.app.AlertDialog.Builder(ctx).setTitle("Weight · today").setView(ScrollView(ctx).apply { addView(box) })
             .setPositiveButton("Save") { _, _ ->
                 fun num(e: android.widget.EditText) = e.text.toString().trim().toDoubleOrNull()?.takeIf { it in 70.0..600.0 } ?: 0.0
                 val w = num(wake); val p = num(post)

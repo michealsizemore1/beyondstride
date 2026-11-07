@@ -19,11 +19,12 @@ class NutritionActivity : Activity() {
     private var dbSort = "saved"
     private var dbMeal = FoodUi.mealNow()
 
-    private fun dbRow(title: String, sub: String, kcal: Int, delete: (() -> Unit)? = null, add: () -> Unit) = LinearLayout(this).apply {
+    private fun dbRow(title: String, sub: String, kcal: Int, delete: (() -> Unit)? = null, image: String = "", add: () -> Unit) = LinearLayout(this).apply {
         val ctx = this@NutritionActivity
         orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
         background = RunUi.rounded(0xFF26302C.toInt(), RunUi.dp(ctx, 10).toFloat()); setPadding(RunUi.dp(ctx, 12), RunUi.dp(ctx, 6), RunUi.dp(ctx, 10), RunUi.dp(ctx, 6))
         layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = RunUi.dp(ctx, 6) }
+        if (image.isNotEmpty()) addView(Thumbs.view(ctx, 40, image))
         addView(LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
             addView(RunUi.text(ctx, title, Color.WHITE, 14f, true).apply { maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END })
@@ -159,8 +160,9 @@ class NutritionActivity : Activity() {
                     if (picker) body.addView(quickPicker(m))
                     mine.forEach { f -> body.
                         addView(LinearLayout(ctx).apply {
-                            orientation = LinearLayout.HORIZONTAL
+                            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
                             setPadding(dp(4), dp(8), 0, dp(2))
+                            FoodLibrary.imageFor(ctx, f).takeIf { it.isNotEmpty() }?.let { addView(Thumbs.view(ctx, 36, it)) }
                             addView(LinearLayout(ctx).apply {
                                 orientation = LinearLayout.VERTICAL
                                 addView(RunUi.text(ctx, f.name, Color.WHITE, 14f))
@@ -213,7 +215,7 @@ class NutritionActivity : Activity() {
                     if (r.isEmpty()) list.addView(RunUi.text(ctx, if (favs.isEmpty() && healthy.isEmpty()) "Your Command Center food database shows here once it's been opened there." else "No match.", RunUi.MUTED, 12f).apply { setPadding(0, dp(8), 0, 0) })
                     r.take(200).forEach { f ->
                         list.addView(dbRow(f.name, f.servingLabel + " · P ${(f.prot ?: 0.0).toInt()} · C ${(f.carbs ?: 0.0).toInt()} · F ${(f.fat ?: 0.0).toInt()} g", ((f.cal ?: 0.0) * f.servings).toInt(),
-                            delete = { FoodLibrary.delete(ctx, dbTab, f.name) }) {
+                            delete = { FoodLibrary.delete(ctx, dbTab, f.name) }, image = FoodLibrary.imageFor(ctx, f)) {
                             FoodUi.confirmAdd(this@NutritionActivity, f, dbMeal) { render() }
                         })
                     }

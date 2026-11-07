@@ -98,6 +98,7 @@ class FoodAddActivity : Activity() {
         orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
         background = RunUi.rounded(RunUi.CARD, dp(12).toFloat()); setPadding(dp(12), dp(8), dp(12), dp(8))
         layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(6) }
+        if (f.image.isNotEmpty()) addView(Thumbs.view(this@FoodAddActivity, 40, f.image))
         addView(LinearLayout(this@FoodAddActivity).apply {
             orientation = LinearLayout.VERTICAL
             addView(RunUi.text(this@FoodAddActivity, f.name, Color.WHITE, 14f, true))

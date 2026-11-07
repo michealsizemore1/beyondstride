@@ -26,13 +26,13 @@ object FoodSearch {
         val micros = HashMap<String, Double>()
         OFF_KEY.forEach { (f, k) -> v(k)?.let { micros[f] = if (f == "sodium") Math.round(it * 1000).toDouble() else it } }
         val serving = if (hasServing && p.optString("serving_size").isNotBlank()) p.optString("serving_size") else "100 g"
-        return Food.Item(Food.newId(), meal, name, serving, 1.0, v("energy-kcal"), v("proteins"), v("fat"), v("carbohydrates"), micros, p.optString("code"))
+        return Food.Item(Food.newId(), meal, name, serving, 1.0, v("energy-kcal"), v("proteins"), v("fat"), v("carbohydrates"), micros, p.optString("code"), p.optString("image_front_small_url"))
     }
 
     /** Text search. Call off the main thread. */
     fun search(q: String, meal: String): List<Food.Item> = try {
         val url = "https://world.openfoodfacts.org/cgi/search.pl?search_simple=1&json=1&page_size=25&search_terms=" + URLEncoder.encode(q, "UTF-8") +
-            "&fields=code,product_name,brands,serving_size,nutriments"
+            "&fields=code,product_name,brands,serving_size,nutriments,image_front_small_url"
         val c = (URL(url).openConnection() as HttpURLConnection).apply { connectTimeout = 15_000; readTimeout = 20_000; setRequestProperty("User-Agent", UA) }
         val a = JSONObject(c.inputStream.bufferedReader().readText()).optJSONArray("products") ?: JSONArray()
         (0 until a.length()).mapNotNull { a.optJSONObject(it)?.let { p -> product(p, meal) } }.filter { it.cal != null }
@@ -40,7 +40,7 @@ object FoodSearch {
 
     /** Barcode lookup. Call off the main thread. */
     fun barcode(code: String, meal: String): Food.Item? = try {
-        val c = (URL("https://world.openfoodfacts.org/api/v2/product/$code.json?fields=code,product_name,brands,serving_size,nutriments")
+        val c = (URL("https://world.openfoodfacts.org/api/v2/product/$code.json?fields=code,product_name,brands,serving_size,nutriments,image_front_small_url")
             .openConnection() as HttpURLConnection).apply { connectTimeout = 15_000; readTimeout = 20_000; setRequestProperty("User-Agent", UA) }
         val o = JSONObject(c.inputStream.bufferedReader().readText())
         if (o.optInt("status") != 1) null else o.optJSONObject("product")?.let { product(it, meal)?.copy(barcode = code) }

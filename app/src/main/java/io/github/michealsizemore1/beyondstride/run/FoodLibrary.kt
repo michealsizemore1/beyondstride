@@ -43,6 +43,19 @@ object FoodLibrary {
         Thread { HydrationSync.flush(ctx.applicationContext) }.start()
     }
 
+    /** A food's picture: its own, or the one saved with the same name in your food database. */
+    private var picCache: Pair<String, Map<String, String>>? = null
+    fun imageFor(ctx: Context, f: Food.Item): String {
+        if (f.image.isNotEmpty()) return f.image
+        val raw = p(ctx).getString("lib", "") ?: ""
+        val map = picCache?.takeIf { it.first.length == raw.length }?.second ?: run {
+            val m = HashMap<String, String>()
+            (healthy(ctx) + favorites(ctx) + meals(ctx).flatMap { it.items }).forEach { if (it.image.isNotEmpty()) m[it.name.lowercase().trim()] = it.image }
+            picCache = raw to m; m
+        }
+        return map[f.name.lowercase().trim()] ?: ""
+    }
+
     /** (foods that need enriching, foods with AI estimates) from the Command Center. */
     fun stats(ctx: Context): Pair<Int, Int> = lib(ctx).optJSONObject("stats")?.let { it.optInt("needEnrich") to it.optInt("estimated") } ?: (0 to 0)
 

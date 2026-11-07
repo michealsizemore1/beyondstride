@@ -65,7 +65,34 @@ object FoodUi {
     /** A logged food: servings, meal, delete. */
     fun edit(a: Activity, f: Food.Item, done: () -> Unit) {
         val b = box(a)
-        b.addView(TextView(a).apply { text = f.servingLabel + " per serving"; textSize = 13f })
+        // Serving size — editable, so a drink can be given fluid ounces / mL and count toward fluids.
+        b.addView(TextView(a).apply { text = "Serving size"; textSize = 13f })
+        val fluid = TextView(a).apply { textSize = 12f; setPadding(0, dp(a, 2), 0, 0) }
+        fun showFluid(label: String) {
+            val oz = Food.fluidOz(label)
+            fluid.text = if (oz > 0) "💧 Counts as ${Food.fmt(Math.round(oz * 10) / 10.0)} fl oz per serving (in Liquids or Sports Nutrition)"
+                else "For a drink, use fl oz or mL (e.g. 20 fl oz, 591 mL) so it counts as fluid"
+        }
+        val serving = EditText(a).apply {
+            setText(f.servingLabel); setSingleLine(); inputType = InputType.TYPE_CLASS_TEXT
+            addTextChangedListener(object : android.text.TextWatcher {
+                override fun afterTextChanged(e: android.text.Editable?) = showFluid(e?.toString() ?: "")
+                override fun beforeTextChanged(s: CharSequence?, st: Int, c: Int, af: Int) {}
+                override fun onTextChanged(s: CharSequence?, st: Int, b2: Int, c: Int) {}
+            })
+        }
+        b.addView(serving)
+        b.addView(LinearLayout(a).apply {
+            orientation = LinearLayout.HORIZONTAL
+            listOf("8 fl oz", "12 fl oz", "16.9 fl oz", "20 fl oz", "591 mL").forEach { u ->
+                addView(TextView(a).apply {
+                    text = u; textSize = 12f; setPadding(dp(a, 8), dp(a, 4), dp(a, 8), dp(a, 4))
+                    background = RunUi.rounded(0x33FFFFFF, dp(a, 10).toFloat())
+                    setOnClickListener { serving.setText(u) }
+                }, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { marginEnd = dp(a, 4) })
+            }
+        })
+        b.addView(fluid); showFluid(f.servingLabel)
         val total = TextView(a).apply { text = per(f, f.servings); textSize = 14f; setPadding(0, dp(a, 4), 0, dp(a, 6)) }
         b.addView(total)
         val field = servingsRow(a, b, f.servings) { total.text = per(f, it) }
@@ -73,7 +100,8 @@ object FoodUi {
         AlertDialog.Builder(a).setTitle(f.name).setView(ScrollView(a).apply { addView(b) })
             .setPositiveButton("Save") { _, _ ->
                 val s = field.text.toString().toDoubleOrNull()?.takeIf { it > 0 } ?: f.servings
-                if (s != f.servings || meal() != f.meal) HydrationSync.food(a, "foodEdit", f.copy(servings = s, meal = meal()))
+                val label = serving.text.toString().trim().ifEmpty { f.servingLabel }
+                if (s != f.servings || meal() != f.meal || label != f.servingLabel) HydrationSync.food(a, "foodEdit", f.copy(servings = s, meal = meal(), servingLabel = label))
                 done()
             }
             .setNeutralButton("Delete") { _, _ ->

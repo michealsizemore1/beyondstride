@@ -15,6 +15,8 @@ object Food {
         val id: String, val meal: String, val name: String, val servingLabel: String, val servings: Double,
         val cal: Double?, val prot: Double?, val fat: Double?, val carbs: Double?,
         val micros: Map<String, Double> = emptyMap(), val barcode: String = "",
+        /** Picture: a product image link (https…) or a small saved photo (data:…). */
+        val image: String = "",
     ) {
         fun total(v: Double?) = (v ?: 0.0) * servings
         val kcal get() = total(cal).roundToInt()
@@ -33,15 +35,17 @@ object Food {
         return Item(o.optString("id").ifEmpty { newId() }, meal ?: o.optString("meal", "snack").ifEmpty { "snack" },
             o.optString("name", "Food"), o.optString("servingLabel", "1 serving").ifEmpty { "1 serving" },
             o.optDouble("servings", 1.0).takeIf { !it.isNaN() && it > 0 } ?: 1.0,
-            d(o, "cal"), d(o, "prot"), d(o, "fat"), d(o, "carbs"), m, o.optString("barcode"))
+            d(o, "cal"), d(o, "prot"), d(o, "fat"), d(o, "carbs"), m, o.optString("barcode"), o.optString("image"))
     }
 
-    fun toJson(i: Item, withId: Boolean = true): JSONObject = JSONObject().apply {
+    /** [withPhoto]: keep a saved photo (data:…); links are always kept. Photos stay out of the daily log to keep it small. */
+    fun toJson(i: Item, withId: Boolean = true, withPhoto: Boolean = false): JSONObject = JSONObject().apply {
         if (withId) { put("id", i.id); put("meal", i.meal) }
         put("name", i.name); put("servingLabel", i.servingLabel); put("servings", i.servings)
         i.cal?.let { put("cal", it) }; i.prot?.let { put("prot", it) }; i.fat?.let { put("fat", it) }; i.carbs?.let { put("carbs", it) }
         i.micros.forEach { (k, v) -> put(k, v) }
         if (i.barcode.isNotEmpty()) put("barcode", i.barcode)
+        if (i.image.startsWith("http") || (withPhoto && i.image.startsWith("data:"))) put("image", i.image)
     }
 
     fun listJson(items: List<Item>) = JSONArray().apply { items.forEach { put(toJson(it)) } }
