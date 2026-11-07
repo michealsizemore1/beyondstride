@@ -17,6 +17,7 @@ object ActivityStore {
     private fun raw(ctx: Context): JSONObject = try { JSONObject(p(ctx).getString("data", "{}")) } catch (e: Exception) { JSONObject() }
 
     fun fetchedAt(ctx: Context) = p(ctx).getLong("at", 0)
+    fun status(ctx: Context) = p(ctx).getString("status", "") ?: ""
 
     /** Every activity: the Command Center's list with changes made here (not taken by it yet) on top. */
     fun list(ctx: Context): List<JSONObject> {
@@ -57,9 +58,19 @@ object ActivityStore {
         return try {
             val c = (URL(Live.db(ctx) + "/nutrition/" + NutritionSync.key(ctx) + "/activities.json").openConnection() as HttpURLConnection)
                 .apply { connectTimeout = 12_000; readTimeout = 25_000 }
-            if (c.responseCode != 200) return false
+            if (c.responseCode != 200) { p(ctx).edit().putString("status", "Couldn't read Activities (HTTP ${c.responseCode})").apply(); return false }
             val txt = c.inputStream.bufferedReader().readText()
-            if (txt == "null" || txt.isBlank()) return false
+            // What the Command Center last said about sharing (shown when nothing has arrived).
+            try {
+                val sc = (URL(Live.db(ctx) + "/nutrition/" + NutritionSync.key(ctx) + "/activitiesStatus.json").openConnection() as HttpURLConnection).apply { connectTimeout = 10_000; readTimeout = 10_000 }
+                val st = if (sc.responseCode == 200) sc.inputStream.bufferedReader().readText() else "null"
+                val o = if (st == "null") null else JSONObject(st)
+                p(ctx).edit().putString("status", if (o == null) "The Command Center hasn't tried to share Activities yet — reload its page (it needs the latest version)."
+                    else "Command Center: " + o.optString("stage") + (if (o.has("count")) " · ${o.optInt("count")} activities" else "") + (if (o.has("bytes")) " · ${o.optInt("bytes") / 1024} KB" else "") +
+                        (if (o.has("status")) " · HTTP ${o.optInt("status")}" else "") + (o.optString("err").takeIf { it.isNotEmpty() }?.let { " · $it" } ?: "") +
+                        " · " + android.text.format.DateUtils.getRelativeTimeSpanString(o.optLong("at"))).apply()
+            } catch (e: Exception) { }
+            if (txt == "null" || txt.isBlank()) return true
             val changed = txt != p(ctx).getString("data", "")
             p(ctx).edit().putString("data", txt).putLong("at", System.currentTimeMillis()).apply()
             changed

@@ -55,6 +55,7 @@ class ActivitiesActivity : Activity() {
             }
         })
         if (S.fetchedAt(this) == 0L) col.addView(txt(if (NutritionSync.ready(this)) "Open the Command Center once (after reloading it) so it can share your Activities." else "Set up LiveTrack first — Activities come through the same database.", 0xFFF2C94C.toInt(), 12f).apply { setPadding(0, dp(6), 0, 0) })
+        if (all.isEmpty() && S.status(this).isNotEmpty()) col.addView(txt(S.status(this), RunUi.MUTED, 11f).apply { setPadding(0, dp(4), 0, 0) })
 
         // Buttons.
         col.addView(FlowLayout(this, dp(6), dp(6)).apply {
