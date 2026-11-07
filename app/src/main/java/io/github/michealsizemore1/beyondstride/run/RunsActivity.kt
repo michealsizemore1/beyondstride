@@ -351,6 +351,7 @@ open class RunsActivity : Activity() {
     /** Fluids (± a cup) and wake-up / post-run weight for today. Fluid taps save at once; weights on Save. */
     private fun fluidDialog() {
         val ctx = this
+        fun dp(v: Int) = RunUi.dp(ctx, v)
         val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(20), dp(8), dp(20), 0) }
         val names = mapOf("water" to "Water", "sports" to "Sports drinks", "other" to "Other drinks")
         fun value(f: String) = HydrationSync.today(ctx).let { d -> when (f) { "water" -> d?.water; "sports" -> d?.sportsOz; else -> d?.otherOz } ?: 0 }
