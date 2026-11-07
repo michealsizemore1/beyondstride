@@ -37,17 +37,17 @@ object NutritionUi {
             })
             val (pp, cp, fp) = nd.ratios()
             col.addView(RunUi.text(ctx, N.macros(nd) + "  ($pp / $cp / $fp %)", RunUi.MUTED, 12f))
+            if (summary && nd.micros.isNotEmpty()) {
+                // One line instead of the tiles (the Nutrition tab has them).
+                val low = nd.micros.count { it.status == "Low" }; val high = nd.micros.count { it.status == "High" }
+                col.addView(RunUi.text(ctx, "Micronutrients " + String.format(Locale.US, "%.1f", nd.microScore) + "/10 · " + nd.microLabel() +
+                    (if (low > 0) " · $low low" else "") + (if (high > 0) " · $high high" else ""),
+                    N.statusColor(when { nd.microScore >= 7 -> "Met"; nd.microScore >= 5 -> "Close"; else -> "Low" }), 12f, true).apply { setPadding(0, dp(4), 0, 0) })
+            }
             if (big && nd.active > 0) col.addView(RunUi.text(ctx, "Target includes ${N.kcal(nd.active)} active kcal", RunUi.DIM, 11f))
         }
         fluids(act, col, nd, refresh, chips)
         if (withMicros && nd != null && nd.micros.isNotEmpty()) micros(act, col, nd)
-        else if (summary && nd != null && nd.micros.isNotEmpty()) {
-            // One line instead of the tiles (the Nutrition tab has them).
-            val low = nd.micros.count { it.status == "Low" }; val high = nd.micros.count { it.status == "High" }
-            col.addView(RunUi.text(ctx, "Micronutrients " + String.format(Locale.US, "%.1f", nd.microScore) + "/10 · " + nd.microLabel() +
-                (if (low > 0) " · $low low" else "") + (if (high > 0) " · $high high" else ""),
-                N.statusColor(when { nd.microScore >= 7 -> "Met"; nd.microScore >= 5 -> "Close"; else -> "Low" }), 12f, true).apply { setPadding(0, dp(10), 0, 0) })
-        }
     }
 
     /** Fluids line, rehydration after a run, and the quick-tap row. */
