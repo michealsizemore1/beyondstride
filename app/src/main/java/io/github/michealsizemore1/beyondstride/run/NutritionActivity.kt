@@ -120,10 +120,21 @@ class NutritionActivity : Activity() {
                             background = RunUi.rounded(MEAL_COLOR[m] ?: 0xFF4B5563.toInt(), dp(10).toFloat()); setPadding(dp(12), dp(5), dp(12), dp(5))
                             setOnClickListener { startActivity(android.content.Intent(ctx, FoodAddActivity::class.java).putExtra("meal", m)) }
                         })
-                        addView(RunUi.text(ctx, if (open) "▾" else "▸", RunUi.MUTED, 14f).apply { setPadding(dp(8), 0, 0, 0) })
-                        setOnClickListener { if (mine.isNotEmpty()) { openPrefs.edit().putBoolean("open_$m", !open).apply(); render() } }
+                        val arrow = RunUi.text(ctx, if (open) "▾" else "▸", RunUi.MUTED, 14f).apply { setPadding(dp(8), 0, 0, 0) }
+                        addView(arrow)
+                        setOnClickListener {
+                            if (mine.isEmpty()) return@setOnClickListener
+                            val card = parent as LinearLayout
+                            val b = card.getChildAt(1)
+                            val nowOpen = b.visibility != android.view.View.VISIBLE
+                            b.visibility = if (nowOpen) android.view.View.VISIBLE else android.view.View.GONE
+                            arrow.text = if (nowOpen) "▾" else "▸"
+                            openPrefs.edit().putBoolean("open_$m", nowOpen).apply()
+                        }
                     })
-                    if (open) mine.forEach { f ->
+                    val body = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL; visibility = if (open) android.view.View.VISIBLE else android.view.View.GONE }
+                    addView(body)
+                    mine.forEach { f -> body.
                         addView(LinearLayout(ctx).apply {
                             orientation = LinearLayout.HORIZONTAL
                             setPadding(dp(4), dp(8), 0, dp(2))
@@ -265,11 +276,17 @@ class NutritionActivity : Activity() {
         col.addView(RunUi.text(this, "Food logged in either app shows in both.", RunUi.DIM, 11f).apply {
             gravity = Gravity.CENTER; setPadding(0, dp(6), 0, 0) })
 
-        setContentView(RunUi.tabbed(this, ScrollView(this).apply {
+        // Keep the page where it was when it's redrawn (opening a meal, adding or editing a food…).
+        val keepY = scroller?.scrollY ?: 0
+        val sv = ScrollView(this).apply {
             setBackgroundColor(RunUi.BG)
             addView(col, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
-        }, RunUi.TAB_NUTRITION))
+        }
+        scroller = sv
+        setContentView(RunUi.tabbed(this, sv, RunUi.TAB_NUTRITION))
+        if (keepY > 0) sv.post { sv.scrollTo(0, keepY) }
     }
+    private var scroller: ScrollView? = null
 
     /** 💾 Save this meal's foods as a saved meal (also added to the Command Center's saved meals). */
     private fun saveMealDialog(meal: String, items: List<io.github.michealsizemore1.beyondstride.Food.Item>) {
