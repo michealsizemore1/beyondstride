@@ -1681,11 +1681,6 @@ class RunActivity : Activity() {
             // Streak and Training Load Ratio (miles).
             box {
                 if (a.optInt("streak") > 0) addView(label("🔥 ${a.optInt("streak")}-week streak", ORANGE, 12f, true))
-                if (a.has("acwr")) { val r = a.optDouble("acwr")
-                    val (c, l) = when { r < 0.8 -> 0xFF5DADE2.toInt() to "Low load (easing back)"; r <= 1.3 -> 0xFF27AE60.toInt() to "Sweet spot"; r <= 1.5 -> 0xFFF39C12.toInt() to "Elevated — watch for soreness"; else -> 0xFFE74C3C.toInt() to "High — too much too soon" }
-                    addView(label("⚡ Training Load Ratio (miles)", C.MUTED, 9f, true).apply { setPadding(0, dp(3), 0, 0) })
-                    addView(label(String.format(java.util.Locale.US, "%.2f · %s", r, l), c, 12f, true))
-                    addView(label(String.format(java.util.Locale.US, "%.1f mi/day (7d) vs %.1f (28d)", a.optDouble("acute"), a.optDouble("chronic")), C.DIM, 8f)) }
             }
             // Personal Records.
             a.optJSONArray("prs")?.takeIf { it.length() > 0 }?.let { prs -> box {
@@ -1828,12 +1823,19 @@ class RunActivity : Activity() {
 
                 if (ld != null) {
                     // TRAINING LOAD.
-                    body.addView(head("TRAINING LOAD (STRESS)"))
+                    body.addView(head("TRAINING LOAD"))
                     body.addView(card().apply {
                         addView(label(ld.status, ld.color, 14f, true))
                         addView(label("${ld.acute} stress · " + String.format(java.util.Locale.US, "%.1f", ld.milesWeek) + " mi, last 7 days", Color.WHITE, 10f))
                         ld.ratio?.let { addView(label(String.format(java.util.Locale.US, "Ratio %.2f (0.8–1.3 healthy) · usual %.1f mi", it, ld.milesAvg), ld.color, 9f)) }
                         addView(label(ld.advice, C.MUTED, 9f).apply { setPadding(0, dp(2), 0, 0) })
+                        addView(label("By stress" + (ld.ratio?.let { String.format(java.util.Locale.US, ": %.2f", it) } ?: ": building baseline"), ld.color, 10f, true).apply { setPadding(0, dp(4), 0, 0) })
+                        io.github.michealsizemore1.beyondstride.NutritionStore.acts(this@RunActivity)?.takeIf { it.has("acwr") }?.let { a ->
+                            val r = a.optDouble("acwr")
+                            val (c, l) = when { r < 0.8 -> 0xFF5DADE2.toInt() to "Low load"; r <= 1.3 -> 0xFF27AE60.toInt() to "Sweet spot"; r <= 1.5 -> 0xFFF39C12.toInt() to "Elevated"; else -> 0xFFE74C3C.toInt() to "Too much too soon" }
+                            addView(label(String.format(java.util.Locale.US, "By miles: %.2f · %s", r, l), c, 10f, true))
+                            addView(label(String.format(java.util.Locale.US, "%.1f mi/day (7d) vs %.1f (28d)", a.optDouble("acute"), a.optDouble("chronic")), C.DIM, 8f))
+                        }
                     })
                 }
 

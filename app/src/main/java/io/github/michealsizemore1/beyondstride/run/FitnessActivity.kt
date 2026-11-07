@@ -118,7 +118,7 @@ class FitnessActivity : Activity() {
                 val hrMax = RunSettings.hrMax(this); val hrRest = RunSettings.hrRest(this)
                 // Training load.
                 val ld = io.github.michealsizemore1.beyondstride.Insights.load(all)
-                col.addView(RunUi.section(this, "TRAINING LOAD (STRESS)"))
+                col.addView(RunUi.section(this, "TRAINING LOAD"))
                 col.addView(RunUi.card(this).apply {
                     addView(RunUi.text(ctx, ld.status, ld.color, 18f, true))
                     addView(RunUi.statGrid(ctx, listOfNotNull(
@@ -129,6 +129,18 @@ class FitnessActivity : Activity() {
                         ld.ratio?.let { Triple(String.format(java.util.Locale.US, "%.1f", ld.milesAvg), "usual weekly miles", Color.WHITE) },
                     )))
                     addView(RunUi.text(ctx, ld.advice, RunUi.MUTED, 12f).apply { setPadding(0, dp(6), 0, 0) })
+                    // The same 7-day vs usual ratio by miles, from every activity (Garmin, Stryd, manual too).
+                    addView(RunUi.text(ctx, "By stress (heart rate & power, BeyondStride runs)" + (ld.ratio?.let { String.format(java.util.Locale.US, ": %.2f", it) } ?: ": building baseline"), ld.color, 12f, true).apply { setPadding(0, dp(10), 0, 0) })
+                    ActivityStore.acwr(ctx)?.let { (r, ac, ch) ->
+                        val (c, l) = when { r < 0.8 -> 0xFF5DADE2.toInt() to "Low load (easing back)"; r <= 1.3 -> 0xFF27AE60.toInt() to "Sweet spot"; r <= 1.5 -> 0xFFF39C12.toInt() to "Elevated — watch for soreness"; else -> 0xFFE74C3C.toInt() to "High — classic \"too much too soon\" range" }
+                        addView(RunUi.text(ctx, String.format(java.util.Locale.US, "By miles (every activity): %.2f · %s", r, l), c, 12f, true).apply { setPadding(0, dp(4), 0, 0) })
+                        addView(RunUi.text(ctx, String.format(java.util.Locale.US, "Last 7 days’ daily average (%.1f mi/day) vs. last 28 days’ (%.1f mi/day).", ac, ch), RunUi.DIM, 11f))
+                        ld.ratio?.let { s -> when {
+                            s - r > 0.2 -> "Miles steady but stress rising — runs are getting harder."
+                            r - s > 0.2 -> "Miles rising faster than stress — mostly easy running."
+                            else -> null }?.let { addView(RunUi.text(ctx, it, Color.WHITE, 12f).apply { setPadding(0, dp(4), 0, 0) }) } }
+                    }
+                    addView(RunUi.text(ctx, "Estimates from your logged training — not a medical assessment. 0.8–1.3 is the healthy range.", RunUi.DIM, 10f).apply { setPadding(0, dp(4), 0, 0) })
                 })
                 // Zone 2 fitness: pace while HR is in Zone 2, run by run.
                 val z2 = all.mapNotNull { r -> io.github.michealsizemore1.beyondstride.Insights.zone2(r, hrMax, hrRest)?.let { r.optLong("start") to it } }.take(12)

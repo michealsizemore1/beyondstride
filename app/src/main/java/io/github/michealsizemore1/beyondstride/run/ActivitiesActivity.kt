@@ -70,8 +70,8 @@ class ActivitiesActivity : Activity() {
         plans.optJSONObject("current")?.let { todayWorkout(col, it, plans.optBoolean("collapsed")) }
         mileage(col, all); zones(col); shoes(col)
         uploadPlan(col)
-        // 📊 Run Metrics Summary — its own section, outside the collapsed log.
-        ActivityAnalysis(this, panels) { render() }.metrics(col, all)
+        // 📊 Run Metrics Summary, then 📈 Charts — their own sections, outside the collapsed log.
+        ActivityAnalysis(this, panels) { render() }.apply { metrics(col, all); charts(col, all) }
         // 🏃 Activities: collapsed each time the screen opens, like the Command Center's Activities section.
         col.addView(txt((if (logOpen) "▼" else "▶") + "  🏃 Activities" + (if (all.isNotEmpty()) "  (${all.size})" else ""), 0xFFE67E22.toInt(), 17f, true).apply {
             background = RunUi.rounded(RunUi.CARD, dp(10).toFloat()); setPadding(dp(12), dp(12), dp(12), dp(12))
@@ -109,8 +109,8 @@ class ActivitiesActivity : Activity() {
         col.addView(statsBox, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(10) })
         // Phase 4: the Command Center's analysis, in its order.
         ActivityAnalysis(this, panels) { render() }.apply {
-            // Charts together under the 12-week streak chart (12 weeks → 26 weeks → daily miles), then the rest.
-            streakLoad(col, all); volume(col, all); dailyMiles(col, all); acwr(col, all); prs(col, all); racePredictor(col, all)
+            // Charts are their own section (under Run Metrics Summary); Training Load Ratio is on Fitness now.
+            prs(col, all); racePredictor(col, all)
             cardioDrift(col, all); heatAcclimation(col, all); humidity(col, all)
         }
 

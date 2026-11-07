@@ -146,6 +146,16 @@ object ActivityStore {
         return o
     }
 
+    /** Training Load Ratio by miles (every activity): (ratio, 7-day mi/day, 28-day mi/day), or null. */
+    fun acwr(ctx: Context): Triple<Double, Double, Double>? {
+        if (fetchedAt(ctx) == 0L) return null
+        val today = java.time.LocalDate.now(); val daily = HashMap<String, Double>()
+        list(ctx).forEach { a -> val d = str(a, "date").take(10); daily[d] = (daily[d] ?: 0.0) + num(a, "distance") }
+        fun lastN(n: Int) = (0 until n).sumOf { daily[today.minusDays(it.toLong()).toString()] ?: 0.0 }
+        val acute = lastN(7) / 7; val chronic = lastN(28) / 28
+        return if (chronic > 0) Triple(acute / chronic, acute, chronic) else null
+    }
+
     /** Weekly Run Notes by Monday (with notes saved here on top). */
     fun weekNotes(ctx: Context): Map<String, String> {
         val out = HashMap<String, String>()

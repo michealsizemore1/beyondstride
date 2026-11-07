@@ -63,6 +63,12 @@ class ActivityAnalysis(private val act: Activity, private val open: MutableSet<S
     }
     private fun chart(box: LinearLayout, h: Int, setup: ActChart.() -> Unit) = box.addView(ActChart(act).apply(setup), LinearLayout.LayoutParams(MATCH_PARENT, dp(h)).apply { topMargin = dp(6) })
 
+    /** 📈 Charts: 12-week streak, 26-week volume and daily miles (collapsible). */
+    fun charts(col: LinearLayout, all: List<JSONObject>) {
+        if (!toggle(col, "charts", "📈 Charts  (12 weeks · 26 weeks · 60 days)")) return
+        streakLoad(col, all); volume(col, all); dailyMiles(col, all)
+    }
+
     // ── Streak + 12-week load ──
     fun streakLoad(col: LinearLayout, all: List<JSONObject>) {
         val thisMon = monday(today); val N = 12
