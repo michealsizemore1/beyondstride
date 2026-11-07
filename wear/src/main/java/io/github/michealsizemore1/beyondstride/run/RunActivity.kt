@@ -1202,7 +1202,7 @@ class RunActivity : Activity() {
     private fun showFluids(fresh: Boolean = true): Unit = overlay { col ->
         val N = io.github.michealsizemore1.beyondstride.Nutrition
         val H = io.github.michealsizemore1.beyondstride.Hydration
-        val date = io.github.michealsizemore1.beyondstride.Readiness.today()
+        val date = nutDay()
         val days = io.github.michealsizemore1.beyondstride.NutritionStore.days(this)
         val t = days.lastOrNull { it.date == date }
         if (fresh) {
@@ -1251,7 +1251,7 @@ class RunActivity : Activity() {
     private fun watchFluid(f: String, delta: Int = 0, value: Double = 0.0, redraw: Boolean = true) {
         val H = io.github.michealsizemore1.beyondstride.Hydration
         val S = io.github.michealsizemore1.beyondstride.NutritionStore
-        val date = io.github.michealsizemore1.beyondstride.Readiness.today()
+        val date = nutDay()
         val days = S.days(this)
         val cur = days.lastOrNull { it.date == date } ?: H.blank(date)
         var d = delta
@@ -1357,7 +1357,7 @@ class RunActivity : Activity() {
                 addView(label("${F.fmt(f.servings)} × ${f.servingLabel} · ${f.kcal} kcal", C.MUTED, 9f))
                 setOnClickListener {
                     val item = f.copy(id = F.newId(), meal = quickMeal)
-                    val date = io.github.michealsizemore1.beyondstride.Readiness.today()
+                    val date = nutDay()
                     val days = S.days(this@RunActivity)
                     val cur = days.lastOrNull { it.date == date } ?: io.github.michealsizemore1.beyondstride.Hydration.blank(date)
                     S.putLocal(this@RunActivity, (days.filter { it.date != date } + F.summarize(cur, cur.foods + item)).sortedBy { it.date })
@@ -1381,7 +1381,7 @@ class RunActivity : Activity() {
     /** Adds foods to today (shown at once) and sends them to the phone, which logs them and tells the Command Center. */
     private fun watchAddFoods(items: List<io.github.michealsizemore1.beyondstride.Food.Item>, done: String) {
         val F = io.github.michealsizemore1.beyondstride.Food; val S = io.github.michealsizemore1.beyondstride.NutritionStore
-        val date = io.github.michealsizemore1.beyondstride.Readiness.today()
+        val date = nutDay()
         val days = S.days(this)
         val cur = days.lastOrNull { it.date == date } ?: io.github.michealsizemore1.beyondstride.Hydration.blank(date)
         S.putLocal(this, (days.filter { it.date != date } + F.summarize(cur, cur.foods + items)).sortedBy { it.date })
@@ -1488,6 +1488,10 @@ class RunActivity : Activity() {
         col.addView(label("Back", C.MUTED, 13f, true).apply { setPadding(0, dp(12), 0, dp(4)); setOnClickListener { showNutrition() } })
     }
 
+    /** The day on the Nutrition screen (null = today). Fluids, weights and Quick add go to it. */
+    private var nutDate: String? = null
+    private fun nutDay() = nutDate ?: io.github.michealsizemore1.beyondstride.Readiness.today()
+
     private fun showNutrition() {
         overlayOpen = true; startBuilt = false
         val N = io.github.michealsizemore1.beyondstride.Nutrition
@@ -1499,10 +1503,26 @@ class RunActivity : Activity() {
             layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(6) }; build()
         })
         col.addView(label("Nutrition", Color.WHITE, 20f, true))
-        val t = N.today(days)
+        // Day stepping, like the phone (the watch keeps the last week).
+        val todayS = io.github.michealsizemore1.beyondstride.Readiness.today()
+        val shown = nutDay()
+        val have = (days.map { it.date } + todayS).distinct().sorted()
+        val idx = have.indexOf(shown)
+        col.addView(LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+            layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(4) }
+            fun arrow(tx: String, to: String?) = addView(label(tx, if (to != null) Color.BLACK else C.DIM, 16f, true).apply {
+                background = rounded(if (to != null) C.ACCENT else C.CARD, 14); setPadding(0, dp(3), 0, dp(4))
+                if (to != null) setOnClickListener { nutDate = if (to == todayS) null else to; showNutrition() } }, LinearLayout.LayoutParams(dp(34), WRAP_CONTENT))
+            arrow("‹", have.getOrNull(idx - 1))
+            addView(label(if (shown == todayS) "Today" else java.time.LocalDate.parse(shown).format(java.time.format.DateTimeFormatter.ofPattern("EEE, MMM d", java.util.Locale.US)), Color.WHITE, 12f, true),
+                LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
+            arrow("›", have.getOrNull(idx + 1))
+        })
+        val t = N.today(days, shown)
         box {
-            addView(label("TODAY", C.ACCENT, 11f, true))
-            if (t == null || t.count == 0) addView(label("No food logged today yet", C.MUTED, 11f))
+            addView(label(if (shown == todayS) "TODAY" else java.time.LocalDate.parse(shown).format(java.time.format.DateTimeFormatter.ofPattern("EEEE", java.util.Locale.US)).uppercase(), C.ACCENT, 11f, true))
+            if (t == null || t.count == 0) addView(label(if (shown == todayS) "No food logged today yet" else "No food logged this day", C.MUTED, 11f))
             else {
                 addView(label(N.kcal(t.cal) + " kcal", Color.WHITE, 20f, true))
                 if (t.target > 0) addView(label(if (t.left >= 0) "${N.kcal(t.left)} left of ${N.kcal(t.target)}" else "${N.kcal(-t.left)} over ${N.kcal(t.target)}",
@@ -1604,6 +1624,83 @@ class RunActivity : Activity() {
         root.addView(ScrollView(this).apply { isVerticalScrollBarEnabled = false; addView(col); requestFocus() })
     }
 
+    /** Activities (like the phone's tab, compact): today's plan workout, mileage, streak + load, records, recent activities. */
+    private var actPlanOpen = false
+    private fun showActivities() {
+        overlayOpen = true; startBuilt = false
+        val w = resources.displayMetrics.widthPixels
+        val col = column().apply { setPadding(w / 9, w / 8, w / 9, w / 5) }
+        fun box(build: LinearLayout.() -> Unit) = col.addView(LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL; setPadding(dp(12), dp(8), dp(12), dp(8)); background = rounded(C.CARD, 16)
+            layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(6) }; build()
+        })
+        val ORANGE = 0xFFE67E22.toInt()
+        col.addView(label("Activities", Color.WHITE, 20f, true))
+        val a = io.github.michealsizemore1.beyondstride.NutritionStore.acts(this)
+        if (a == null) col.addView(label("Open Activities on the phone once to send them here.", C.MUTED, 10f))
+        else {
+            col.addView(label("${a.optInt("count")} activities", C.MUTED, 10f))
+            // Training plan — today (tap to open / close).
+            a.optJSONObject("plan")?.let { p -> box {
+                background = rounded(0xFF2A2F5A.toInt(), 16)
+                addView(label((if (actPlanOpen) "▼ " else "▶ ") + "🏃 Plan · Week ${p.optInt("week")}, Day ${p.optInt("day")}", Color.WHITE, 11f, true))
+                p.optString("race").takeIf { it.isNotEmpty() }?.let { r -> try { val dd = java.time.temporal.ChronoUnit.DAYS.between(java.time.LocalDate.now(), java.time.LocalDate.parse(r)).toInt()
+                    if (dd >= 0) addView(label(if (dd == 0) "🏁 Race day!" else "🏁 $dd days to race day", 0xCCFFFFFF.toInt(), 9f)) } catch (e: Exception) { } }
+                if (actPlanOpen) addView(label(p.optString("text"), Color.WHITE, 10f).apply { gravity = Gravity.START; setPadding(0, dp(4), 0, 0) })
+                setOnClickListener { actPlanOpen = !actPlanOpen; showActivities() }
+            } }
+            // Mileage.
+            col.addView(label("MILEAGE", C.ACCENT, 11f, true).apply { setPadding(0, dp(8), 0, 0) })
+            val ms = a.optJSONArray("mileage")
+            if (ms != null) for (i in 0 until ms.length()) { val m = ms.getJSONObject(i); box {
+                addView(LinearLayout(this@RunActivity).apply { orientation = LinearLayout.HORIZONTAL
+                    addView(label(m.optString("t"), ORANGE, 11f, true).apply { gravity = Gravity.START }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
+                    addView(label(String.format(java.util.Locale.US, "%.1f mi", m.optDouble("mi")), Color.WHITE, 13f, true)) })
+                val min = m.optInt("min")
+                addView(label(listOfNotNull(m.optString("pace").ifEmpty { null }?.let { "$it/mi" }, m.optInt("w").takeIf { it > 0 }?.let { "$it W" },
+                    if (min > 0) (if (min < 60) "${min}m" else "${min / 60}h ${min % 60}m") else null).joinToString(" · ").ifEmpty { "—" }, C.MUTED, 9f))
+                val g = m.optDouble("goal")
+                if (g > 0) { val pct = Math.min(100, Math.round(m.optDouble("mi") / g * 100).toInt())
+                    addView(android.widget.ProgressBar(this@RunActivity, null, android.R.attr.progressBarStyleHorizontal).apply { max = 100; progress = pct
+                        progressTintList = android.content.res.ColorStateList.valueOf(if (pct >= 100) 0xFF27AE60.toInt() else ORANGE) }, LinearLayout.LayoutParams(MATCH_PARENT, dp(6)).apply { topMargin = dp(3) })
+                    addView(label(String.format(java.util.Locale.US, "%.1f / %s mi (%d%%)", m.optDouble("mi"), if (g == Math.floor(g)) g.toLong().toString() else g.toString(), pct), C.MUTED, 8f)) }
+            } }
+            // Streak and Training Load Ratio (miles).
+            box {
+                if (a.optInt("streak") > 0) addView(label("🔥 ${a.optInt("streak")}-week streak", ORANGE, 12f, true))
+                if (a.has("acwr")) { val r = a.optDouble("acwr")
+                    val (c, l) = when { r < 0.8 -> 0xFF5DADE2.toInt() to "Low load (easing back)"; r <= 1.3 -> 0xFF27AE60.toInt() to "Sweet spot"; r <= 1.5 -> 0xFFF39C12.toInt() to "Elevated — watch for soreness"; else -> 0xFFE74C3C.toInt() to "High — too much too soon" }
+                    addView(label("⚡ Training Load Ratio (miles)", C.MUTED, 9f, true).apply { setPadding(0, dp(3), 0, 0) })
+                    addView(label(String.format(java.util.Locale.US, "%.2f · %s", r, l), c, 12f, true))
+                    addView(label(String.format(java.util.Locale.US, "%.1f mi/day (7d) vs %.1f (28d)", a.optDouble("acute"), a.optDouble("chronic")), C.DIM, 8f)) }
+            }
+            // Personal Records.
+            a.optJSONArray("prs")?.takeIf { it.length() > 0 }?.let { prs -> box {
+                addView(label("🏆 PERSONAL RECORDS", C.ACCENT, 10f, true))
+                for (i in 0 until prs.length()) { val r = prs.getJSONObject(i)
+                    addView(LinearLayout(this@RunActivity).apply { orientation = LinearLayout.HORIZONTAL; setPadding(0, dp(2), 0, 0)
+                        addView(label(r.optString("l"), C.MUTED, 9f).apply { gravity = Gravity.START }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
+                        addView(label(r.optString("v"), ORANGE, 10f, true)) }) }
+            } }
+            // Recent activities.
+            col.addView(label("RECENT", C.ACCENT, 11f, true).apply { setPadding(0, dp(8), 0, 0) })
+            a.optJSONArray("recent")?.let { rs -> for (i in 0 until rs.length()) { val r = rs.getJSONObject(i); box {
+                addView(LinearLayout(this@RunActivity).apply { orientation = LinearLayout.HORIZONTAL
+                    addView(label(r.optString("title"), Color.WHITE, 11f, true).apply { gravity = Gravity.START; maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
+                    addView(label(r.optString("src"), C.DIM, 8f)) })
+                addView(label(try { java.time.LocalDate.parse(r.optString("date").take(10)).format(java.time.format.DateTimeFormatter.ofPattern("EEE, MMM d", java.util.Locale.US)) } catch (e: Exception) { r.optString("date") }, C.MUTED, 9f).apply { gravity = Gravity.START })
+                addView(label(listOfNotNull(r.optDouble("mi").takeIf { it > 0 }?.let { String.format(java.util.Locale.US, "%.2f mi", it) }, r.optString("dur").ifEmpty { null },
+                    r.optString("pace").ifEmpty { null }?.let { "$it/mi" }, r.optDouble("hr").takeIf { it > 0 }?.let { "${it.toInt()} bpm" }, r.optDouble("w").takeIf { it > 0 }?.let { "${it.toInt()} W" }).joinToString(" · "), Color.WHITE, 9f).apply { gravity = Gravity.START })
+            } } }
+        }
+        col.addView(label("Runs on this watch ▸", C.ACCENT, 12f, true).apply { setPadding(0, dp(10), 0, 0)
+            setOnClickListener { startActivity(Intent(this@RunActivity, RunHistoryActivity::class.java)) } })
+        col.addView(View(this).apply { setBackgroundColor(0x22FFFFFF) }, LinearLayout.LayoutParams(MATCH_PARENT, dp(1)).apply { topMargin = dp(10) })
+        col.addView(menuRow(4))
+        root.removeAllViews()
+        root.addView(ScrollView(this).apply { isVerticalScrollBarEnabled = false; addView(col); requestFocus() })
+    }
+
     /** Same tabs as the phone. [selected]: 0 Today, 1 Fitness, 2 Nutrition, 3 Plan, 4 Runs. */
     private fun menuRow(selected: Int) = LinearLayout(this).apply {
         orientation = LinearLayout.HORIZONTAL
@@ -1611,9 +1708,9 @@ class RunActivity : Activity() {
         listOf<Triple<String, String, () -> Unit>>(
             Triple("☀", "Today", { overlayOpen = false; startBuilt = false; renderStart() }),
             Triple("♥", "Fitness", { showFitness() }),
-            Triple("🍎", "Nutrition", { showNutrition() }),
+            Triple("🍎", "Nutrition", { nutDate = null; showNutrition() }),
             Triple("▦", "Plan", { showWorkoutPicker() }),
-            Triple("≡", "Runs", { startActivity(Intent(this@RunActivity, RunHistoryActivity::class.java)) }),
+            Triple("≡", "Activities", { showActivities() }),
         ).forEachIndexed { idx, (glyph, name, go) ->
             val on = idx == selected
             addView(column().apply {

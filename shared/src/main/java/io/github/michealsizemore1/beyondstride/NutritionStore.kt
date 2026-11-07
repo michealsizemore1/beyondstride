@@ -24,7 +24,7 @@ object NutritionStore {
         Thread {
             try {
                 val req = PutDataMapRequest.create(PATH).apply {
-                    dataMap.putString("json", json); dataMap.putString("quick", p(ctx).getString("quick", "[]") ?: "[]"); dataMap.putString("calc", p(ctx).getString("calc", "{}") ?: "{}"); dataMap.putString("mileage", p(ctx).getString("mileage", "") ?: ""); dataMap.putLong("at", System.currentTimeMillis()) }
+                    dataMap.putString("json", json); dataMap.putString("quick", p(ctx).getString("quick", "[]") ?: "[]"); dataMap.putString("calc", p(ctx).getString("calc", "{}") ?: "{}"); dataMap.putString("mileage", p(ctx).getString("mileage", "") ?: ""); dataMap.putString("acts", p(ctx).getString("acts", "") ?: ""); dataMap.putLong("at", System.currentTimeMillis()) }
                     .asPutDataRequest().setUrgent()
                 Tasks.await(Wearable.getDataClient(app).putDataItem(req))
             } catch (e: Exception) { }
@@ -38,7 +38,7 @@ object NutritionStore {
     /** Watch: data from the phone. */
     fun apply(ctx: Context, m: DataMap) {
         val s = m.getString("json") ?: return
-        p(ctx).edit().putString("days", s).putString("quick", m.getString("quick") ?: "[]").putString("calc", m.getString("calc") ?: "{}").putString("mileage", m.getString("mileage") ?: "").putLong("at", System.currentTimeMillis()).apply()
+        p(ctx).edit().putString("days", s).putString("quick", m.getString("quick") ?: "[]").putString("calc", m.getString("calc") ?: "{}").putString("mileage", m.getString("mileage") ?: "").putString("acts", m.getString("acts") ?: "").putLong("at", System.currentTimeMillis()).apply()
     }
 
     /** Phone: the watch's Quick add list (sent with the next save). */
@@ -72,6 +72,15 @@ object NutritionStore {
         p(ctx).edit().putString("mileage", json).apply()
         save(ctx, days(ctx))
     }
+    /** Phone: the watch's Activities screen (a small summary). Sent only when it changes (ignoring its time stamp). */
+    fun setActs(ctx: Context, o: org.json.JSONObject) {
+        val cmp = org.json.JSONObject(o.toString()).apply { remove("at") }.toString()
+        if (cmp == p(ctx).getString("actsCmp", "")) return
+        p(ctx).edit().putString("acts", o.toString()).putString("actsCmp", cmp).apply()
+        save(ctx, days(ctx))
+    }
+    /** Watch: that summary. */
+    fun acts(ctx: Context): org.json.JSONObject? = try { org.json.JSONObject(p(ctx).getString("acts", "") ?: "").takeIf { it.has("count") } } catch (e: Exception) { null }
     /** Watch: that mileage, if it's for the current week. */
     fun mileage(ctx: Context): org.json.JSONObject? = try { org.json.JSONObject(p(ctx).getString("mileage", "") ?: "").takeIf {
         it.optString("monday") == java.time.LocalDate.now().let { d -> d.minusDays((d.dayOfWeek.value - 1).toLong()) }.toString() } } catch (e: Exception) { null }

@@ -47,6 +47,7 @@ class ActivitiesActivity : Activity() {
         val ctx = this
         val all = S.list(this)
         S.mileage(this)?.let { io.github.michealsizemore1.beyondstride.NutritionStore.setMileage(this, it.week, it.runs, it.month) }   // the watch's This Week
+        S.watchSummary(this)?.let { io.github.michealsizemore1.beyondstride.NutritionStore.setActs(this, it) }   // the watch's Activities screen
         val col = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(16), dp(40), dp(16), dp(32)) }
         col.addView(txt("🏃 Activities", Color.WHITE, 26f, true))
 

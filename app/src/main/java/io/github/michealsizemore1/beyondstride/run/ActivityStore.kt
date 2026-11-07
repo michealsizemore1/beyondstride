@@ -93,6 +93,59 @@ object ActivityStore {
         return Mileage(mi(mon), runs, mi(m1))
     }
 
+    /**
+     * A small copy of the Activities tab for the watch: today's plan workout, the four mileage tiles with goals,
+     * streak, Training Load Ratio (miles), Personal Records and the 25 most recent activities.
+     */
+    fun watchSummary(ctx: Context): JSONObject? {
+        if (fetchedAt(ctx) == 0L) return null
+        val all = list(ctx); val today = java.time.LocalDate.now()
+        fun d(a: JSONObject) = try { java.time.LocalDate.parse(str(a, "date").take(10)) } catch (e: Exception) { null }
+        val mon = today.minusDays((today.dayOfWeek.value - 1).toLong())
+        val covered = all.filter { num(it, "distance") > 0 }.map { str(it, "date") }.toSet()
+        val ex = exMiles(ctx)
+        fun tile(t: String, from: java.time.LocalDate, to: java.time.LocalDate?, goal: Double): JSONObject {
+            val acts = all.filter { a -> d(a)?.let { !it.isBefore(from) && (to == null || it.isBefore(to)) } == true }
+            val mi = acts.sumOf { num(it, "distance") } + ex.filter { (ds, _) -> ds !in covered && ds >= from.toString() && (to == null || ds < to.toString()) }.values.sum()
+            val ps = acts.map { paceSec(str(it, "pace")) }.filter { it > 0 }; val pw = acts.map { num(it, "power") }.filter { it > 0 }
+            val mins = acts.sumOf { durSec(str(it, "duration")) } / 60
+            return JSONObject().put("t", t).put("mi", Math.round(mi * 10) / 10.0).put("pace", if (ps.isEmpty()) "" else ps.average().toInt().let { "${it / 60}:${String.format("%02d", it % 60)}" })
+                .put("w", if (pw.isEmpty()) 0 else Math.round(pw.average()).toInt()).put("min", mins).put("goal", goal)
+        }
+        val o = JSONObject().put("count", all.size).put("at", System.currentTimeMillis())
+        o.put("mileage", org.json.JSONArray().put(tile("This Week", mon, null, goal(ctx, "week"))).put(tile("Last Week", mon.minusWeeks(1), mon, 0.0))
+            .put(tile("Month to Date", today.withDayOfMonth(1), null, goal(ctx, "month"))).put(tile("Year to Date", today.withDayOfYear(1), null, goal(ctx, "year"))))
+        // Streak (weeks in a row with an activity) and ACWR from miles.
+        var streak = 0; while (streak < 52) { val w0 = mon.minusWeeks(streak.toLong()); if (all.none { a -> d(a)?.let { !it.isBefore(w0) && it.isBefore(w0.plusWeeks(1)) } == true }) break; streak++ }
+        o.put("streak", streak)
+        val daily = HashMap<java.time.LocalDate, Double>(); all.forEach { a -> d(a)?.let { dd -> daily[dd] = (daily[dd] ?: 0.0) + num(a, "distance") } }
+        fun lastN(n: Int) = (0 until n).sumOf { daily[today.minusDays(it.toLong())] ?: 0.0 }
+        val acute = lastN(7) / 7; val chronic = lastN(28) / 28
+        if (chronic > 0) o.put("acwr", Math.round(acute / chronic * 100) / 100.0).put("acute", Math.round(acute * 10) / 10.0).put("chronic", Math.round(chronic * 10) / 10.0)
+        // Personal Records.
+        val pr = org.json.JSONArray(); val fmt = java.time.format.DateTimeFormatter.ofPattern("MMM d, yy", java.util.Locale.US)
+        fun best(lbl: String, sel: (JSONObject) -> Double, lower: Boolean, show: (JSONObject) -> String) =
+            all.filter { sel(it) > 0 }.let { l -> if (lower) l.minByOrNull(sel) else l.maxByOrNull(sel) }?.let { pr.put(JSONObject().put("l", lbl).put("v", show(it)).put("d", d(it)?.format(fmt) ?: "")) }
+        best("Longest Run", { num(it, "distance") }, false) { String.format("%.2f mi", num(it, "distance")) }
+        best("Fastest Pace", { paceSec(str(it, "pace")).toDouble() }, true) { str(it, "pace") + "/mi" }
+        best("Peak Avg Power", { num(it, "power") }, false) { "${Math.round(num(it, "power"))}W" }
+        best("Most Elev Gain", { num(it, "elevGain") }, false) { String.format(java.util.Locale.US, "%,d ft", Math.round(num(it, "elevGain"))) }
+        best("Most Calories", { num(it, "calories") }, false) { String.format(java.util.Locale.US, "%,d cal", Math.round(num(it, "calories"))) }
+        o.put("prs", pr)
+        // Today's training-plan workout.
+        PlanStore.data(ctx).optJSONObject("current")?.let { p ->
+            val st = p.optString("startDate")
+            val dn = try { java.time.temporal.ChronoUnit.DAYS.between(java.time.LocalDate.parse(st), today).toInt() + 1 } catch (e: Exception) { 0 }
+            if (dn >= 1) o.put("plan", JSONObject().put("week", (dn + 6) / 7).put("day", (dn - 1) % 7 + 1).put("text", PlanStore.workoutFor(p, today.toString()).take(1500)).put("race", p.optString("race")))
+        }
+        // Recent activities.
+        val rec = org.json.JSONArray()
+        all.sortedByDescending { str(it, "date") }.take(25).forEach { a -> rec.put(JSONObject().put("date", str(a, "date")).put("title", str(a, "title").ifEmpty { str(a, "type") }).put("type", str(a, "type"))
+            .put("mi", num(a, "distance")).put("dur", str(a, "duration")).put("pace", str(a, "pace")).put("hr", num(a, "heartRate")).put("w", num(a, "power")).put("src", sourceLabel(str(a, "source")))) }
+        o.put("recent", rec)
+        return o
+    }
+
     /** Weekly Run Notes by Monday (with notes saved here on top). */
     fun weekNotes(ctx: Context): Map<String, String> {
         val out = HashMap<String, String>()

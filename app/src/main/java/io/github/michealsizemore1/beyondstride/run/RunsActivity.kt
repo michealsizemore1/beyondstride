@@ -232,6 +232,7 @@ open class RunsActivity : Activity() {
         // Same miles as Activities → Mileage (every source, Mon–Sun); BeyondStride's own runs until Activities arrive.
         val am = ActivityStore.mileage(this)
         am?.let { io.github.michealsizemore1.beyondstride.NutritionStore.setMileage(this, it.week, it.runs, it.month) }
+        ActivityStore.watchSummary(this)?.let { io.github.michealsizemore1.beyondstride.NutritionStore.setActs(this, it) }
         col.addView(RunUi.section(this, "THIS WEEK"))
         col.addView(RunUi.card(this).apply {
             addView(RunUi.statGrid(ctx, listOf(
