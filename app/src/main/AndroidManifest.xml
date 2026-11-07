@@ -57,6 +57,18 @@
             android:windowSoftInputMode="adjustResize"
             android:taskAffinity="io.github.michealsizemore1.beyondstride.running" />
         <activity
+            android:name=".run.ActivitiesActivity"
+            android:exported="false"
+            android:label="Activities"
+            android:windowSoftInputMode="adjustPan"
+            android:taskAffinity="io.github.michealsizemore1.beyondstride.running" />
+        <activity
+            android:name=".run.ActivityEditActivity"
+            android:exported="false"
+            android:label="Activity"
+            android:windowSoftInputMode="adjustResize"
+            android:taskAffinity="io.github.michealsizemore1.beyondstride.running" />
+        <activity
             android:name=".run.NutritionToolsActivity"
             android:exported="false"
             android:label="Nutrition"

@@ -80,7 +80,7 @@ object RunUi {
             Triple("Fitness", "♥", FitnessActivity::class.java),
             Triple("Nutrition", "🍎", NutritionActivity::class.java),
             Triple("Plan", "▦", WorkoutsActivity::class.java),
-            Triple("Runs", "≡", AllRunsActivity::class.java),
+            Triple("Activities", "≡", ActivitiesActivity::class.java),
         )
         val bar = LinearLayout(act).apply {
             orientation = LinearLayout.HORIZONTAL
