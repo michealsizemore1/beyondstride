@@ -1451,6 +1451,40 @@ class RunActivity : Activity() {
         col.addView(label("Back", C.MUTED, 13f, true).apply { setPadding(0, dp(12), 0, dp(4)); setOnClickListener { showNutrition() } })
     }
 
+    /** Calorie target breakdown and settings (from the Today card's Target line). */
+    private fun showCalorieTarget(): Unit = overlay { col ->
+        val CT = io.github.michealsizemore1.beyondstride.CalorieTarget
+        val c = io.github.michealsizemore1.beyondstride.NutritionStore.calc(this)
+        val t = io.github.michealsizemore1.beyondstride.Nutrition.today(io.github.michealsizemore1.beyondstride.NutritionStore.days(this))
+        col.addView(LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_HORIZONTAL
+
+                val st = io.github.michealsizemore1.beyondstride.CalorieTarget.Settings.from(c.optJSONObject("settings"))
+                addView(label("Calorie target", Color.WHITE, 16f, true))
+                addView(label("${CT.kcal(c.optInt("target"))} kcal", 0xFF5FD38D.toInt(), 18f, true))
+                addView(label("Range ${CT.kcal(maxOf(1200, c.optInt("target") - c.optInt("range")))}–${CT.kcal(c.optInt("target") + c.optInt("range"))}", C.MUTED, 9f))
+                c.optString("preset").takeIf { it.isNotEmpty() }?.let { addView(label(it, 0xFF93C5FD.toInt(), 9f, true)) }
+                addView(label("${CT.kcal(c.optInt("base"))} rest + ${CT.kcal(c.optInt("replace"))} workout" +
+                    c.optInt("goalAdjust").let { g -> if (g != 0) (if (g > 0) " + " else " − ") + kotlin.math.abs(g) + " goal" else "" }, Color.WHITE, 9f))
+                t?.takeIf { it.count > 0 }?.let { d -> addView(label("Logged ${CT.kcal(d.cal)} · " + if (d.cal > c.optInt("target")) "over ${CT.kcal(d.cal - c.optInt("target"))}" else "${CT.kcal(c.optInt("target") - d.cal)} left", C.MUTED, 9f)) }
+                fun send(s: io.github.michealsizemore1.beyondstride.CalorieTarget.Settings) {
+                    RunSync.tellPhone(this@RunActivity, "/cmd/calset", s.json().toString().toByteArray()) { ok -> flash(if (ok) "Saved — updating…" else "Phone not connected") }
+                }
+                addView(LinearLayout(this@RunActivity).apply {
+                    orientation = LinearLayout.HORIZONTAL; setPadding(0, dp(5), 0, 0)
+                    addView(label((CT.GOALS.firstOrNull { it.first == st.goal }?.second ?: "Maintain").replace(" weight", ""), Color.WHITE, 10f, true).apply {
+                        background = rounded(0xFF26302C.toInt(), 12); setPadding(0, dp(4), 0, dp(4))
+                        setOnClickListener { val i = CT.GOALS.indexOfFirst { it.first == st.goal }; send(st.copy(goal = CT.GOALS[(i + 1) % CT.GOALS.size].first)) }
+                    }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f).apply { marginEnd = dp(4) })
+                    addView(label("Replace ${st.refuel}%", Color.WHITE, 10f, true).apply {
+                        background = rounded(0xFF26302C.toInt(), 12); setPadding(0, dp(4), 0, dp(4))
+                        setOnClickListener { val i = CT.REFUELS.indexOf(st.refuel); send(st.copy(refuel = CT.REFUELS[(i + 1) % CT.REFUELS.size])) }
+                    }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
+                })
+        })
+        col.addView(label("Back", C.MUTED, 13f, true).apply { setPadding(0, dp(12), 0, dp(4)); setOnClickListener { showNutrition() } })
+    }
+
     private fun showNutrition() {
         overlayOpen = true; startBuilt = false
         val N = io.github.michealsizemore1.beyondstride.Nutrition
@@ -1473,6 +1507,12 @@ class RunActivity : Activity() {
                 val (pp, cp, fp) = t.ratios()
                 addView(label(N.macros(t) + "  ($pp/$cp/$fp%)", C.MUTED, 10f))
                 if (t.active > 0) addView(label("Target includes ${N.kcal(t.active)} active kcal", C.DIM, 9f))
+            }
+            io.github.michealsizemore1.beyondstride.NutritionStore.calc(this@RunActivity).takeIf { it.has("target") }?.let { c ->
+                val g = c.optInt("goalAdjust")
+                addView(label("Target ${N.kcal(c.optInt("target"))}" + (if (c.optString("preset").isNotEmpty()) " · hard day" else if (c.optInt("replace") > 0) " · runs +${c.optInt("replace")}" else "") +
+                    (if (g != 0) (if (g > 0) " · +" else " · −") + kotlin.math.abs(g) else "") + " ▸", C.ACCENT, 10f, true).apply {
+                    setPadding(0, dp(3), 0, 0); setOnClickListener { showCalorieTarget() } })
             }
             // Fluids and post-run rehydration, part of Today. Tap to add a cup or enter weights.
             addView(label("Fluids ${t?.waterOz ?: 0} oz", Color.WHITE, 12f, true).apply { setPadding(0, dp(4), 0, 0) })
@@ -1501,35 +1541,6 @@ class RunActivity : Activity() {
             layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(6) }
             setOnClickListener { quickMeal = defaultMeal(); quickQuery = ""; quickOnline = null; showQuickAdd() }
         })
-        // DAILY CALORIE TARGET — same as the phone; tap Goal or Replace to change (saved on the phone and the Command Center).
-        run {
-            val CT = io.github.michealsizemore1.beyondstride.CalorieTarget
-            val c = io.github.michealsizemore1.beyondstride.NutritionStore.calc(this)
-            if (c.has("target")) box {
-                val st = io.github.michealsizemore1.beyondstride.CalorieTarget.Settings.from(c.optJSONObject("settings"))
-                addView(label("CALORIE TARGET", C.ACCENT, 11f, true))
-                addView(label("${CT.kcal(c.optInt("target"))} kcal", 0xFF5FD38D.toInt(), 18f, true))
-                addView(label("Range ${CT.kcal(maxOf(1200, c.optInt("target") - c.optInt("range")))}–${CT.kcal(c.optInt("target") + c.optInt("range"))}", C.MUTED, 9f))
-                c.optString("preset").takeIf { it.isNotEmpty() }?.let { addView(label(it, 0xFF93C5FD.toInt(), 9f, true)) }
-                addView(label("${CT.kcal(c.optInt("base"))} rest + ${CT.kcal(c.optInt("replace"))} workout" +
-                    c.optInt("goalAdjust").let { g -> if (g != 0) (if (g > 0) " + " else " − ") + kotlin.math.abs(g) + " goal" else "" }, Color.WHITE, 9f))
-                t?.takeIf { it.count > 0 }?.let { d -> addView(label("Logged ${CT.kcal(d.cal)} · " + if (d.cal > c.optInt("target")) "over ${CT.kcal(d.cal - c.optInt("target"))}" else "${CT.kcal(c.optInt("target") - d.cal)} left", C.MUTED, 9f)) }
-                fun send(s: io.github.michealsizemore1.beyondstride.CalorieTarget.Settings) {
-                    RunSync.tellPhone(this@RunActivity, "/cmd/calset", s.json().toString().toByteArray()) { ok -> flash(if (ok) "Saved — updating…" else "Phone not connected") }
-                }
-                addView(LinearLayout(this@RunActivity).apply {
-                    orientation = LinearLayout.HORIZONTAL; setPadding(0, dp(5), 0, 0)
-                    addView(label((CT.GOALS.firstOrNull { it.first == st.goal }?.second ?: "Maintain").replace(" weight", ""), Color.WHITE, 10f, true).apply {
-                        background = rounded(0xFF26302C.toInt(), 12); setPadding(0, dp(4), 0, dp(4))
-                        setOnClickListener { val i = CT.GOALS.indexOfFirst { it.first == st.goal }; send(st.copy(goal = CT.GOALS[(i + 1) % CT.GOALS.size].first)) }
-                    }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f).apply { marginEnd = dp(4) })
-                    addView(label("Replace ${st.refuel}%", Color.WHITE, 10f, true).apply {
-                        background = rounded(0xFF26302C.toInt(), 12); setPadding(0, dp(4), 0, dp(4))
-                        setOnClickListener { val i = CT.REFUELS.indexOf(st.refuel); send(st.copy(refuel = CT.REFUELS[(i + 1) % CT.REFUELS.size])) }
-                    }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
-                })
-            }
-        }
         // Same tools as the phone (the photo and AI ones need the phone's camera / key).
         col.addView(LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL

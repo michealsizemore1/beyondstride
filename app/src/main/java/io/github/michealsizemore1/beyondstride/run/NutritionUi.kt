@@ -44,8 +44,21 @@ object NutritionUi {
                     (if (low > 0) " · $low low" else "") + (if (high > 0) " · $high high" else ""),
                     N.statusColor(when { nd.microScore >= 7 -> "Met"; nd.microScore >= 5 -> "Close"; else -> "Low" }), 12f, true).apply { setPadding(0, dp(4), 0, 0) })
             }
-            if (big && nd.active > 0) col.addView(RunUi.text(ctx, "Target includes ${N.kcal(nd.active)} active kcal", RunUi.DIM, 11f))
         }
+        // One line for the calorie target; tap for the breakdown and settings.
+        if (big) try {
+            val r = CalorieTargets.result(ctx)
+            val parts = mutableListOf("Target ${N.kcal(r.target)}")
+            r.preset?.let { parts += it.label.substringAfter(": ").substringBefore(" —").let { k -> if (it.label.startsWith("Tomorrow")) "$k tomorrow" else "$k day" } }
+            val rep = Math.round(r.active * r.refuel).toInt()
+            if (rep > 0 && r.preset == null) parts += "runs +${N.kcal(rep)}"
+            if (r.goalAdjust != 0) parts += (io.github.michealsizemore1.beyondstride.CalorieTarget.GOALS.firstOrNull { it.first == CalorieTargets.settings(ctx).goal }?.second?.lowercase() ?: "goal") +
+                (if (r.goalAdjust > 0) " +" else " −") + kotlin.math.abs(r.goalAdjust)
+            col.addView(RunUi.text(ctx, parts.joinToString(" · ") + "  ▸", RunUi.ACCENT, 12f, true).apply {
+                setPadding(0, dp(4), 0, dp(2))
+                setOnClickListener { act.startActivity(android.content.Intent(act, NutritionToolsActivity::class.java).putExtra("mode", "target")) }
+            })
+        } catch (e: Exception) { }
         fluids(act, col, nd, refresh, chips)
         if (withMicros && nd != null && nd.micros.isNotEmpty()) micros(act, col, nd)
     }
