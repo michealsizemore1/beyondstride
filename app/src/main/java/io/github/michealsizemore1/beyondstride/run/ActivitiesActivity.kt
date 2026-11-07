@@ -670,7 +670,16 @@ class ActivitiesActivity : Activity() {
         val up = which == "upcoming"
         col.addView(RunUi.card(this).apply {
             layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(12) }
-            addView(txt(if (up) "📅 Upcoming Training Plan" else "📋 Active Training Plan", 0xFFE67E22.toInt(), 16f, true))
+            // Collapsed each time the screen opens; tap the title to open it.
+            val key = "plan_$which"; val isOpen = key in panels
+            addView(txt((if (isOpen) "▼  " else "▶  ") + (if (up) "📅 Upcoming Training Plan" else "📋 Active Training Plan"), 0xFFE67E22.toInt(), 16f, true).apply {
+                setOnClickListener { if (isOpen) panels.remove(key) else panels.add(key); render() } })
+            if (!isOpen) {
+                val m = listOfNotNull(plan.optString("type").ifEmpty { null }, plan.optInt("weeks").takeIf { it > 0 }?.let { "$it-week plan" },
+                    if (up) "Starts " + fmtDate(plan.optString("startDate")) else null).joinToString(" • ")
+                if (m.isNotEmpty()) addView(txt(m, RunUi.MUTED, 12f).apply { setPadding(0, dp(4), 0, 0) })
+                return@apply
+            }
             addView(FlowLayout(ctx, dp(6), dp(6)).apply {
                 setPadding(0, dp(8), 0, dp(4))
                 pbtn(this, "🪄 Clean Up Formatting", 0xFFD35400.toInt()) { aiPlan(which, plan, null) }
