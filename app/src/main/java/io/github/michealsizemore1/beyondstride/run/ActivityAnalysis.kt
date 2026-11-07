@@ -55,9 +55,9 @@ class ActivityAnalysis(private val act: Activity, private val open: MutableSet<S
                         addView(txt(l, RunUi.MUTED, 10f, true).apply { gravity = Gravity.CENTER })
                         d?.let { addView(txt(it, RunUi.DIM, 10f).apply { gravity = Gravity.CENTER }) }
                         extra.getOrNull(r * 3 + i)?.let { addView(txt(it, 0xFFFCD34D.toInt(), 10f, true).apply { gravity = Gravity.CENTER }) }
-                    }, LinearLayout.LayoutParams(0, MATCH_PARENT, 1f).apply { if (i < 2) marginEnd = dp(6) })
+                    }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f).apply { if (i < 2) marginEnd = dp(6) })
                 }
-                repeat(3 - row.size) { addView(android.view.View(act), LinearLayout.LayoutParams(0, 1, 1f)) }
+                repeat(3 - row.size) { addView(android.view.View(act), LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f).apply { marginEnd = dp(6) }) }
             })
         }
     }
@@ -124,11 +124,11 @@ class ActivityAnalysis(private val act: Activity, private val open: MutableSet<S
         val b = best ?: return
         val baseD = S.num(b, "distance"); val baseT = bestP * baseD
         if (baseD <= 0 || baseT <= 0) return
+        if (!toggle(col, "race", "🏁 Estimated Race Times")) return
         fun clock(sec0: Double): String { val sec = Math.round(sec0); val h = sec / 3600; val m = (sec % 3600) / 60; val s = sec % 60
             return (if (h > 0) "$h:" else "") + (if (h > 0) String.format(Locale.US, "%02d", m) else "$m") + ":" + String.format(Locale.US, "%02d", s) }
         fun riegel(mi: Double) = baseT * Math.pow(mi / baseD, 1.06)
-        val box = card(col)
-        box.addView(head("🏁 Estimated Race Times"))
+        val box = card(col, 4)
         grid(box, listOf("Mile" to 1.0, "2 Mile" to 2.0, "5K" to 3.10686, "10K" to 6.21371, "Half" to 13.1094, "Marathon" to 26.2188).map { (l, mi) -> Triple(clock(riegel(mi)), l, null) })
         box.addView(txt("Projected with the Riegel formula from your fastest logged pace in the last 60 days (${S.str(b, "pace")}/mi over ${f1(baseD)} mi on ${S.str(b, "date")}). An estimate, not a guarantee — actual race-day performance depends on training, terrain, and conditions.", RunUi.DIM, 11f).apply { setPadding(0, dp(6), 0, dp(10)) })
         box.addView(head("🏔️ Ultra Distances"))
@@ -350,8 +350,8 @@ class ActivityAnalysis(private val act: Activity, private val open: MutableSet<S
             row.forEachIndexed { i, (l, v, s) -> addView(LinearLayout(act).apply { orientation = LinearLayout.VERTICAL
                 background = RunUi.rounded(0xFF26302C.toInt(), dp(8).toFloat()); setPadding(dp(10), dp(8), dp(10), dp(8))
                 addView(txt(l, 0xFFD4A84B.toInt(), 11f, true)); addView(txt(v, ORANGE, 16f, true)); if (s.isNotEmpty()) addView(txt(s, RunUi.MUTED, 11f)) },
-                LinearLayout.LayoutParams(0, MATCH_PARENT, 1f).apply { if (i == 0) marginEnd = dp(6) }) }
-            if (row.size == 1) addView(android.view.View(act), LinearLayout.LayoutParams(0, 1, 1f))
+                LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f).apply { if (i == 0) marginEnd = dp(6) }) }
+            if (row.size == 1) addView(android.view.View(act), LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
         }) }
         box.addView(txt("⭐ Runs ≥ 10 Miles (${runs10.size})", ORANGE, 13f, true).apply { setPadding(0, dp(12), 0, dp(4)) })
         if (runs10.isEmpty()) box.addView(txt("No runs ≥ 10 miles yet.", RunUi.MUTED, 12f))
