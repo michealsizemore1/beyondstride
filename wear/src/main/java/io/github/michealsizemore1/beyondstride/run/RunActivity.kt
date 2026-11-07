@@ -1173,14 +1173,14 @@ class RunActivity : Activity() {
                     if (t.left >= 0) 0xFF5FD38D.toInt() else 0xFFF2C94C.toInt(), 12f, true))
                 addView(label(N.macros(t), C.MUTED, 11f))
             }
-        }
-        if (t != null && (t.waterOz > 0 || N.rehydrate(t) != null)) box {
-            addView(label("💧 HYDRATION", N.WATER, 11f, true))
-            addView(label("${t.waterOz} oz today", Color.WHITE, 15f, true))
-            addView(label(N.fluids(t), C.MUTED, 10f))
-            N.rehydrate(t)?.let { h ->
-                addView(label("Lost ${String.format(java.util.Locale.US, "%.1f", h.lostLb)} lb on the run → ~${h.targetOz} oz", Color.WHITE, 11f, true).apply { setPadding(0, dp(4), 0, 0) })
-                addView(label(if (h.needOz == 0) "Caught up ✓" else "Drink ~${h.needOz} oz more", if (h.needOz == 0) 0xFF5FD38D.toInt() else N.WATER, 13f, true))
+            // Fluids and post-run rehydration, part of Today.
+            if (t != null && (t.waterOz > 0 || N.rehydrate(t) != null)) {
+                addView(label("Fluids ${t.waterOz} oz", Color.WHITE, 12f, true).apply { setPadding(0, dp(4), 0, 0) })
+                if (t.water + t.sportsOz + t.otherOz > 0) addView(label(N.fluids(t), C.MUTED, 10f))
+                N.rehydrate(t)?.let { h ->
+                    addView(label("Lost ${String.format(java.util.Locale.US, "%.1f", h.lostLb)} lb → ~${h.targetOz} oz", C.MUTED, 10f))
+                    addView(label(if (h.needOz == 0) "Rehydrated ✓" else "Drink ~${h.needOz} oz more", if (h.needOz == 0) 0xFF5FD38D.toInt() else N.WATER, 12f, true))
+                }
             }
         }
         if (t != null && t.micros.isNotEmpty()) box {

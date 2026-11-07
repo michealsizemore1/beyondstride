@@ -183,10 +183,21 @@ open class RunsActivity : Activity() {
                 val N = io.github.michealsizemore1.beyondstride.Nutrition
                 val nd = N.today(io.github.michealsizemore1.beyondstride.NutritionStore.days(ctx))
                 addView(RunUi.text(ctx, "FUEL", RunUi.ACCENT, 11f, true))
+                // Fluids and post-run rehydration, part of Fuel (right under the macros).
+                fun fluidLines() {
+                    if (nd == null || (nd.waterOz <= 0 && N.rehydrate(nd) == null)) return
+                    addView(RunUi.text(ctx, "Fluids ${nd.waterOz} oz" + (if (nd.water + nd.sportsOz + nd.otherOz > 0)
+                        "  (water ${nd.water} · sports ${nd.sportsOz} · other ${nd.otherOz})" else ""), RunUi.MUTED, 12f).apply { setPadding(0, dp(2), 0, 0) })
+                    N.rehydrate(nd)?.let { h ->
+                        addView(RunUi.text(ctx, "Lost ${String.format(Locale.US, "%.1f", h.lostLb)} lb on the run → ~${h.targetOz} oz to rehydrate · " +
+                            (if (h.needOz == 0) "caught up ✓" else "drink ~${h.needOz} oz more"),
+                            if (h.needOz == 0) 0xFF5FD38D.toInt() else N.WATER, 12f, true).apply { setPadding(0, dp(2), 0, 0) })
+                    }
+                }
                 when {
                     !NutritionSync.ready(ctx) -> addView(RunUi.text(ctx, "Set up LiveTrack first — nutrition is shared through the same database.", RunUi.MUTED, 12f))
                     NutritionSync.lastError(ctx) == "rules" -> addView(RunUi.text(ctx, "Update your Firebase rules to share nutrition (Settings → LiveTrack → copy rules).", 0xFFF2C94C.toInt(), 12f))
-                    nd == null || nd.count == 0 -> addView(RunUi.text(ctx, "Nothing logged today · tap to open 🍎 Nutrition", RunUi.MUTED, 13f))
+                    nd == null || nd.count == 0 -> { addView(RunUi.text(ctx, "Nothing logged today · tap to open 🍎 Nutrition", RunUi.MUTED, 13f)); fluidLines() }
                     else -> {
                         val over = nd.target > 0 && nd.left < 0
                         addView(RunUi.text(ctx, N.line(nd), if (over) 0xFFF2C94C.toInt() else Color.WHITE, 16f, true))
@@ -197,6 +208,7 @@ open class RunsActivity : Activity() {
                         })
                         val (pp, cp, fp) = nd.ratios()
                         addView(RunUi.text(ctx, N.macros(nd) + "  ($pp / $cp / $fp %)", RunUi.MUTED, 12f))
+                        fluidLines()
                         // Micronutrients: score + every nutrient as a small tile (lowest first), colored by status.
                         if (nd.micros.isNotEmpty()) {
                             addView(RunUi.text(ctx, "MICRONUTRIENTS  " + String.format(Locale.US, "%.1f", nd.microScore) + "/10 · " + nd.microLabel(),
@@ -219,29 +231,6 @@ open class RunsActivity : Activity() {
                                 })
                             }
                         }
-                    }
-                }
-                // Hydration: fluids today and, after a run, how much to drink to replace the weight lost.
-                if (nd != null && (nd.waterOz > 0 || N.rehydrate(nd) != null)) {
-                    addView(RunUi.text(ctx, "💧 HYDRATION  ${nd.waterOz} oz today", N.WATER, 12f, true).apply { setPadding(0, dp(10), 0, dp(2)) })
-                    addView(RunUi.text(ctx, N.fluids(nd) + " (excl. caffeine)", RunUi.MUTED, 12f))
-                    N.rehydrate(nd)?.let { h ->
-                        addView(LinearLayout(ctx).apply {
-                            orientation = LinearLayout.VERTICAL
-                            background = RunUi.rounded(0xFF26302C.toInt(), dp(8).toFloat())
-                            setPadding(dp(8), dp(6), dp(8), dp(6))
-                            layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(4) }
-                            addView(RunUi.text(ctx, "Lost ${String.format(Locale.US, "%.1f", h.lostLb)} lb on the run → ~${h.targetOz} oz to rehydrate",
-                                Color.WHITE, 13f, true))
-                            addView(RunUi.text(ctx, if (h.needOz == 0) "Had ${h.hadOz} oz — you're caught up ✓" else "Had ${h.hadOz} oz — drink about ${h.needOz} oz more",
-                                if (h.needOz == 0) 0xFF5FD38D.toInt() else N.WATER, 12f, true))
-                            if (h.hadOz < h.targetOz) addView(android.widget.ProgressBar(ctx, null, android.R.attr.progressBarStyleHorizontal).apply {
-                                max = h.targetOz.coerceAtLeast(1); progress = h.hadOz.coerceAtMost(max)
-                                progressTintList = android.content.res.ColorStateList.valueOf(N.WATER)
-                                layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, dp(6)).apply { topMargin = dp(4) }
-                            })
-                            addView(RunUi.text(ctx, "16–24 oz per lb lost (ACSM) · wake-up ${nd.weight} → post-run ${nd.postWeight} lb", RunUi.DIM, 10f).apply { setPadding(0, dp(3), 0, 0) })
-                        })
                     }
                 }
                 setOnClickListener { RunUi.openNutrition(this@RunsActivity) }
