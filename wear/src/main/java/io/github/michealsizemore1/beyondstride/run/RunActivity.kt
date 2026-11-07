@@ -1274,6 +1274,8 @@ class RunActivity : Activity() {
 
     /** Quick add (watch): a favorite or recent food into a meal; the phone logs it and tells the Command Center. */
     private var quickMeal = "snack"
+    private var quickQuery = ""
+    private var quickOnline: List<io.github.michealsizemore1.beyondstride.Food.Item>? = null
     private fun defaultMeal() = when (java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)) {
         in 4..10 -> "breakfast"; in 11..14 -> "lunch"; in 17..21 -> "dinner"; else -> "snack" }
 
@@ -1288,10 +1290,43 @@ class RunActivity : Activity() {
             layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(6) }
             setOnClickListener { quickMeal = N.MEAL_ORDER[(N.MEAL_ORDER.indexOf(quickMeal) + 1) % N.MEAL_ORDER.size]; showQuickAdd() }
         })
+        // Search: type or speak (the watch keyboard has a mic). Searches your foods; 🔎 Online asks Open Food Facts.
+        col.addView(android.widget.EditText(this).apply {
+            hint = "🔍 Search foods"; setText(quickQuery); setSingleLine(); gravity = Gravity.CENTER
+            setTextColor(Color.WHITE); setHintTextColor(C.MUTED); textSize = RunViews.scaled(this@RunActivity, 12f)
+            background = rounded(C.CARD, 18); setPadding(dp(10), dp(6), dp(10), dp(6))
+            imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH
+            layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(6) }
+            setOnEditorActionListener { v, _, _ -> quickQuery = v.text.toString().trim(); quickOnline = null; showQuickAdd(); true }
+        })
+        if (quickQuery.isNotEmpty()) col.addView(LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(5) }
+            addView(label("🔎 Online", Color.WHITE, 11f, true).apply {
+                background = rounded(C.CARD, 14); setPadding(0, dp(5), 0, dp(5))
+                setOnClickListener {
+                    quickOnline = emptyList(); flash("Searching…")
+                    val q = quickQuery; val m = quickMeal
+                    Thread {
+                        val r = io.github.michealsizemore1.beyondstride.FoodSearch.search(q, m)
+                        runOnUiThread { if (overlayOpen) { quickOnline = r; if (r.isEmpty()) flash("Nothing found online"); showQuickAdd() } }
+                    }.start()
+                }
+            }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f).apply { marginEnd = dp(4) })
+            addView(label("✕ Clear", C.MUTED, 11f, true).apply {
+                background = rounded(C.CARD, 14); setPadding(0, dp(5), 0, dp(5))
+                setOnClickListener { quickQuery = ""; quickOnline = null; showQuickAdd() }
+            }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
+        })
         val seen = HashSet<String>()
         val recent = S.days(this).sortedByDescending { it.date }.flatMap { it.foods.reversed() }
-        val foods = (S.quick(this) + recent).filter { it.name.isNotBlank() && seen.add(it.name.lowercase().trim()) }.take(40)
-        if (foods.isEmpty()) col.addView(label("Log a few foods on the phone first — favorites and recent foods show here.", C.MUTED, 10f))
+        fun hit(n: String) = quickQuery.split(" ").filter { it.isNotBlank() }.all { n.contains(it, ignoreCase = true) }
+        val foods = quickOnline?.takeIf { it.isNotEmpty() }
+            ?: if (quickQuery.isEmpty()) (S.quick(this) + recent).filter { it.name.isNotBlank() && seen.add(it.name.lowercase().trim()) }.take(40)
+            else (S.quick(this) + recent + S.library(this)).filter { it.name.isNotBlank() && hit(it.name) && seen.add(it.name.lowercase().trim()) }.take(30)
+        if (quickOnline?.isNotEmpty() == true) col.addView(label("OPEN FOOD FACTS", C.ACCENT, 9f, true).apply { setPadding(0, dp(6), 0, 0) })
+        if (foods.isEmpty()) col.addView(label(if (quickQuery.isEmpty()) "Log a few foods on the phone first — favorites and recent foods show here."
+            else "No match in your foods — tap 🔎 Online.", C.MUTED, 10f).apply { setPadding(0, dp(6), 0, 0) })
         foods.forEach { f ->
             col.addView(LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL; background = rounded(C.CARD, 14); setPadding(dp(10), dp(6), dp(10), dp(6))
@@ -1360,7 +1395,7 @@ class RunActivity : Activity() {
         col.addView(label("🍎 Quick add food ▸", Color.BLACK, 13f, true).apply {
             background = rounded(C.ACCENT, 20); setPadding(0, dp(8), 0, dp(8))
             layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(6) }
-            setOnClickListener { quickMeal = defaultMeal(); showQuickAdd() }
+            setOnClickListener { quickMeal = defaultMeal(); quickQuery = ""; quickOnline = null; showQuickAdd() }
         })
         if (t != null && t.count > 0) box {
             addView(label("MEALS", C.ACCENT, 11f, true))

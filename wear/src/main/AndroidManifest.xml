@@ -77,6 +77,7 @@
                 <data android:scheme="wear" android:host="*" android:path="/nights" />
                 <data android:scheme="wear" android:host="*" android:pathPrefix="/torun/" />
                 <data android:scheme="wear" android:host="*" android:path="/nutrition" />
+                <data android:scheme="wear" android:host="*" android:path="/foodlib" />
                 <data android:scheme="wear" android:host="*" android:path="/checks" />
                 <data android:scheme="wear" android:host="*" android:pathPrefix="/course/" />
                 <data android:scheme="wear" android:host="*" android:pathPrefix="/deleted/" />

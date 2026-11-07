@@ -47,6 +47,23 @@ object NutritionStore {
         p(ctx).edit().putString("quick", json).apply()
         save(ctx, days(ctx))
     }
+    const val LIB_PATH = "/foodlib"
+    /** Phone: your food database, sent to the watch (separate item so the daily data stays small). */
+    fun setLibrary(ctx: Context, json: String) {
+        if (json == p(ctx).getString("libSent", "")) return
+        p(ctx).edit().putString("libSent", json).apply()
+        val app = ctx.applicationContext
+        Thread {
+            try {
+                val req = PutDataMapRequest.create(LIB_PATH).apply { dataMap.putString("json", json); dataMap.putLong("at", System.currentTimeMillis()) }.asPutDataRequest()
+                Tasks.await(Wearable.getDataClient(app).putDataItem(req))
+            } catch (e: Exception) { }
+        }.start()
+    }
+    /** Watch: the food database from the phone. */
+    fun applyLibrary(ctx: Context, m: DataMap) { m.getString("json")?.let { p(ctx).edit().putString("lib", it).apply() } }
+    fun library(ctx: Context) = try { Food.parseList(org.json.JSONArray(p(ctx).getString("lib", "[]"))) } catch (e: Exception) { emptyList() }
+
     /** Watch: foods for Quick add. */
     fun quick(ctx: Context) = try { Food.parseList(org.json.JSONArray(p(ctx).getString("quick", "[]"))) } catch (e: Exception) { emptyList() }
 }

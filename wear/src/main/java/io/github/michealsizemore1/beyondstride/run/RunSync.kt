@@ -88,6 +88,9 @@ object RunSync {
                     val nr = com.google.android.gms.tasks.Tasks.await(dc.getDataItems(Uri.parse("wear://*" + io.github.michealsizemore1.beyondstride.NutritionStore.PATH)))
                     nr.map { DataMapItem.fromDataItem(it).dataMap }.maxByOrNull { it.getLong("at") }?.let { io.github.michealsizemore1.beyondstride.NutritionStore.apply(app, it) }
                     nr.release()
+                    val lr = com.google.android.gms.tasks.Tasks.await(dc.getDataItems(Uri.parse("wear://*" + io.github.michealsizemore1.beyondstride.NutritionStore.LIB_PATH)))
+                    lr.map { DataMapItem.fromDataItem(it).dataMap }.maxByOrNull { it.getLong("at") }?.let { io.github.michealsizemore1.beyondstride.NutritionStore.applyLibrary(app, it) }
+                    lr.release()
                 } catch (e: Exception) { }
                 for (path in listOf(io.github.michealsizemore1.beyondstride.ReadinessSync.NIGHTS, io.github.michealsizemore1.beyondstride.ReadinessSync.CHECKS)) {
                     val r = com.google.android.gms.tasks.Tasks.await(dc.getDataItems(Uri.parse("wear://*$path")))
@@ -219,6 +222,10 @@ class RunSettingsListener : WearableListenerService() {
             // Nutrition totals from the phone (Command Center).
             if (e.type == DataEvent.TYPE_CHANGED && e.dataItem.uri.path == io.github.michealsizemore1.beyondstride.NutritionStore.PATH) {
                 io.github.michealsizemore1.beyondstride.NutritionStore.apply(this, DataMapItem.fromDataItem(e.dataItem).dataMap)
+                return@forEach
+            }
+            if (e.type == DataEvent.TYPE_CHANGED && e.dataItem.uri.path == io.github.michealsizemore1.beyondstride.NutritionStore.LIB_PATH) {
+                io.github.michealsizemore1.beyondstride.NutritionStore.applyLibrary(this, DataMapItem.fromDataItem(e.dataItem).dataMap)
                 return@forEach
             }
             // Runs copied from the phone (after a restore): keep any the watch doesn't already have.
