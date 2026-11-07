@@ -1382,6 +1382,75 @@ class RunActivity : Activity() {
         col.addView(label("Back", C.MUTED, 13f, true).apply { setPadding(0, dp(10), 0, dp(4)); setOnClickListener { showNutrition() } })
     }
 
+    /** Adds foods to today (shown at once) and sends them to the phone, which logs them and tells the Command Center. */
+    private fun watchAddFoods(items: List<io.github.michealsizemore1.beyondstride.Food.Item>, done: String) {
+        val F = io.github.michealsizemore1.beyondstride.Food; val S = io.github.michealsizemore1.beyondstride.NutritionStore
+        val date = io.github.michealsizemore1.beyondstride.Readiness.today()
+        val days = S.days(this)
+        val cur = days.lastOrNull { it.date == date } ?: io.github.michealsizemore1.beyondstride.Hydration.blank(date)
+        S.putLocal(this, (days.filter { it.date != date } + F.summarize(cur, cur.foods + items)).sortedBy { it.date })
+        var sent = 0; var failed = false
+        items.forEach { item ->
+            val msg = org.json.JSONObject().put("date", date).put("op", "foodAdd").put("item", F.toJson(item)).toString()
+            RunSync.tellPhone(this, "/cmd/food", msg.toByteArray()) { ok ->
+                sent++; if (!ok) failed = true
+                if (sent == items.size) flash(if (failed) "Phone not connected — not saved" else done)
+            }
+        }
+    }
+
+    /** Meal ideas (20/60/20), same as the phone. */
+    private var ideasFilter = "all"
+    private fun showMealIdeas(): Unit = overlay { col ->
+        val MI = io.github.michealsizemore1.beyondstride.MealIdeas
+        val N = io.github.michealsizemore1.beyondstride.Nutrition
+        col.addView(label("Meal ideas", Color.WHITE, 17f, true))
+        col.addView(label("20% protein · 60% carbs · 20% fat", C.MUTED, 9f))
+        col.addView(label((if (ideasFilter == "all") "All meals" else N.MEAL_NAMES[ideasFilter] ?: ideasFilter) + "  ▾", Color.BLACK, 12f, true).apply {
+            background = rounded(C.ACCENT, 18); setPadding(0, dp(5), 0, dp(5))
+            layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(5) }
+            setOnClickListener { val o = listOf("all", "breakfast", "lunch", "dinner", "snack"); ideasFilter = o[(o.indexOf(ideasFilter) + 1) % o.size]; showMealIdeas() }
+        })
+        MI.READY.filter { ideasFilter == "all" || it.meal == ideasFilter }.forEach { m ->
+            col.addView(LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL; background = rounded(C.CARD, 14); setPadding(dp(10), dp(6), dp(10), dp(6))
+                layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(5) }
+                addView(label(m.label, Color.WHITE, 11f, true))
+                addView(label("${N.MEAL_NAMES[m.meal]} · ${Math.round(m.kcal)} kcal", C.MUTED, 9f))
+                addView(label(m.parts.joinToString(" · ") { it.name }, C.DIM, 8f))
+                addView(label("＋ Log", C.ACCENT, 11f, true))
+                setOnClickListener { watchAddFoods(m.items(), "Logged ${m.label}"); showNutrition() }
+            })
+        }
+        col.addView(label("Back", C.MUTED, 13f, true).apply { setPadding(0, dp(12), 0, dp(4)); setOnClickListener { showNutrition() } })
+    }
+
+    /** Copy day: yesterday's foods (everything or one meal) onto today. */
+    private fun showCopyDay(): Unit = overlay { col ->
+        val N = io.github.michealsizemore1.beyondstride.Nutrition
+        val F = io.github.michealsizemore1.beyondstride.Food
+        val days = io.github.michealsizemore1.beyondstride.NutritionStore.days(this).filter { it.foods.isNotEmpty() && it.date != io.github.michealsizemore1.beyondstride.Readiness.today() }
+            .sortedByDescending { it.date }.take(5)
+        col.addView(label("Copy to today", Color.WHITE, 17f, true))
+        if (days.isEmpty()) col.addView(label("No earlier logged days on the watch yet.", C.MUTED, 10f))
+        days.forEach { d ->
+            val dd = java.time.LocalDate.parse(d.date)
+            val name = if (dd == java.time.LocalDate.now().minusDays(1)) "Yesterday" else dd.dayOfWeek.name.take(3).lowercase().replaceFirstChar { it.uppercase() } + " " + dd.monthValue + "/" + dd.dayOfMonth
+            col.addView(label(name.uppercase(), C.ACCENT, 9f, true).apply { setPadding(0, dp(8), 0, 0) })
+            (listOf("all") + N.MEAL_ORDER.filter { m -> d.foods.any { it.meal == m } }).forEach { m ->
+                val items = d.foods.filter { m == "all" || it.meal == m }
+                col.addView(LinearLayout(this).apply {
+                    orientation = LinearLayout.VERTICAL; background = rounded(C.CARD, 14); setPadding(dp(10), dp(5), dp(10), dp(5))
+                    layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(4) }
+                    addView(label(if (m == "all") "Everything" else N.MEAL_NAMES[m] ?: m, Color.WHITE, 11f, true))
+                    addView(label("${items.size} foods · ${N.kcal(items.sumOf { it.kcal })} kcal", C.MUTED, 9f))
+                    setOnClickListener { watchAddFoods(items.map { it.copy(id = F.newId()) }, "Copied ${items.size} foods"); showNutrition() }
+                })
+            }
+        }
+        col.addView(label("Back", C.MUTED, 13f, true).apply { setPadding(0, dp(12), 0, dp(4)); setOnClickListener { showNutrition() } })
+    }
+
     private fun showNutrition() {
         overlayOpen = true; startBuilt = false
         val N = io.github.michealsizemore1.beyondstride.Nutrition
@@ -1431,6 +1500,15 @@ class RunActivity : Activity() {
             background = rounded(C.ACCENT, 20); setPadding(0, dp(8), 0, dp(8))
             layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(6) }
             setOnClickListener { quickMeal = defaultMeal(); quickQuery = ""; quickOnline = null; showQuickAdd() }
+        })
+        // Same tools as the phone (the photo and AI ones need the phone's camera / key).
+        col.addView(LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(5) }
+            addView(label("🥗 Ideas", Color.WHITE, 11f, true).apply { background = rounded(0xFF059669.toInt(), 14); setPadding(0, dp(6), 0, dp(6)); setOnClickListener { showMealIdeas() } },
+                LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f).apply { marginEnd = dp(4) })
+            addView(label("📅 Copy day", Color.WHITE, 11f, true).apply { background = rounded(0xFF16A085.toInt(), 14); setPadding(0, dp(6), 0, dp(6)); setOnClickListener { showCopyDay() } },
+                LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
         })
         if (t != null && t.count > 0) box {
             addView(label("MEALS", C.ACCENT, 11f, true))

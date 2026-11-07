@@ -38,6 +38,10 @@ object AiFood {
         return o.optJSONArray("content")?.optJSONObject(0)?.optString("text")?.trim() ?: ""
     }
 
+    /** A plain question → the answer text (Fuel AI). Call off the main thread. */
+    fun askText(ctx: Context, prompt: String, maxTokens: Int = 3000) =
+        ask(ctx, "claude-haiku-4-5-20251001", maxTokens, JSONArray().put(JSONObject().put("type", "text").put("text", prompt)))
+
     private fun json(text: String): JSONObject? = try { JSONObject(text) } catch (e: Exception) {
         Regex("\\{[\\s\\S]*\\}").find(text)?.value?.let { try { JSONObject(it) } catch (e2: Exception) { null } }
     }

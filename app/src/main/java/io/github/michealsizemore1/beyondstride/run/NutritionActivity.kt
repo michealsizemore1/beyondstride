@@ -35,6 +35,30 @@ class NutritionActivity : Activity() {
         col.addView(RunUi.section(this, "TODAY"))
         col.addView(RunUi.card(this).apply { NutritionUi.today(this@NutritionActivity, this, withMicros = false, big = true) { render() } })
 
+        // Tools — the Command Center's six buttons, same colors.
+        run {
+            fun add(action: String) = startActivity(android.content.Intent(ctx, FoodAddActivity::class.java).putExtra("meal", FoodUi.mealNow()).putExtra("action", action))
+            fun tools(mode: String) = startActivity(android.content.Intent(ctx, NutritionToolsActivity::class.java).putExtra("mode", mode))
+            val tiles = listOf(
+                Triple("📷 Camera", 0xFFE67E22.toInt()) { add("camera") }, Triple("🖼 Upload", 0xFFC0640F.toInt()) { add("upload") },
+                Triple("▥ Barcode", 0xFF0F766E.toInt()) { add("barcode") }, Triple("🥗 Meal Ideas", 0xFF059669.toInt()) { tools("ideas") },
+                Triple("🧠 Fuel AI", 0xFF8E44AD.toInt()) { tools("fuel") }, Triple("📅 Copy Day", 0xFF16A085.toInt()) { FoodUi.copyDay(this@NutritionActivity) { render() } },
+            )
+            tiles.chunked(3).forEach { row ->
+                col.addView(LinearLayout(ctx).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(8) }
+                    row.forEachIndexed { i, (t, c, go) ->
+                        addView(RunUi.text(ctx, t, Color.WHITE, 14f, true).apply {
+                            gravity = Gravity.CENTER; maxLines = 1; background = RunUi.rounded(c, dp(12).toFloat())
+                            setPadding(dp(4), dp(12), dp(4), dp(12)); setOnClickListener { go() }
+                        }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f).apply { if (i < 2) marginEnd = dp(6) })
+                    }
+                })
+            }
+            col.addView(RunUi.text(ctx, "Camera and Upload read a nutrition label; Camera, Upload and Fuel AI use your Anthropic key.", RunUi.DIM, 10f).apply { setPadding(dp(2), dp(4), 0, 0) })
+        }
+
         // Micronutrients.
         if (t != null && t.micros.isNotEmpty()) {
             col.addView(RunUi.section(this, "MICRONUTRIENTS"))

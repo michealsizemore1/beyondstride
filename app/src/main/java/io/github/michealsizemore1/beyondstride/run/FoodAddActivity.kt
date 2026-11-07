@@ -30,6 +30,10 @@ class FoodAddActivity : Activity() {
         meal = intent.getStringExtra("meal") ?: "snack"
         build()
         Thread { if (FoodLibrary.refresh(this)) runOnUiThread { if (!isFinishing) fill() } }.start()
+        // Opened from a Nutrition tile: go straight to the camera, a picture, or the barcode scanner.
+        if (b == null) when (intent.getStringExtra("action")) {
+            "camera" -> takePhoto(); "upload" -> choosePhoto(); "barcode" -> scan()
+        }
     }
 
     private fun dp(v: Int) = RunUi.dp(this, v)
@@ -208,18 +212,23 @@ class FoodAddActivity : Activity() {
     private fun labelPhoto() {
         if (needKey()) return
         android.app.AlertDialog.Builder(this).setTitle("Nutrition label")
-            .setItems(arrayOf("Take a photo", "Choose a picture")) { _, which ->
-                if (which == 0) {
-                    val dir = java.io.File(cacheDir, "photos").apply { mkdirs() }
-                    val f = java.io.File(dir, "label.jpg")
-                    val uri = androidx.core.content.FileProvider.getUriForFile(this, "$packageName.files", f)
-                    photoUri = uri
-                    try {
-                        startActivityForResult(android.content.Intent(android.provider.MediaStore.ACTION_IMAGE_CAPTURE).putExtra(android.provider.MediaStore.EXTRA_OUTPUT, uri)
-                            .addFlags(android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION or android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION), 41)
-                    } catch (e: Exception) { Toast.makeText(this, "No camera app", Toast.LENGTH_SHORT).show() }
-                } else startActivityForResult(android.content.Intent(android.content.Intent.ACTION_GET_CONTENT).setType("image/*"), 42)
-            }.show()
+            .setItems(arrayOf("Take a photo", "Choose a picture")) { _, which -> if (which == 0) takePhoto() else choosePhoto() }.show()
+    }
+
+    private fun takePhoto() {
+        if (needKey()) return
+        val dir = java.io.File(cacheDir, "photos").apply { mkdirs() }
+        val uri = androidx.core.content.FileProvider.getUriForFile(this, "$packageName.files", java.io.File(dir, "label.jpg"))
+        photoUri = uri
+        try {
+            startActivityForResult(android.content.Intent(android.provider.MediaStore.ACTION_IMAGE_CAPTURE).putExtra(android.provider.MediaStore.EXTRA_OUTPUT, uri)
+                .addFlags(android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION or android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION), 41)
+        } catch (e: Exception) { Toast.makeText(this, "No camera app", Toast.LENGTH_SHORT).show() }
+    }
+
+    private fun choosePhoto() {
+        if (needKey()) return
+        startActivityForResult(android.content.Intent(android.content.Intent.ACTION_GET_CONTENT).setType("image/*"), 42)
     }
 
     @Deprecated("Activity result")
