@@ -56,6 +56,8 @@ object NutritionSync {
             val before = Nutrition.json(NutritionStore.days(ctx))
             sp.edit().putString("err", "").apply()
             NutritionStore.save(ctx, days)
+            FoodLibrary.refresh(ctx)
+            FoodLibrary.quickToWatch(ctx)
             Nutrition.json(days.takeLast(21)) != before
         } catch (e: Exception) { sp.edit().putString("err", "offline").apply(); false }
     }

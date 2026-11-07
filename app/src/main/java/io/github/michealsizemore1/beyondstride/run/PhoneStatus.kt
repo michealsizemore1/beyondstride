@@ -74,6 +74,7 @@ object PhoneStatus {
             }
             // Watch finished a morning check: send last night's sleep (needs background access to Health Connect).
             "/cmd/fluid" -> HydrationSync.fromWatch(ctx, data)
+            "/cmd/food" -> HydrationSync.foodFromWatch(ctx, data)
             "/cmd/sleep" -> Thread { SleepData.refresh(ctx.applicationContext, 7) }.start()
             "/cmd/livestart" -> Live.started(ctx)
             "/cmd/livealert" -> Live.alert(ctx, String(data))

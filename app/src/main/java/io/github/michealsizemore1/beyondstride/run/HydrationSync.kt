@@ -25,6 +25,23 @@ object HydrationSync {
         Thread { flush(app) }.start()
     }
 
+    /** A food added, changed (servings / meal) or removed — here or on the watch. */
+    fun food(ctx: Context, op: String, item: io.github.michealsizemore1.beyondstride.Food.Item, date: String = Readiness.today()) {
+        val app = ctx.applicationContext
+        synchronized(Hydration) {
+            val days = NutritionStore.days(app)
+            Hydration.recordFood(app, days.lastOrNull { it.date == date }, date, op, item)
+            NutritionStore.save(app, Hydration.overlay(app, days))
+        }
+        Thread { flush(app) }.start()
+    }
+
+    /** From the watch: {"date":…, "op":…, "item":{…}}. */
+    fun foodFromWatch(ctx: Context, data: ByteArray) = try {
+        val o = JSONObject(String(data))
+        food(ctx, o.getString("op"), io.github.michealsizemore1.beyondstride.Food.fromJson(o.getJSONObject("item")), o.optString("date").ifEmpty { Readiness.today() })
+    } catch (e: Exception) { }
+
     /** From the watch: "date|f|delta|value". */
     fun fromWatch(ctx: Context, data: ByteArray) {
         val c = Hydration.decode(String(data)) ?: return
@@ -39,7 +56,11 @@ object HydrationSync {
         for (c in Hydration.changes(ctx).filter { it.id == null }) {
             try {
                 val body = JSONObject().put("date", c.date).put("f", c.f).put("at", c.at)
-                if (c.f in Hydration.FLUIDS) body.put("d", c.d) else body.put("v", c.v)
+                when {
+                    c.f in Hydration.FOOD_OPS -> body.put("x", JSONObject(c.x ?: "{}"))
+                    c.f in Hydration.FLUIDS -> body.put("d", c.d)
+                    else -> body.put("v", c.v)
+                }
                 val conn = (URL(base(ctx) + ".json").openConnection() as HttpURLConnection).apply {
                     requestMethod = "POST"; doOutput = true; connectTimeout = 12_000; readTimeout = 15_000
                     setRequestProperty("Content-Type", "application/json")

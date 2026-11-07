@@ -30,6 +30,8 @@ object Nutrition {
         val water: Int = 0, val sportsOz: Int = 0, val otherOz: Int = 0,
         /** Wake-up and post-run weight (lb), 0 when not entered. */
         val weight: Double = 0.0, val postWeight: Double = 0.0,
+        /** Every food with its serving and per-serving values (for the food log). */
+        val foods: List<Food.Item> = emptyList(),
     ) {
         fun microLabel() = when { microScore >= 9 -> "Excellent"; microScore >= 7 -> "Good"; microScore >= 5 -> "Fair"; microScore >= 3 -> "Low"; else -> "Poor" }
         /** Lowest first (Low, then High, Close, Met), like the Command Center's breakdown. */
@@ -55,6 +57,15 @@ object Nutrition {
                 items += Item(it.optString("meal"), it.optString("name"), it.optInt("cal"), it.optDouble("prot", 0.0), it.optDouble("carbs", 0.0), it.optDouble("fat", 0.0))
             }
         }
+        // Full foods: saved here as "foods"; from the Command Center as each item's "x".
+        val foods = o.optJSONArray("foods")?.let { Food.parseList(it) } ?: run {
+            val a = o.optJSONArray("items")
+            if (a == null) emptyList() else (0 until a.length()).mapNotNull { i -> a.optJSONObject(i)?.let { it ->
+                it.optJSONObject("x")?.let { x -> Food.fromJson(x, null) }
+                    ?: Food.Item("old$i", it.optString("meal", "snack"), it.optString("name"), "1 serving", 1.0,
+                        it.optDouble("cal", 0.0), it.optDouble("prot", 0.0), it.optDouble("fat", 0.0), it.optDouble("carbs", 0.0))
+            } }
+        }
         val micros = ArrayList<Micro>()
         o.optJSONArray("micros")?.let { a ->
             for (i in 0 until a.length()) a.optJSONObject(i)?.let {
@@ -64,7 +75,7 @@ object Nutrition {
         return Day(date, o.optInt("cal"), o.optDouble("prot", 0.0), o.optDouble("carbs", 0.0), o.optDouble("fat", 0.0),
             o.optDouble("fiber", 0.0), o.optInt("sodium"), o.optInt("waterOz"), o.optInt("target"), o.optInt("range"), o.optInt("active"),
             meals, items, o.optInt("count", items.size), o.optLong("updated"), micros, o.optDouble("microScore", 0.0),
-            o.optInt("water"), o.optInt("sportsOz"), o.optInt("otherOz"), o.optDouble("weight", 0.0), o.optDouble("postWeight", 0.0))
+            o.optInt("water"), o.optInt("sportsOz"), o.optInt("otherOz"), o.optDouble("weight", 0.0), o.optDouble("postWeight", 0.0), foods)
     }
 
     /** Firebase's {"2026-11-06": {...}, ...} (or null) → days, oldest first. */
@@ -81,6 +92,7 @@ object Nutrition {
                 .put("meals", JSONObject().apply { d.meals.forEach { (k, v) -> put(k, v) } })
                 .put("items", JSONArray().apply { d.items.forEach { put(JSONObject().put("meal", it.meal).put("name", it.name).put("cal", it.cal).put("prot", it.prot).put("carbs", it.carbs).put("fat", it.fat)) } })
                 .put("microScore", d.microScore)
+                .put("foods", Food.listJson(d.foods))
                 .put("water", d.water).put("sportsOz", d.sportsOz).put("otherOz", d.otherOz).put("weight", d.weight).put("postWeight", d.postWeight)
                 .put("micros", JSONArray().apply { d.micros.forEach { put(JSONObject().put("n", it.name).put("f", it.field).put("v", it.value).put("t", it.target).put("mx", it.max).put("u", it.unit)) } }))
         }

@@ -17,12 +17,14 @@ object NutritionStore {
 
     /** Saves (phone, after reading Firebase) and sends to the watch. */
     fun save(ctx: Context, days: List<Nutrition.Day>) {
-        val json = Nutrition.json(days.takeLast(21))
-        p(ctx).edit().putString("days", json).putLong("at", System.currentTimeMillis()).apply()
+        val json21 = Nutrition.json(days.takeLast(21))
+        p(ctx).edit().putString("days", json21).putLong("at", System.currentTimeMillis()).apply()
+        val json = Nutrition.json(days.takeLast(8))   // the watch shows a week (keeps the transfer small)
         val app = ctx.applicationContext
         Thread {
             try {
-                val req = PutDataMapRequest.create(PATH).apply { dataMap.putString("json", json); dataMap.putLong("at", System.currentTimeMillis()) }
+                val req = PutDataMapRequest.create(PATH).apply {
+                    dataMap.putString("json", json); dataMap.putString("quick", p(ctx).getString("quick", "[]") ?: "[]"); dataMap.putLong("at", System.currentTimeMillis()) }
                     .asPutDataRequest().setUrgent()
                 Tasks.await(Wearable.getDataClient(app).putDataItem(req))
             } catch (e: Exception) { }
@@ -36,6 +38,15 @@ object NutritionStore {
     /** Watch: data from the phone. */
     fun apply(ctx: Context, m: DataMap) {
         val s = m.getString("json") ?: return
-        p(ctx).edit().putString("days", s).putLong("at", System.currentTimeMillis()).apply()
+        p(ctx).edit().putString("days", s).putString("quick", m.getString("quick") ?: "[]").putLong("at", System.currentTimeMillis()).apply()
     }
+
+    /** Phone: the watch's Quick add list (sent with the next save). */
+    fun setQuick(ctx: Context, json: String) {
+        if (json == p(ctx).getString("quick", "")) return
+        p(ctx).edit().putString("quick", json).apply()
+        save(ctx, days(ctx))
+    }
+    /** Watch: foods for Quick add. */
+    fun quick(ctx: Context) = try { Food.parseList(org.json.JSONArray(p(ctx).getString("quick", "[]"))) } catch (e: Exception) { emptyList() }
 }

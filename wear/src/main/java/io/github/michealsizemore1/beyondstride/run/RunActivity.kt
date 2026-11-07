@@ -1272,6 +1272,46 @@ class RunActivity : Activity() {
         if (redraw) showFluids(false)
     }
 
+    /** Quick add (watch): a favorite or recent food into a meal; the phone logs it and tells the Command Center. */
+    private var quickMeal = "snack"
+    private fun defaultMeal() = when (java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)) {
+        in 4..10 -> "breakfast"; in 11..14 -> "lunch"; in 17..21 -> "dinner"; else -> "snack" }
+
+    private fun showQuickAdd(): Unit = overlay { col ->
+        val N = io.github.michealsizemore1.beyondstride.Nutrition
+        val F = io.github.michealsizemore1.beyondstride.Food
+        val S = io.github.michealsizemore1.beyondstride.NutritionStore
+        col.addView(label("Quick add", Color.WHITE, 17f, true))
+        // Meal: tap to change.
+        col.addView(label("${N.MEAL_NAMES[quickMeal] ?: quickMeal}  ▾", Color.BLACK, 13f, true).apply {
+            background = rounded(C.ACCENT, 18); setPadding(0, dp(6), 0, dp(6))
+            layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(6) }
+            setOnClickListener { quickMeal = N.MEAL_ORDER[(N.MEAL_ORDER.indexOf(quickMeal) + 1) % N.MEAL_ORDER.size]; showQuickAdd() }
+        })
+        val seen = HashSet<String>()
+        val recent = S.days(this).sortedByDescending { it.date }.flatMap { it.foods.reversed() }
+        val foods = (S.quick(this) + recent).filter { it.name.isNotBlank() && seen.add(it.name.lowercase().trim()) }.take(40)
+        if (foods.isEmpty()) col.addView(label("Log a few foods on the phone first — favorites and recent foods show here.", C.MUTED, 10f))
+        foods.forEach { f ->
+            col.addView(LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL; background = rounded(C.CARD, 14); setPadding(dp(10), dp(6), dp(10), dp(6))
+                layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(5) }
+                addView(label(f.name, Color.WHITE, 11f, true))
+                addView(label("${F.fmt(f.servings)} × ${f.servingLabel} · ${f.kcal} kcal", C.MUTED, 9f))
+                setOnClickListener {
+                    val item = f.copy(id = F.newId(), meal = quickMeal)
+                    val date = io.github.michealsizemore1.beyondstride.Readiness.today()
+                    val days = S.days(this@RunActivity)
+                    val cur = days.lastOrNull { it.date == date } ?: io.github.michealsizemore1.beyondstride.Hydration.blank(date)
+                    S.putLocal(this@RunActivity, (days.filter { it.date != date } + F.summarize(cur, cur.foods + item)).sortedBy { it.date })
+                    val msg = org.json.JSONObject().put("date", date).put("op", "foodAdd").put("item", F.toJson(item)).toString()
+                    RunSync.tellPhone(this@RunActivity, "/cmd/food", msg.toByteArray()) { ok -> flash(if (ok) "Added ${f.name}" else "Phone not connected — not saved") }
+                }
+            })
+        }
+        col.addView(label("Back", C.MUTED, 13f, true).apply { setPadding(0, dp(12), 0, dp(4)); setOnClickListener { showNutrition() } })
+    }
+
     private fun showNutrition() {
         overlayOpen = true; startBuilt = false
         val N = io.github.michealsizemore1.beyondstride.Nutrition
@@ -1317,11 +1357,17 @@ class RunActivity : Activity() {
                 addView(label("${m.pct.toInt()}% · ${m.status}", N.statusColor(m.status), 11f, true))
             }
         }
+        col.addView(label("🍎 Quick add food ▸", Color.BLACK, 13f, true).apply {
+            background = rounded(C.ACCENT, 20); setPadding(0, dp(8), 0, dp(8))
+            layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(6) }
+            setOnClickListener { quickMeal = defaultMeal(); showQuickAdd() }
+        })
         if (t != null && t.count > 0) box {
             addView(label("MEALS", C.ACCENT, 11f, true))
             (N.MEAL_ORDER + t.meals.keys.filter { it !in N.MEAL_ORDER }).filter { (t.meals[it] ?: 0) > 0 || t.items.any { i -> i.meal == it } }.forEach { m ->
                 addView(label("${N.MEAL_NAMES[m] ?: m}  ${N.kcal(t.meals[m] ?: 0)} kcal", Color.WHITE, 12f, true).apply { setPadding(0, dp(4), 0, 0) })
-                t.items.filter { it.meal == m }.forEach { i -> addView(label("${i.name} · ${N.kcal(i.cal)}", C.MUTED, 9f)) }
+                if (t.foods.isNotEmpty()) t.foods.filter { it.meal == m }.forEach { f -> addView(label("${f.name} · ${io.github.michealsizemore1.beyondstride.Food.fmt(f.servings)}× · ${N.kcal(f.kcal)}", C.MUTED, 9f)) }
+                else t.items.filter { it.meal == m }.forEach { i -> addView(label("${i.name} · ${N.kcal(i.cal)}", C.MUTED, 9f)) }
             }
         }
         val week = days.filter { it.count > 0 }.takeLast(7)

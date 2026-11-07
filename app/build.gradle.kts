@@ -52,6 +52,7 @@ dependencies {
     implementation("com.google.android.gms:play-services-wearable:18.2.0")
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.browser:browser:1.8.0")
+    implementation("com.google.android.gms:play-services-code-scanner:16.1.0")
     implementation("androidx.health.connect:connect-client:1.1.0-alpha10")
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20240303")

@@ -15,20 +15,21 @@ object Hydration {
     const val STEP = 8   // oz per tap (one cup)
 
     /** A change waiting for the Command Center. [id] is Firebase's key once posted. */
-    data class Change(val date: String, val f: String, val d: Int, val v: Double, val at: Long, val id: String?)
+    data class Change(val date: String, val f: String, val d: Int, val v: Double, val at: Long, val id: String?, val x: String? = null)
+    val FOOD_OPS = listOf("foodAdd", "foodEdit", "foodDel")
 
     private fun p(ctx: Context) = ctx.getSharedPreferences("hydration", 0)
 
     fun changes(ctx: Context): List<Change> = try {
         val a = JSONArray(p(ctx).getString("changes", "[]"))
         (0 until a.length()).map { i -> a.getJSONObject(i).let {
-            Change(it.getString("date"), it.getString("f"), it.optInt("d"), it.optDouble("v", 0.0), it.optLong("at"), it.optString("id").ifEmpty { null })
+            Change(it.getString("date"), it.getString("f"), it.optInt("d"), it.optDouble("v", 0.0), it.optLong("at"), it.optString("id").ifEmpty { null }, it.optString("x").ifEmpty { null })
         } }
     } catch (e: Exception) { emptyList() }
 
     fun saveChanges(ctx: Context, list: List<Change>) {
         val a = JSONArray()
-        list.forEach { c -> a.put(JSONObject().put("date", c.date).put("f", c.f).put("d", c.d).put("v", c.v).put("at", c.at).put("id", c.id ?: "")) }
+        list.forEach { c -> a.put(JSONObject().put("date", c.date).put("f", c.f).put("d", c.d).put("v", c.v).put("at", c.at).put("id", c.id ?: "").put("x", c.x ?: "")) }
         p(ctx).edit().putString("changes", a.toString()).apply()
     }
 
@@ -53,8 +54,9 @@ object Hydration {
             val i = out.indexOfFirst { it.date == date }
             val base = if (i >= 0) out[i] else blank(date)
             val w = o.optInt("water", base.water); val s = o.optInt("sports", base.sportsOz); val ot = o.optInt("other", base.otherOz)
-            val d = base.copy(water = w, sportsOz = s, otherOz = ot, waterOz = w + s + ot,
+            var d = base.copy(water = w, sportsOz = s, otherOz = ot, waterOz = w + s + ot,
                 weight = o.optDouble("weight", base.weight), postWeight = o.optDouble("postWeight", base.postWeight))
+            o.optJSONArray("foods")?.let { d = Food.summarize(d, Food.parseList(it)) }
             if (i >= 0) out[i] = d else out += d
         }
         return out.sortedBy { it.date }
@@ -66,7 +68,7 @@ object Hydration {
      * Records a change for [date] on top of [shown] (the day as currently displayed) and queues it.
      * Fluids: [delta] oz. Weights: [value] lb (0 clears). Returns the new day.
      */
-    fun record(ctx: Context, shown: Nutrition.Day?, date: String, f: String, delta: Int = 0, value: Double = 0.0): Nutrition.Day {
+    @Synchronized fun record(ctx: Context, shown: Nutrition.Day?, date: String, f: String, delta: Int = 0, value: Double = 0.0): Nutrition.Day {
         val base = shown ?: blank(date)
         val l = local(ctx)
         val o = l.optJSONObject(date) ?: JSONObject().put("water", base.water).put("sports", base.sportsOz).put("other", base.otherOz)
@@ -81,6 +83,29 @@ object Hydration {
         p(ctx).edit().putString("days", l.toString()).apply()
         saveChanges(ctx, changes(ctx) + Change(date, f, d, value, System.currentTimeMillis(), null))
         return overlayOne(base, o)
+    }
+
+    /**
+     * A food change for [date] on top of [shown]: "foodAdd" ([item] new), "foodEdit" ([item] with new servings / meal),
+     * "foodDel" ([item]'s id). Saves the day's foods here and queues the change. Returns the new day.
+     */
+    @Synchronized fun recordFood(ctx: Context, shown: Nutrition.Day?, date: String, op: String, item: Food.Item): Nutrition.Day {
+        val base = shown ?: blank(date)
+        val l = local(ctx)
+        val o = l.optJSONObject(date) ?: JSONObject().put("water", base.water).put("sports", base.sportsOz).put("other", base.otherOz)
+            .put("weight", base.weight).put("postWeight", base.postWeight)
+        val foods = (o.optJSONArray("foods")?.let { Food.parseList(it) } ?: base.foods).toMutableList()
+        val i = foods.indexOfFirst { it.id == item.id }
+        val x = when (op) {
+            "foodAdd" -> { if (i < 0) foods += item; Food.toJson(item) }
+            "foodEdit" -> { if (i >= 0) foods[i] = foods[i].copy(servings = item.servings, meal = item.meal); JSONObject().put("id", item.id).put("servings", item.servings).put("meal", item.meal) }
+            else -> { if (i >= 0) foods.removeAt(i); JSONObject().put("id", item.id) }
+        }
+        o.put("foods", Food.listJson(foods))
+        l.put(date, o)
+        p(ctx).edit().putString("days", l.toString()).apply()
+        saveChanges(ctx, changes(ctx) + Change(date, op, 0, 0.0, System.currentTimeMillis(), null, x.toString()))
+        return Food.summarize(overlayOne(base, o), foods)
     }
 
     private fun overlayOne(base: Nutrition.Day, o: JSONObject): Nutrition.Day {

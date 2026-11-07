@@ -45,35 +45,39 @@ class NutritionActivity : Activity() {
             })
         }
 
-        // Meals: each meal's calories and what was in it.
-        if (t != null && t.count > 0) {
-            col.addView(RunUi.section(this, "MEALS"))
-            col.addView(RunUi.card(this).apply {
-                val order = N.MEAL_ORDER + t.meals.keys.filter { it !in N.MEAL_ORDER }
-                var first = true
-                order.filter { (t.meals[it] ?: 0) > 0 || t.items.any { i -> i.meal == it } }.forEach { m ->
+        // FOOD LOG: every meal with its foods. Tap a food to change it; ＋ to add.
+        col.addView(RunUi.section(this, "FOOD LOG"))
+        col.addView(RunUi.card(this).apply {
+            val foods = t?.foods ?: emptyList()
+            val order = N.MEAL_ORDER + foods.map { it.meal }.distinct().filter { it !in N.MEAL_ORDER }
+            order.forEachIndexed { idx, m ->
+                val mine = foods.filter { it.meal == m }
+                addView(LinearLayout(ctx).apply {
+                    orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+                    setPadding(0, if (idx == 0) 0 else dp(10), 0, dp(2))
+                    addView(RunUi.text(ctx, N.MEAL_NAMES[m] ?: m.replaceFirstChar { it.uppercase() }, Color.WHITE, 15f, true), LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
+                    if (mine.isNotEmpty()) addView(RunUi.text(ctx, "${N.kcal(mine.sumOf { it.kcal })} kcal  ", RunUi.ACCENT, 14f, true))
+                    addView(RunUi.text(ctx, "＋ Add", Color.BLACK, 12f, true).apply {
+                        background = RunUi.rounded(RunUi.ACCENT, dp(12).toFloat()); setPadding(dp(10), dp(4), dp(10), dp(4))
+                        setOnClickListener { startActivity(android.content.Intent(ctx, FoodAddActivity::class.java).putExtra("meal", m)) }
+                    })
+                })
+                mine.forEach { f ->
                     addView(LinearLayout(ctx).apply {
                         orientation = LinearLayout.HORIZONTAL
-                        setPadding(0, if (first) 0 else dp(12), 0, dp(2))
-                        addView(RunUi.text(ctx, N.MEAL_NAMES[m] ?: m.replaceFirstChar { it.uppercase() }, Color.WHITE, 15f, true), LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
-                        addView(RunUi.text(ctx, "${N.kcal(t.meals[m] ?: 0)} kcal", RunUi.ACCENT, 14f, true))
-                    })
-                    first = false
-                    t.items.filter { it.meal == m }.forEach { i ->
+                        setPadding(dp(8), dp(4), 0, dp(2))
                         addView(LinearLayout(ctx).apply {
-                            orientation = LinearLayout.HORIZONTAL
-                            setPadding(dp(8), dp(3), 0, dp(1))
-                            addView(LinearLayout(ctx).apply {
-                                orientation = LinearLayout.VERTICAL
-                                addView(RunUi.text(ctx, i.name, RunUi.MUTED, 13f))
-                                addView(RunUi.text(ctx, "P ${i.prot.toInt()} · C ${i.carbs.toInt()} · F ${i.fat.toInt()} g", RunUi.DIM, 11f))
-                            }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
-                            addView(RunUi.text(ctx, N.kcal(i.cal), RunUi.MUTED, 13f))
-                        })
-                    }
+                            orientation = LinearLayout.VERTICAL
+                            addView(RunUi.text(ctx, f.name, RunUi.MUTED, 13f))
+                            addView(RunUi.text(ctx, io.github.michealsizemore1.beyondstride.Food.fmt(f.servings) + " × " + f.servingLabel +
+                                " · P ${f.total(f.prot).toInt()} · C ${f.total(f.carbs).toInt()} · F ${f.total(f.fat).toInt()} g", RunUi.DIM, 11f))
+                        }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
+                        addView(RunUi.text(ctx, N.kcal(f.kcal), RunUi.MUTED, 13f))
+                        setOnClickListener { FoodUi.edit(this@NutritionActivity, f) { render() } }
+                    })
                 }
-            })
-        }
+            }
+        })
 
         // The last 7 days.
         val week = days.filter { it.count > 0 }.takeLast(7)
@@ -105,11 +109,11 @@ class NutritionActivity : Activity() {
             })
         }
 
-        // Logging food still happens in the Command Center (until BeyondStride has its own food log).
-        col.addView(RunUi.button(this, "🍎  Log food in the Command Center", RunUi.ACCENT) { RunUi.openNutrition(this) }.apply {
+        // The Command Center's own Nutrition page (AI search, label scan, food database) — still there too.
+        col.addView(RunUi.button(this, "Open Nutrition in the Command Center", RunUi.CARD, Color.WHITE) { RunUi.openNutrition(this) }.apply {
             layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(22) }
         })
-        col.addView(RunUi.text(this, "Pull down the page there to refresh; totals show here a few seconds after you log.", RunUi.DIM, 11f).apply {
+        col.addView(RunUi.text(this, "Food logged in either app shows in both.", RunUi.DIM, 11f).apply {
             gravity = Gravity.CENTER; setPadding(0, dp(6), 0, 0) })
 
         setContentView(RunUi.tabbed(this, ScrollView(this).apply {
