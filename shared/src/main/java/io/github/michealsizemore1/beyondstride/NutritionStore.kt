@@ -24,7 +24,7 @@ object NutritionStore {
         Thread {
             try {
                 val req = PutDataMapRequest.create(PATH).apply {
-                    dataMap.putString("json", json); dataMap.putString("quick", p(ctx).getString("quick", "[]") ?: "[]"); dataMap.putString("calc", p(ctx).getString("calc", "{}") ?: "{}"); dataMap.putLong("at", System.currentTimeMillis()) }
+                    dataMap.putString("json", json); dataMap.putString("quick", p(ctx).getString("quick", "[]") ?: "[]"); dataMap.putString("calc", p(ctx).getString("calc", "{}") ?: "{}"); dataMap.putString("mileage", p(ctx).getString("mileage", "") ?: ""); dataMap.putLong("at", System.currentTimeMillis()) }
                     .asPutDataRequest().setUrgent()
                 Tasks.await(Wearable.getDataClient(app).putDataItem(req))
             } catch (e: Exception) { }
@@ -38,7 +38,7 @@ object NutritionStore {
     /** Watch: data from the phone. */
     fun apply(ctx: Context, m: DataMap) {
         val s = m.getString("json") ?: return
-        p(ctx).edit().putString("days", s).putString("quick", m.getString("quick") ?: "[]").putString("calc", m.getString("calc") ?: "{}").putLong("at", System.currentTimeMillis()).apply()
+        p(ctx).edit().putString("days", s).putString("quick", m.getString("quick") ?: "[]").putString("calc", m.getString("calc") ?: "{}").putString("mileage", m.getString("mileage") ?: "").putLong("at", System.currentTimeMillis()).apply()
     }
 
     /** Phone: the watch's Quick add list (sent with the next save). */
@@ -63,6 +63,18 @@ object NutritionStore {
     /** Watch: the food database from the phone. */
     fun applyLibrary(ctx: Context, m: DataMap) { m.getString("json")?.let { p(ctx).edit().putString("lib", it).apply() } }
     fun library(ctx: Context) = try { Food.parseList(org.json.JSONArray(p(ctx).getString("lib", "[]"))) } catch (e: Exception) { emptyList() }
+
+    /** Phone: this week's / month's miles as Activities counts them (all sources), sent to the watch so both show the same. */
+    fun setMileage(ctx: Context, week: Double, runs: Int, month: Double) {
+        val mon = java.time.LocalDate.now().let { it.minusDays((it.dayOfWeek.value - 1).toLong()) }.toString()
+        val json = org.json.JSONObject().put("week", Math.round(week * 100) / 100.0).put("runs", runs).put("month", Math.round(month * 100) / 100.0).put("monday", mon).put("ym", mon.take(7).let { java.time.LocalDate.now().toString().take(7) }).toString()
+        if (json == p(ctx).getString("mileage", "")) return
+        p(ctx).edit().putString("mileage", json).apply()
+        save(ctx, days(ctx))
+    }
+    /** Watch: that mileage, if it's for the current week. */
+    fun mileage(ctx: Context): org.json.JSONObject? = try { org.json.JSONObject(p(ctx).getString("mileage", "") ?: "").takeIf {
+        it.optString("monday") == java.time.LocalDate.now().let { d -> d.minusDays((d.dayOfWeek.value - 1).toLong()) }.toString() } } catch (e: Exception) { null }
 
     /** The calorie target's settings and breakdown (phone sets it; sent to the watch with the days). */
     fun setCalc(ctx: Context, json: String) = p(ctx).edit().putString("calc", json).apply()

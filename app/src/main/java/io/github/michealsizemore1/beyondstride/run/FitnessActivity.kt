@@ -67,7 +67,7 @@ class FitnessActivity : Activity() {
             col.addView(row(
                 tile("CRITICAL POWER", "$cpNow W", cpE.cp?.let { if (kotlin.math.abs(it - cpNow) >= 3) "runs say $it W ▸" else "matches your runs" } ?: "needs a hard effort to update",
                     Color.WHITE) { startActivity(Intent(ctx, ReadinessActivity::class.java)) },
-                tile("PERSONAL BESTS", latestPb?.let { I.clock(it.value.sec) } ?: "—",
+                tile("FASTEST EFFORTS", latestPb?.let { I.clock(it.value.sec) } ?: "—",
                     latestPb?.let { I.pbName(it.key) + " · " + SimpleDateFormat("MMM d", Locale.US).format(Date(it.value.start)) } ?: "after your first runs",
                     if (latestPb != null) 0xFFF2C94C.toInt() else Color.WHITE, openFit),
             ))
@@ -118,7 +118,7 @@ class FitnessActivity : Activity() {
                 val hrMax = RunSettings.hrMax(this); val hrRest = RunSettings.hrRest(this)
                 // Training load.
                 val ld = io.github.michealsizemore1.beyondstride.Insights.load(all)
-                col.addView(RunUi.section(this, "TRAINING LOAD"))
+                col.addView(RunUi.section(this, "TRAINING LOAD (STRESS)"))
                 col.addView(RunUi.card(this).apply {
                     addView(RunUi.text(ctx, ld.status, ld.color, 18f, true))
                     addView(RunUi.statGrid(ctx, listOfNotNull(
@@ -129,10 +129,6 @@ class FitnessActivity : Activity() {
                         ld.ratio?.let { Triple(String.format(java.util.Locale.US, "%.1f", ld.milesAvg), "usual weekly miles", Color.WHITE) },
                     )))
                     addView(RunUi.text(ctx, ld.advice, RunUi.MUTED, 12f).apply { setPadding(0, dp(6), 0, 0) })
-                    val cpE = io.github.michealsizemore1.beyondstride.CriticalPower.estimate(all, currentCp = RunSettings.cp(ctx))
-                    val cpNow = RunSettings.cp(ctx)
-                    addView(RunUi.text(ctx, "Critical power $cpNow W" + (cpE.cp?.let { if (kotlin.math.abs(it - cpNow) >= 3) " · your runs say $it W — tap to review" else " · matches your runs" } ?: " ▸"),
-                        0xFFB18CFF.toInt(), 13f, true).apply { setPadding(0, dp(8), 0, 0); setOnClickListener { startActivity(Intent(ctx, ReadinessActivity::class.java)) } })
                 })
                 // Zone 2 fitness: pace while HR is in Zone 2, run by run.
                 val z2 = all.mapNotNull { r -> io.github.michealsizemore1.beyondstride.Insights.zone2(r, hrMax, hrRest)?.let { r.optLong("start") to it } }.take(12)
@@ -167,7 +163,7 @@ class FitnessActivity : Activity() {
                 // Personal bests.
                 val rec = io.github.michealsizemore1.beyondstride.Insights.records(all)
                 if (rec.isNotEmpty()) {
-                    col.addView(RunUi.section(this, "PERSONAL BESTS"))
+                    col.addView(RunUi.section(this, "FASTEST EFFORTS"))
                     col.addView(RunUi.card(this).apply {
                         rec.forEach { (k, pb) ->
                             addView(LinearLayout(ctx).apply {

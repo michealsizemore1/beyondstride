@@ -46,6 +46,7 @@ class ActivitiesActivity : Activity() {
     private fun render() {
         val ctx = this
         val all = S.list(this)
+        S.mileage(this)?.let { io.github.michealsizemore1.beyondstride.NutritionStore.setMileage(this, it.week, it.runs, it.month) }   // the watch's This Week
         val col = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(16), dp(40), dp(16), dp(32)) }
         col.addView(txt("🏃 Activities", Color.WHITE, 26f, true))
 
@@ -88,7 +89,6 @@ class ActivitiesActivity : Activity() {
             btn("⊞ Expand", RunUi.CARD) { collapsed.clear(); fill() }
             btn("⊟ Collapse", RunUi.CARD) { all.forEach { collapsed += S.idOf(it) }; fill() }
             btn(if (compare) "✖ Exit Compare" else "⚖️ Compare", if (compare) 0xFF4C1D95.toInt() else 0xFF7C3AED.toInt()) { compare = !compare; if (!compare) chosen.clear(); render() }
-            btn("BeyondStride runs ▸", RunUi.CARD) { startActivity(Intent(ctx, AllRunsActivity::class.java)) }
         })
 
         // Compare bar.

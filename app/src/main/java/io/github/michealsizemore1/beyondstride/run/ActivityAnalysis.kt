@@ -89,7 +89,7 @@ class ActivityAnalysis(private val act: Activity, private val open: MutableSet<S
         val (c, l) = when { r < 0.8 -> 0xFF5DADE2.toInt() to "Low load (easing back)"; r <= 1.3 -> 0xFF27AE60.toInt() to "Sweet spot"
             r <= 1.5 -> 0xFFF39C12.toInt() to "Elevated — watch for soreness"; else -> 0xFFE74C3C.toInt() to "High — classic \"too much too soon\" range" }
         val box = card(col)
-        box.addView(head("⚡ Training Load Ratio (ACWR)"))
+        box.addView(head("⚡ Training Load Ratio (ACWR · miles)"))
         box.addView(LinearLayout(act).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.BOTTOM
             addView(txt(f2(r), c, 22f, true)); addView(txt("   $l", c, 13f, true)) })
         box.addView(txt("Last 7 days’ daily average (${f1(acute)} mi/day) vs. last 28 days’ (${f1(chronic)} mi/day). An estimate from your logged mileage — not a medical assessment.", RunUi.DIM, 11f))

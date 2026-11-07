@@ -454,9 +454,12 @@ class RunActivity : Activity() {
             addView(head("THIS WEEK"))
             addView(LinearLayout(this@RunActivity).apply {
                 orientation = LinearLayout.HORIZONTAL
-                addView(column().apply { addView(label(Run.miles(meters), Color.WHITE, 18f, true)); addView(label("miles", C.MUTED, 9f)) }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
-                addView(column().apply { addView(label("$runs", Color.WHITE, 18f, true)); addView(label("runs", C.MUTED, 9f)) }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
-                addView(column().apply { addView(label(Run.miles(monthMeters), Color.WHITE, 18f, true)); addView(label("this month", C.MUTED, 9f)) }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
+                // Same miles as the phone (Activities, every source) when the phone has sent this week's; else the watch's own runs.
+                val pm = io.github.michealsizemore1.beyondstride.NutritionStore.mileage(this@RunActivity)
+                fun mi(v: Double) = String.format(java.util.Locale.US, "%.2f", v)
+                addView(column().apply { addView(label(pm?.let { mi(it.optDouble("week")) } ?: Run.miles(meters), Color.WHITE, 18f, true)); addView(label("miles", C.MUTED, 9f)) }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
+                addView(column().apply { addView(label("${pm?.optInt("runs") ?: runs}", Color.WHITE, 18f, true)); addView(label("runs", C.MUTED, 9f)) }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
+                addView(column().apply { addView(label(pm?.takeIf { it.optString("ym") == java.time.LocalDate.now().toString().take(7) }?.let { mi(it.optDouble("month")) } ?: Run.miles(monthMeters), Color.WHITE, 18f, true)); addView(label("this month", C.MUTED, 9f)) }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
             })
             val loadL = label("", Color.WHITE, 12f, true).apply { visibility = View.GONE }
             addView(loadL)
@@ -466,7 +469,7 @@ class RunActivity : Activity() {
                 if (rs.isEmpty()) return@Thread
                 val ld = I.load(rs, now)
                 runOnUiThread {
-                    loadL.text = "Load: ${ld.status}" + (ld.ratio?.let { String.format(java.util.Locale.US, " · ratio %.2f", it) } ?: "") + " · ${ld.acute} stress, 7 days"
+                    loadL.text = "Training load (stress): ${ld.status}" + (ld.ratio?.let { String.format(java.util.Locale.US, " · ratio %.2f", it) } ?: "") + " · ${ld.acute} stress, 7 days"
                     loadL.setTextColor(ld.color); loadL.visibility = View.VISIBLE
                 }
             }.start()
@@ -1693,7 +1696,7 @@ class RunActivity : Activity() {
                     tile("DECOUPLING", if (dec.isEmpty()) "—" else D.text(dec.average()), if (dec.isEmpty()) "needs 30+ min steady" else D.rating(dec.average()),
                         if (dec.isEmpty()) Color.WHITE else D.color(dec.average())))
                 row(tile("CRITICAL POWER", "${Run.criticalPower} W", cpE?.cp?.let { if (kotlin.math.abs(it - Run.criticalPower) >= 3) "runs say $it W" else "matches runs" } ?: "needs a hard effort", Color.WHITE),
-                    tile("PERSONAL BESTS", latestPb?.let { I.clock(it.value.sec) } ?: "—",
+                    tile("FASTEST EFFORTS", latestPb?.let { I.clock(it.value.sec) } ?: "—",
                         latestPb?.let { I.pbName(it.key).replace("Half marathon", "Half") + " · " + mmmd.format(java.util.Date(it.value.start)) } ?: "after first runs",
                         if (latestPb != null) 0xFFF2C94C.toInt() else Color.WHITE))
 
@@ -1715,14 +1718,12 @@ class RunActivity : Activity() {
 
                 if (ld != null) {
                     // TRAINING LOAD.
-                    body.addView(head("TRAINING LOAD"))
+                    body.addView(head("TRAINING LOAD (STRESS)"))
                     body.addView(card().apply {
                         addView(label(ld.status, ld.color, 14f, true))
                         addView(label("${ld.acute} stress · " + String.format(java.util.Locale.US, "%.1f", ld.milesWeek) + " mi, last 7 days", Color.WHITE, 10f))
                         ld.ratio?.let { addView(label(String.format(java.util.Locale.US, "Ratio %.2f (0.8–1.3 healthy) · usual %.1f mi", it, ld.milesAvg), ld.color, 9f)) }
                         addView(label(ld.advice, C.MUTED, 9f).apply { setPadding(0, dp(2), 0, 0) })
-                        addView(label("Critical power ${Run.criticalPower} W" + (cpE?.cp?.let { if (kotlin.math.abs(it - Run.criticalPower) >= 3) " · runs say $it W" else " · matches your runs" } ?: ""),
-                            0xFFB18CFF.toInt(), 10f, true).apply { setPadding(0, dp(4), 0, 0) })
                     })
                 }
 
@@ -1741,7 +1742,7 @@ class RunActivity : Activity() {
 
                 // PERSONAL BESTS.
                 if (rec.isNotEmpty()) {
-                    body.addView(head("PERSONAL BESTS"))
+                    body.addView(head("FASTEST EFFORTS"))
                     body.addView(card().apply {
                         rec.forEach { (k, pb) ->
                             addView(LinearLayout(this@RunActivity).apply {

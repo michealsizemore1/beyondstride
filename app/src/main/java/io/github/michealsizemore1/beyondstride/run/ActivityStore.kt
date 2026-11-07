@@ -81,6 +81,18 @@ object ActivityStore {
         }
         return out
     }
+    /** This week (Mon–Sun) and this month, the Activities mileage way: every activity's distance plus journal-only miles. Null before Activities arrive. */
+    data class Mileage(val week: Double, val runs: Int, val month: Double)
+    fun mileage(ctx: Context): Mileage? {
+        if (fetchedAt(ctx) == 0L) return null
+        val all = list(ctx); val today = java.time.LocalDate.now()
+        val mon = today.minusDays((today.dayOfWeek.value - 1).toLong()).toString(); val m1 = today.withDayOfMonth(1).toString()
+        val covered = all.filter { num(it, "distance") > 0 }.map { str(it, "date") }.toSet()
+        fun mi(from: String) = all.filter { str(it, "date") >= from }.sumOf { num(it, "distance") } + exMiles(ctx).filter { (d, _) -> d >= from && d !in covered }.values.sum()
+        val runs = all.count { str(it, "date") >= mon && str(it, "type").lowercase().contains("run") }
+        return Mileage(mi(mon), runs, mi(m1))
+    }
+
     /** Weekly Run Notes by Monday (with notes saved here on top). */
     fun weekNotes(ctx: Context): Map<String, String> {
         val out = HashMap<String, String>()

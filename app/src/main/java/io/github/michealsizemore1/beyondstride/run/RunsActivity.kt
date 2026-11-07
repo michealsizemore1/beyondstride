@@ -229,15 +229,18 @@ open class RunsActivity : Activity() {
         val monthStart = cal.timeInMillis
         fun miles(from: Long) = runs.filter { it.optLong("start") >= from }.sumOf { it.optDouble("distance") }
         val ld = I.load(runs.take(200))
+        // Same miles as Activities → Mileage (every source, Mon–Sun); BeyondStride's own runs until Activities arrive.
+        val am = ActivityStore.mileage(this)
+        am?.let { io.github.michealsizemore1.beyondstride.NutritionStore.setMileage(this, it.week, it.runs, it.month) }
         col.addView(RunUi.section(this, "THIS WEEK"))
         col.addView(RunUi.card(this).apply {
             addView(RunUi.statGrid(ctx, listOf(
-                Triple(RunMath.miles(miles(weekStart)), "miles", Color.WHITE),
-                Triple("${runs.count { it.optLong("start") >= weekStart }}", "runs", Color.WHITE),
-                Triple(RunMath.miles(miles(monthStart)), "this month", Color.WHITE),
+                Triple(am?.let { String.format(Locale.US, "%.2f", it.week) } ?: RunMath.miles(miles(weekStart)), "miles", Color.WHITE),
+                Triple("${am?.runs ?: runs.count { it.optLong("start") >= weekStart }}", "runs", Color.WHITE),
+                Triple(am?.let { String.format(Locale.US, "%.2f", it.month) } ?: RunMath.miles(miles(monthStart)), "this month", Color.WHITE),
             )))
             if (runs.isNotEmpty()) {
-                addView(RunUi.text(ctx, "Load: ${ld.status}" + (ld.ratio?.let { String.format(Locale.US, " · ratio %.2f", it) } ?: "") +
+                addView(RunUi.text(ctx, "Training load (stress): ${ld.status}" + (ld.ratio?.let { String.format(Locale.US, " · ratio %.2f", it) } ?: "") +
                     "  ·  ${ld.acute} stress, last 7 days", ld.color, 13f, true).apply { setPadding(0, dp(8), 0, 0) })
                 if (ld.ratio != null && ld.ratio > 1.3) addView(RunUi.text(ctx, ld.advice, RunUi.MUTED, 12f))
             }
