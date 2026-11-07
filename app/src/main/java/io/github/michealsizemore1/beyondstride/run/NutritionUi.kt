@@ -17,7 +17,7 @@ object NutritionUi {
     private const val TILE = 0xFF26302C.toInt()
 
     /** Calories, target bar, macros, fluids (with quick taps) and, if [withMicros], the micronutrient tiles. */
-    fun today(act: Activity, col: LinearLayout, withMicros: Boolean, big: Boolean = false, summary: Boolean = false, refresh: () -> Unit) {
+    fun today(act: Activity, col: LinearLayout, withMicros: Boolean, big: Boolean = false, summary: Boolean = false, chips: Boolean = true, refresh: () -> Unit) {
         val ctx = act
         fun dp(v: Int) = RunUi.dp(ctx, v)
         val N = Nutrition
@@ -39,7 +39,7 @@ object NutritionUi {
             col.addView(RunUi.text(ctx, N.macros(nd) + "  ($pp / $cp / $fp %)", RunUi.MUTED, 12f))
             if (big && nd.active > 0) col.addView(RunUi.text(ctx, "Target includes ${N.kcal(nd.active)} active kcal", RunUi.DIM, 11f))
         }
-        fluids(act, col, nd, refresh)
+        fluids(act, col, nd, refresh, chips)
         if (withMicros && nd != null && nd.micros.isNotEmpty()) micros(act, col, nd)
         else if (summary && nd != null && nd.micros.isNotEmpty()) {
             // One line instead of the tiles (the Nutrition tab has them).
@@ -51,7 +51,7 @@ object NutritionUi {
     }
 
     /** Fluids line, rehydration after a run, and the quick-tap row. */
-    fun fluids(act: Activity, col: LinearLayout, nd: Nutrition.Day?, refresh: () -> Unit) {
+    fun fluids(act: Activity, col: LinearLayout, nd: Nutrition.Day?, refresh: () -> Unit, chips: Boolean = true) {
         val ctx = act
         fun dp(v: Int) = RunUi.dp(ctx, v)
         val N = Nutrition
@@ -63,7 +63,7 @@ object NutritionUi {
                 (if (h.needOz == 0) "caught up ✓" else "drink ~${h.needOz} oz more"),
                 if (h.needOz == 0) 0xFF5FD38D.toInt() else N.WATER, 12f, true).apply { setPadding(0, dp(2), 0, 0); setOnClickListener { fluidDialog(act, refresh) } })
         }
-        col.addView(LinearLayout(ctx).apply {
+        if (chips) col.addView(LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL
             layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(6) }
             fun chip(t: String, onTap: () -> Unit) = addView(RunUi.text(ctx, t, N.WATER, 12f, true).apply {

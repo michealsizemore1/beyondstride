@@ -181,7 +181,7 @@ open class RunsActivity : Activity() {
             addView(LinearLayout(ctx).apply {
                 orientation = LinearLayout.VERTICAL
                 addView(RunUi.text(ctx, "FUEL", RunUi.ACCENT, 11f, true))
-                NutritionUi.today(this@RunsActivity, this, withMicros = false, summary = true) { render() }
+                NutritionUi.today(this@RunsActivity, this, withMicros = false, summary = true, chips = false) { render() }
                 setOnClickListener { startActivity(Intent(ctx, NutritionActivity::class.java)) }
             })
         })
