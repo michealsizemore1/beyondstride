@@ -1879,6 +1879,31 @@ class RunActivity : Activity() {
                     })
                 }
                 if (all.isEmpty()) body.addView(label("Finish a run and your fitness shows here.", C.MUTED, 11f))
+
+                // From Activities (like the phone's Fitness): race times, heat acclimation, training zones.
+                val acts = io.github.michealsizemore1.beyondstride.NutritionStore.acts(this@RunActivity)
+                acts?.optJSONArray("race")?.takeIf { it.length() > 0 }?.let { r ->
+                    body.addView(head("RACE TIMES"))
+                    body.addView(card().apply { for (i in 0 until r.length()) { val o = r.getJSONObject(i)
+                        addView(LinearLayout(this@RunActivity).apply { orientation = LinearLayout.HORIZONTAL; setPadding(0, dp(2), 0, 0)
+                            addView(label(o.optString("l"), C.MUTED, 10f).apply { gravity = Gravity.START }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
+                            addView(label(o.optString("t"), 0xFFE67E22.toInt(), 11f, true), LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT)) }) }
+                        addView(label("Riegel, from your fastest pace (60 days)", C.DIM, 8f)) })
+                }
+                acts?.takeIf { it.has("heat") }?.let { a ->
+                    val p = a.optInt("heat")
+                    val (l, c) = when { p < 20 -> "Not Acclimated" to 0xFFDC2626.toInt(); p < 45 -> "Minimally Acclimated" to 0xFFF97316.toInt(); p < 70 -> "Acclimatizing" to 0xFFCA8A04.toInt(); p < 90 -> "Mostly Acclimated" to 0xFF65A30D.toInt(); else -> "Well Acclimated" to 0xFF16A34A.toInt() }
+                    body.addView(head("HEAT ACCLIMATION"))
+                    body.addView(card().apply { addView(label("$p% · $l", c, 13f, true)) })
+                }
+                body.addView(head("TRAINING ZONES"))
+                body.addView(card().apply {
+                    val mx = Run.hrMax; val rs = Run.hrRest; val b = listOf(0.5, 0.6, 0.7, 0.8, 0.9).map { Math.round(rs + Math.max(1.0, mx - rs) * it).toInt() }
+                    val zc = listOf(0xFF60A5FA, 0xFF22C55E, 0xFFEAB308, 0xFFF97316, 0xFFEF4444).map { it.toInt() }
+                    (0 until 5).forEach { i -> addView(label("Z${i + 1}  " + (if (i < 4) "${b[i]}–${b[i + 1] - 1}" else "${b[4]}+") + " bpm" +
+                        (if (Run.criticalPower > 0) "  ·  " + listOf(0.0, 0.55, 0.75, 0.90, 1.05)[i].let { lo -> val hi = listOf(0.55, 0.75, 0.90, 1.05, -1.0)[i]
+                            if (hi > 0) "${Math.round(Run.criticalPower * lo)}–${Math.round(Run.criticalPower * hi)} W" else "${Math.round(Run.criticalPower * lo)}+ W" } else ""), zc[i], 10f, true)) }
+                })
             }
         }.start()
 

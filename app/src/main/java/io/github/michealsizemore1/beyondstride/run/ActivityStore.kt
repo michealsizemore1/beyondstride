@@ -132,6 +132,27 @@ object ActivityStore {
         best("Most Elev Gain", { num(it, "elevGain") }, false) { String.format(java.util.Locale.US, "%,d ft", Math.round(num(it, "elevGain"))) }
         best("Most Calories", { num(it, "calories") }, false) { String.format(java.util.Locale.US, "%,d cal", Math.round(num(it, "calories"))) }
         o.put("prs", pr)
+        // Estimated race times (Riegel, fastest pace ≥1 mi in the last 60 days) and heat acclimation — for the watch's Fitness.
+        run {
+            var bp = 0; var bd = 0.0
+            all.forEach { a -> val dd = d(a) ?: return@forEach; val ago = java.time.temporal.ChronoUnit.DAYS.between(dd, today); if (ago !in 0..59) return@forEach
+                val p = paceSec(str(a, "pace")); val mi = num(a, "distance"); if (p > 0 && mi >= 1 && (bp == 0 || p < bp)) { bp = p; bd = mi } }
+            if (bp > 0) {
+                fun clock(s0: Double): String { val s = Math.round(s0); val h = s / 3600; val m = (s % 3600) / 60; val ss = s % 60
+                    return (if (h > 0) "$h:" + String.format("%02d", m) else "$m") + ":" + String.format("%02d", ss) }
+                val base = bp * bd; val race = org.json.JSONArray()
+                listOf("5K" to 3.10686, "10K" to 6.21371, "Half" to 13.1094, "Marathon" to 26.2188, "50K" to 31.0686).forEach { (l, mi) -> race.put(JSONObject().put("l", l).put("t", clock(base * Math.pow(mi / bd, 1.06)))) }
+                o.put("race", race)
+            }
+            val heat = HashMap<java.time.LocalDate, Double>()
+            all.forEach { a -> val t = str(a, "temp").toDoubleOrNull() ?: return@forEach; val dd = d(a) ?: return@forEach; val hrs = durSec(str(a, "duration")) / 3600.0
+                if (str(a, "type") == "Rest Day" || hrs <= 0) return@forEach
+                val f = if (t <= 70) 0.0 else if (t >= 95) 1.0 else (t - 70) / 25; if (f > 0) heat[dd] = (heat[dd] ?: 0.0) + f * Math.min(hrs, 3.0) }
+            val first = all.mapNotNull { a -> d(a)?.takeIf { str(a, "type") != "Rest Day" && !it.isAfter(today) } }.minOrNull()
+            if (first != null) { var load = 0.0; var dd = today.minusDays(Math.min(729L, java.time.temporal.ChronoUnit.DAYS.between(first, today)))
+                while (!dd.isAfter(today)) { load = load * 0.96 + (heat[dd] ?: 0.0); dd = dd.plusDays(1) }
+                o.put("heat", Math.max(0, Math.min(100, Math.round(100 * (1 - Math.exp(-load / 6))).toInt()))) }
+        }
         // Today's training-plan workout.
         PlanStore.data(ctx).optJSONObject("current")?.let { p ->
             val st = p.optString("startDate")

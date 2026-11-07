@@ -72,10 +72,10 @@ class ActivitiesActivity : Activity() {
         // Collapsible sections, most-used first: how training is going → records / race times → conditions →
         // notes → setup and gear (zones, shoes, plan upload). Each starts closed.
         ActivityAnalysis(this, panels) { render() }.apply {
-            metrics(col, all); charts(col, all); racePredictor(col, all); heatHumidity(col, all)
+            metrics(col, all); charts(col, all)   // race times, heat & humidity and training zones are on Fitness
         }
         weekNotes(col)
-        zones(col); shoes(col)
+        shoes(col)
         uploadPlan(col)
         // 🏃 Activities: collapsed each time the screen opens, like the Command Center's Activities section.
         col.addView(txt((if (logOpen) "▼" else "▶") + "  🏃 Activities" + (if (all.isNotEmpty()) "  (${all.size})" else ""), 0xFFE67E22.toInt(), 17f, true).apply {
@@ -497,14 +497,6 @@ class ActivitiesActivity : Activity() {
                         line("Avg pace", if (x.paceN > 0) (x.pace / x.paceN).let { "${it / 60}:${String.format(Locale.US, "%02d", it % 60)}/mi" } else "—")
                         line("Avg power", if (x.wN > 0) "${Math.round(x.w / x.wN)} W" else "—")
                         line("Exercise time", if (x.mins > 0) fmtMins(x.mins) else "—")
-                        if (k == "ThisWeek") {
-                            fun inLine(l: String, v: Double, hint: String, key: String) = addView(LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(0, dp(3), 0, 0)
-                                addView(txt(l, RunUi.MUTED, 11f), LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
-                                addView(numIn(v, hint) { n -> setZone(key, n) }, LinearLayout.LayoutParams(dp(64), WRAP_CONTENT)) })
-                            inLine("Critical power", st.optDouble("cp", 0.0), "280", "cp")
-                            inLine("Max heart rate", st.optDouble("maxHr", 0.0), "174", "maxHr")
-                            inLine("Resting HR (30-day avg)", st.optDouble("restHr", 0.0), "55", "restHr")
-                        }
                         goalKey[k]?.let { gk ->
                             val goal = S.goal(ctx, gk)
                             addView(LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(0, dp(6), 0, 0)
@@ -521,14 +513,6 @@ class ActivitiesActivity : Activity() {
                         }
                     }, LinearLayout.LayoutParams(0, MATCH_PARENT, 1f).apply { if (i == 0) marginEnd = dp(8) })
                 }
-            })
-        }
-        // BeyondStride's own zones (watch alerts, readiness) — offer to match if they differ.
-        val bsMax = RunSettings.hrMax(this); val bsRest = RunSettings.hrRest(this); val bsCp = RunSettings.cp(this)
-        if (st.has("cp") && (st.optDouble("maxHr") != bsMax || st.optDouble("restHr") != bsRest || st.optDouble("cp").toInt() != bsCp)) {
-            col.addView(txt("BeyondStride's watch zones use Max ${fmtNum(bsMax)} · Rest ${fmtNum(bsRest)} · CP $bsCp.  Use these in both ▸", 0xFFF2C94C.toInt(), 12f, true).apply {
-                setPadding(dp(2), dp(6), 0, 0)
-                setOnClickListener { S.saveSettings(ctx, JSONObject().put("cp", bsCp).put("maxHr", bsMax).put("restHr", bsRest)); render() }
             })
         }
     }

@@ -21,6 +21,8 @@ class FitnessActivity : Activity() {
         else Thread { if (NutritionSync.refreshIfStale(this, 60_000L)) runOnUiThread { if (!isFinishing) render() } }.start()
     }
 
+    private val panels = HashSet<String>()
+
     private fun render() {
         val ctx = this
         val dp = { v: Int -> RunUi.dp(ctx, v) }
@@ -227,6 +229,13 @@ class FitnessActivity : Activity() {
                     })
                 })
             }
+        }
+        // From Activities: Estimated Race Times, Heat & Humidity, Training Zones (each collapsible).
+        run {
+            val acts = ActivityStore.list(this)
+            col.addView(RunUi.section(this, "RACE FITNESS & CONDITIONS"))
+            ActivityAnalysis(this, panels) { render() }.apply { racePredictor(col, acts); heatHumidity(col, acts) }
+            ZonesCard.build(this, col, panels) { render() }
         }
         setContentView(RunUi.tabbed(this, ScrollView(this).apply {
             setBackgroundColor(RunUi.BG)
