@@ -60,6 +60,7 @@ class ActivitiesActivity : Activity() {
             }
         })
         if (S.fetchedAt(this) == 0L) col.addView(txt(if (NutritionSync.ready(this)) "Open the Command Center once (after reloading it) so it can share your Activities." else "Set up LiveTrack first — Activities come through the same database.", 0xFFF2C94C.toInt(), 12f).apply { setPadding(0, dp(6), 0, 0) })
+        CcStatus.line(this).let { (tx, c) -> col.addView(txt(tx, c, 11f, true).apply { setPadding(0, dp(4), 0, 0) }) }
         S.notice(this)?.let { (m, at) -> if (System.currentTimeMillis() - at < 15 * 60_000L) col.addView(txt("Command Center: $m", 0xFF7DD3FC.toInt(), 12f, true).apply { setPadding(0, dp(6), 0, 0) }) }
         if (all.isEmpty() && S.status(this).isNotEmpty()) col.addView(txt(S.status(this), RunUi.MUTED, 11f).apply { setPadding(0, dp(4), 0, 0) })
 
@@ -76,6 +77,7 @@ class ActivitiesActivity : Activity() {
         }
         weekNotes(col)
         shoes(col)
+        watchWorkouts(col)
         uploadPlan(col)
         // 🏃 Activities: collapsed each time the screen opens, like the Command Center's Activities section.
         col.addView(txt((if (logOpen) "▼" else "▶") + "  🏃 Activities" + (if (all.isNotEmpty()) "  (${all.size})" else ""), 0xFFE67E22.toInt(), 17f, true).apply {
@@ -515,43 +517,6 @@ class ActivitiesActivity : Activity() {
                 }
             })
         }
-    }
-
-    /** CP / max HR / resting HR: saved in the Command Center and in BeyondStride's own zones (watch). */
-    private fun setZone(key: String, v: Double) {
-        if (v <= 0) return
-        S.saveSettings(this, JSONObject().put(key, v))
-        RunSettings.save(this, if (key == "maxHr") v else RunSettings.hrMax(this), if (key == "restHr") v else RunSettings.hrRest(this),
-            if (key == "cp") v.toInt() else RunSettings.cp(this), RunSettings.cal(this), RunSettings.ccUrl(this))
-        render()
-    }
-
-    // ── Training zones: Heart Rate (Karvonen) and Power, from the Command Center's settings ──
-    private fun zones(col: LinearLayout) {
-        val ctx = this
-        val st = S.settings(this)
-        val max = st.optDouble("maxHr", RunSettings.hrMax(this)); val rest = st.optDouble("restHr", RunSettings.hrRest(this)); val cp = st.optDouble("cp", 0.0)
-        val res = Math.max(1.0, max - rest); val bnd = listOf(0.5, 0.6, 0.7, 0.8, 0.9).map { Math.round(rest + res * it).toInt() }
-        val hrLabels = listOf("Recovery", "Aerobic base", "Aerobic threshold", "Anaerobic", "Max effort")
-        val pw = listOf(Triple(0.0, 0.55, "Recovery"), Triple(0.55, 0.75, "Aerobic / endurance"), Triple(0.75, 0.90, "Tempo"), Triple(0.90, 1.05, "Threshold"), Triple(1.05, -1.0, "VO2 max"))
-        // Collapsible (closed each time the screen opens); the heading shows the Z2 range at a glance.
-        val zOpen = "zones" in panels
-        col.addView(txt((if (zOpen) "▼" else "▶") + "  🎯 Training Zones" + (if (!zOpen) "  (Z2 ${bnd[1]}–${bnd[2] - 1} bpm)" else ""), 0xFFE67E22.toInt(), 15f, true).apply {
-            setPadding(dp(2), dp(16), 0, dp(4)); setOnClickListener { if (zOpen) panels.remove("zones") else panels.add("zones"); render() } })
-        if (!zOpen) return
-        col.addView(RunUi.card(this).apply {
-            fun badge(z: String) = txt(" $z ", Color.BLACK, 11f, true).apply { background = RunUi.rounded(ZONE_COLOR[z] ?: 0xFF888888.toInt(), dp(4).toFloat()) }
-            fun row(z: String, range: String, label: String) = addView(LinearLayout(ctx).apply {
-                orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(0, dp(3), 0, dp(3))
-                addView(badge(z)); addView(txt("  $range", Color.WHITE, 13f), LinearLayout.LayoutParams(dp(130), WRAP_CONTENT)); addView(txt(label, RunUi.MUTED, 12f))
-            })
-            addView(txt("❤️ Heart Rate (Karvonen)", Color.WHITE, 14f, true))
-            addView(txt("Max HR ${fmtNum(max)} bpm · Resting HR ${fmtNum(rest)} bpm" + st.optString("zonesNote").let { if (it.isNotEmpty()) " · $it" else "" }, RunUi.MUTED, 11f))
-            (0 until 5).forEach { i -> row("Z${i + 1}", if (i < 4) "${bnd[i]}–${bnd[i + 1] - 1} bpm" else "${bnd[4]}+ bpm", hrLabels[i]) }
-            addView(txt("⚡ Power", Color.WHITE, 14f, true).apply { setPadding(0, dp(10), 0, 0) })
-            if (cp <= 0) addView(txt("Set Critical Power above to see your power zone ranges.", RunUi.MUTED, 12f))
-            else pw.forEachIndexed { i, (lo, hi, l) -> row("Z${i + 1}", if (hi > 0) "${Math.round(cp * lo)}–${Math.round(cp * hi)} W" else "${Math.round(cp * lo)}+ W", l) }
-        })
     }
 
     // ── Shoe tracker ──
@@ -1046,4 +1011,30 @@ class ActivitiesActivity : Activity() {
             .setNegativeButton("Close", null).show()
     }
     private var printView: android.webkit.WebView? = null
+
+    // ── ⌚ Watch workouts (was the Plan tab): the next workouts the watch will guide, then the calendar & Library ──
+    private fun watchWorkouts(col: LinearLayout) {
+        val ctx = this
+        val isOpen = "watchW" in panels
+        val plan = WorkoutStore.plan(this)
+        val today = java.time.LocalDate.now()
+        val next = (0 until 14).mapNotNull { i -> val d = today.plusDays(i.toLong()); plan.optJSONObject(d.toString())?.let { d to it } }
+        col.addView(txt((if (isOpen) "▼" else "▶") + "  ⌚ Watch Workouts" + (next.firstOrNull()?.let { (d, w) -> "  (" + (if (d == today) "today" else d.format(java.time.format.DateTimeFormatter.ofPattern("EEE", Locale.US))) + ": " + w.optString("name") + ")" } ?: ""),
+            0xFFE67E22.toInt(), 15f, true).apply { setPadding(dp(2), dp(16), 0, dp(4)); maxLines = 2; setOnClickListener { if (isOpen) panels.remove("watchW") else panels.add("watchW"); render() } })
+        if (!isOpen) return
+        col.addView(RunUi.card(this).apply {
+            addView(txt("The guided workouts your watch runs (heart rate / pace / power steps). ⌚ Send to watch on the plan fills them in.", RunUi.MUTED, 11f))
+            if (next.isEmpty()) addView(txt("Nothing planned in the next 2 weeks.", RunUi.DIM, 12f).apply { setPadding(0, dp(6), 0, 0) })
+            next.take(7).forEach { (d, w) -> addView(LinearLayout(ctx).apply {
+                orientation = LinearLayout.HORIZONTAL; setPadding(0, dp(6), 0, 0)
+                addView(txt(if (d == today) "Today" else d.format(java.time.format.DateTimeFormatter.ofPattern("EEE M/d", Locale.US)), RunUi.MUTED, 12f, true), LinearLayout.LayoutParams(dp(80), WRAP_CONTENT))
+                addView(txt(w.optString("name"), Color.WHITE, 13f, true), LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
+            }) }
+            addView(FlowLayout(ctx, dp(6), dp(6)).apply { setPadding(0, dp(10), 0, 0)
+                pbtn(this, "📅 Calendar & edit", 0xFF26302C.toInt()) { startActivity(Intent(ctx, WorkoutsActivity::class.java).putExtra("tab", "plan")) }
+                pbtn(this, "📚 Library", 0xFF26302C.toInt()) { startActivity(Intent(ctx, WorkoutsActivity::class.java).putExtra("tab", "library")) }
+                pbtn(this, "🗺 Trails & courses", 0xFF26302C.toInt()) { startActivity(Intent(ctx, TrailsActivity::class.java)) }
+            })
+        })
+    }
 }

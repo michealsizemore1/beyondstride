@@ -17,12 +17,14 @@ import java.util.zip.ZipOutputStream
  * The same file will move everything into the stand-alone BeyondStride app.
  */
 object Backup {
-    const val VERSION = 1
+    const val VERSION = 2
     /** BeyondStride settings files. */
-    private val PREFS = listOf("runsettings", "readiness", "runflags", "trailsel")
+    private val PREFS = listOf("runsettings", "readiness", "runflags", "trailsel",
+        // Nutrition (recent days, food photos & favorites), Activities, training plans, reminders — the Anthropic key is never included.
+        "nutrition", "foodlib", "activities", "plans", "reminders", "foodlog", "activitiesUi")
     /** Folders and files in the app's storage. */
     private val DIRS = listOf("runs", "courses")
-    private val FILES = listOf("workout_library.json", "workout_plan.json")
+    private val FILES = listOf("workout_library.json", "workout_plan.json", "nutrition_history.json")
 
     private fun meta(ctx: Context) = ctx.getSharedPreferences("backup", 0)
     fun uri(ctx: Context): Uri? = meta(ctx).getString("uri", null)?.let { Uri.parse(it) }
@@ -71,7 +73,7 @@ object Backup {
                     .put("created", System.currentTimeMillis()).put("runs", runs).put("courses", courses).toString(2).toByteArray())
             }
         }
-        val info = "$runs runs · $courses courses · ${ReadinessSync.checks(ctx).size} morning checks"
+        val info = "$runs runs · $courses courses · ${ReadinessSync.checks(ctx).size} morning checks · ${NutriDay.historyCount(ctx) + io.github.michealsizemore1.beyondstride.NutritionStore.days(ctx).size} nutrition days · ${ActivityStore.list(ctx).size} activities"
         meta(ctx).edit().putLong("at", System.currentTimeMillis()).putString("info", info).apply()
         return info
     }
@@ -123,6 +125,7 @@ object Backup {
                 }
             }
         }
+        NutriDay.forget()
         prefs?.let { all ->
             PREFS.forEach { name ->
                 val o = all.optJSONObject(name) ?: return@forEach

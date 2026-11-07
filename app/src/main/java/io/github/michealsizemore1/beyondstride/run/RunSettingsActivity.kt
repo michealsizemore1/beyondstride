@@ -239,7 +239,7 @@ class RunSettingsActivity : Activity() {
             addView(RunUi.text(ctx, if (at == 0L) "No backup yet" else "Last backup: " +
                 java.text.SimpleDateFormat("EEE, MMM d · h:mm a", java.util.Locale.getDefault()).format(java.util.Date(at)), Color.WHITE, 15f, true))
             Backup.lastInfo(ctx).takeIf { it.isNotBlank() }?.let { addView(RunUi.text(ctx, it, RunUi.MUTED, 12f)) }
-            addView(RunUi.text(ctx, "Runs, workouts & plan, courses, settings, zones, LiveTrack, morning checks, sleep and personal bests — in one file. " +
+            addView(RunUi.text(ctx, "Runs, workouts & plan, courses, settings, zones, LiveTrack, morning checks, sleep, personal bests, your nutrition history (with food photos, favorites and notes), Activities and training plans — in one file. Your Anthropic key is never included. " +
                 "Save it to Google Drive so it's safe if the phone is lost.", RunUi.DIM, 12f).apply { setPadding(0, dp(6), 0, 0) })
             addView(RunUi.button(ctx, if (Backup.uri(ctx) == null) "Back up now…" else "Back up now", RunUi.ACCENT) {
                 val u = Backup.uri(ctx)
@@ -256,6 +256,13 @@ class RunSettingsActivity : Activity() {
             }.apply { layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(8) } })
         })
         switch("Update the backup after every run", "Keeps the saved backup file current automatically", Backup.auto(this)) { Backup.setAuto(ctx, it) }
+        // 🔔 Reminders (checked about once an hour; each one at most once).
+        col.addView(RunUi.text(this, "🔔 Reminders", Color.WHITE, 15f, true).apply { setPadding(0, dp(14), 0, 0) })
+        Reminders.KINDS.forEach { (k, label) -> switch(label, when (k) {
+            "prefuel" -> "5–9 pm the day before a long / hard workout: calories and carbs so far vs target"
+            "rehydrate" -> "After a run with a post-run weight: how much more to drink"
+            "shoes" -> "At 85% and 100% of a shoe's max miles"
+            else -> "Sunday evening: miles vs goal, training load, food quality, streak" }, Reminders.on(this, k)) { Reminders.set(ctx, k, it) } }
         col.addView(RunUi.button(this, "Send all runs to the watch", RunUi.CARD, Color.WHITE) {
             Thread {
                 val n = RunSettings.sendAllToWatch(ctx, force = true)

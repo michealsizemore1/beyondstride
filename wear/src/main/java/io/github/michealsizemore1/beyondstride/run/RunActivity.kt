@@ -1682,14 +1682,6 @@ class RunActivity : Activity() {
             box {
                 if (a.optInt("streak") > 0) addView(label("🔥 ${a.optInt("streak")}-week streak", ORANGE, 12f, true))
             }
-            // Personal Records.
-            a.optJSONArray("prs")?.takeIf { it.length() > 0 }?.let { prs -> box {
-                addView(label("🏆 PERSONAL RECORDS", C.ACCENT, 10f, true))
-                for (i in 0 until prs.length()) { val r = prs.getJSONObject(i)
-                    addView(LinearLayout(this@RunActivity).apply { orientation = LinearLayout.HORIZONTAL; setPadding(0, dp(2), 0, 0)
-                        addView(label(r.optString("l"), C.MUTED, 9f).apply { gravity = Gravity.START }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
-                        addView(label(r.optString("v"), ORANGE, 10f, true), LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT)) }) }
-            } }
             // Recent activities.
             col.addView(label("RECENT", C.ACCENT, 11f, true).apply { setPadding(0, dp(8), 0, 0) })
             a.optJSONArray("recent")?.let { rs -> for (i in 0 until rs.length()) { val r = rs.getJSONObject(i); box {
@@ -1701,10 +1693,12 @@ class RunActivity : Activity() {
                     r.optString("pace").ifEmpty { null }?.let { "$it/mi" }, r.optDouble("hr").takeIf { it > 0 }?.let { "${it.toInt()} bpm" }, r.optDouble("w").takeIf { it > 0 }?.let { "${it.toInt()} W" }).joinToString(" · "), Color.WHITE, 9f).apply { gravity = Gravity.START })
             } } }
         }
+        col.addView(label("⌚ Watch workouts ▸", Color.BLACK, 13f, true).apply { background = rounded(C.ACCENT, 20); setPadding(0, dp(7), 0, dp(7))
+            layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(10) }; setOnClickListener { showWorkoutPicker() } })
         col.addView(label("Runs on this watch ▸", C.ACCENT, 12f, true).apply { setPadding(0, dp(10), 0, 0)
             setOnClickListener { startActivity(Intent(this@RunActivity, RunHistoryActivity::class.java)) } })
         col.addView(View(this).apply { setBackgroundColor(0x22FFFFFF) }, LinearLayout.LayoutParams(MATCH_PARENT, dp(1)).apply { topMargin = dp(10) })
-        col.addView(menuRow(4))
+        col.addView(menuRow(3))
         root.removeAllViews()
         root.addView(ScrollView(this).apply { isVerticalScrollBarEnabled = false; addView(col); requestFocus() })
     }
@@ -1717,7 +1711,6 @@ class RunActivity : Activity() {
             Triple("☀", "Today", { overlayOpen = false; startBuilt = false; renderStart() }),
             Triple("♥", "Fitness", { showFitness() }),
             Triple("🍎", "Nutrition", { nutDate = null; showNutrition() }),
-            Triple("▦", "Plan", { showWorkoutPicker() }),
             Triple("≡", "Activities", { showActivities() }),
         ).forEachIndexed { idx, (glyph, name, go) ->
             val on = idx == selected

@@ -34,6 +34,7 @@ open class RunsActivity : Activity() {
             f.edit().putBoolean("strydJobsCleared", true).apply()
         } }
         handleLink(intent)
+        Reminders.schedule(this)
         // Clear the sign-in left from the removed Strava connection.
         try { deleteSharedPreferences("strava") } catch (e: Exception) { }
     }
@@ -218,6 +219,8 @@ open class RunsActivity : Activity() {
                 }
             }, lp(true))
         })
+
+        CcStatus.line(this).let { (t, c) -> col.addView(RunUi.text(this, t, c, 12f, true).apply { setPadding(dp(2), dp(6), 0, 0) }) }
 
         // 3. THIS WEEK: miles, runs, training load.
         val cal = java.util.Calendar.getInstance()

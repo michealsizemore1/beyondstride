@@ -31,6 +31,8 @@ object NutriDay {
     }
     @Synchronized private fun write(ctx: Context, o: JSONObject) { mem = o; try { file(ctx).writeText(o.toString()) } catch (e: Exception) { } }
     fun historyCount(ctx: Context) = cache(ctx).length()
+    /** After a restore: read the history file again. */
+    fun forget() { mem = null }
     /** Every day with food (newest first) — the 3 recent weeks plus the history. */
     fun allDates(ctx: Context): List<String> = (cache(ctx).keys().asSequence().toList() + NutritionStore.days(ctx).filter { it.count > 0 }.map { it.date }).distinct()
         .filter { d -> cache(ctx).optJSONObject(d)?.optBoolean("empty") != true }.sortedDescending()

@@ -55,7 +55,7 @@ object RunUi {
             setOnClickListener { onClick() }
         }
 
-    const val TAB_TODAY = 0; const val TAB_FITNESS = 1; const val TAB_NUTRITION = 2; const val TAB_PLAN = 3; const val TAB_RUNS = 4
+    const val TAB_TODAY = 0; const val TAB_FITNESS = 1; const val TAB_NUTRITION = 2; const val TAB_PLAN = 3; const val TAB_RUNS = 3   // the Plan screen opens from Activities (⌚ Watch workouts)
 
     /**
      * Nutrition = the Command Center's own Nutrition tab, opened in a browser tab inside the app. It shares the
@@ -79,7 +79,6 @@ object RunUi {
             Triple("Today", "☀", RunsActivity::class.java),
             Triple("Fitness", "♥", FitnessActivity::class.java),
             Triple("Nutrition", "🍎", NutritionActivity::class.java),
-            Triple("Plan", "▦", WorkoutsActivity::class.java),
             Triple("Activities", "≡", ActivitiesActivity::class.java),
         )
         val bar = LinearLayout(act).apply {

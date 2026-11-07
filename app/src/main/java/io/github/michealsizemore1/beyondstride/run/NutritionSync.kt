@@ -58,6 +58,7 @@ object NutritionSync {
             val before = Nutrition.json(NutritionStore.days(ctx))
             sp.edit().putString("err", "").apply()
             FoodLibrary.refresh(ctx)
+            CcStatus.fetch(ctx)
             NutritionStore.save(ctx, CalorieTargets.apply(ctx, days))
             FoodLibrary.quickToWatch(ctx)
             FoodLibrary.libraryToWatch(ctx)

@@ -217,6 +217,7 @@ object ActivityStore {
     fun refresh(ctx: Context): Boolean {
         if (!NutritionSync.ready(ctx)) return false
         HydrationSync.reconcile(ctx)
+        CcStatus.fetch(ctx)
         return try {
             val c = (URL(Live.db(ctx) + "/nutrition/" + NutritionSync.key(ctx) + "/activities.json").openConnection() as HttpURLConnection)
                 .apply { connectTimeout = 12_000; readTimeout = 25_000 }

@@ -80,6 +80,7 @@ class NutritionActivity : Activity() {
         col.addView(RunUi.text(this, "Nutrition", Color.WHITE, 26f, true))
         val at = NutritionStore.fetchedAt(this)
         if (at > 0) col.addView(RunUi.text(this, "Updated " + android.text.format.DateUtils.getRelativeTimeSpanString(at, System.currentTimeMillis(), 60_000L), RunUi.DIM, 11f))
+        CcStatus.line(this).let { (tx, c) -> col.addView(RunUi.text(this, tx, c, 11f, true)) }
 
         // Day picker: ‹ previous day · date (tap for a calendar) · next day ›. Everything below is for that day.
         val vd = java.time.LocalDate.parse(NutriDay.date()); val today0 = java.time.LocalDate.now()
