@@ -55,6 +55,12 @@ object FoodLibrary {
         Thread { HydrationSync.flush(ctx.applicationContext) }.start()
     }
     fun healthy(ctx: Context) = Food.parseList(lib(ctx).optJSONArray("healthy"))
+    /** Healthy 7+ foods as stored (with meal counts and scores) — for Pre-Run Meal Ideas. */
+    fun healthyRaw(ctx: Context): List<JSONObject> = lib(ctx).optJSONArray("healthy")?.let { a -> (0 until a.length()).mapNotNull { a.optJSONObject(it) } } ?: emptyList()
+    fun setHealthyRaw(ctx: Context, list: List<JSONObject>) {
+        val l = lib(ctx).put("healthy", org.json.JSONArray().apply { list.forEach { put(it) } })
+        p(ctx).edit().putString("lib", l.toString()).apply()
+    }
     fun meals(ctx: Context): List<Meal> = lib(ctx).optJSONArray("meals")?.let { a ->
         (0 until a.length()).mapNotNull { a.optJSONObject(it) }.map { Meal(it.optString("name"), it.optString("category"), Food.parseList(it.optJSONArray("items"))) }
     } ?: emptyList()
