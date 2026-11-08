@@ -44,6 +44,29 @@ class TrailsActivity : Activity() {
         super.onCreate(savedInstanceState)
         render()
         start()
+        handleShared(intent)
+    }
+    override fun onNewIntent(intent: android.content.Intent) { super.onNewIntent(intent); handleShared(intent) }
+
+    /** A GPX file opened or shared into BeyondStride (Garmin Connect, Strava, Files…). */
+    private fun handleShared(i: android.content.Intent?) {
+        val uri = when (i?.action) {
+            android.content.Intent.ACTION_VIEW -> i.data
+            android.content.Intent.ACTION_SEND -> @Suppress("DEPRECATION") (i.getParcelableExtra<android.net.Uri>(android.content.Intent.EXTRA_STREAM))
+            else -> null } ?: return
+        importGpx(uri)
+    }
+    private fun importGpx(uri: android.net.Uri) {
+        val app = applicationContext
+        Thread { val t = GpxImport.import(app, uri)
+            runOnUiThread { if (isFinishing) return@runOnUiThread
+                if (t == null) android.widget.Toast.makeText(this, GpxImport.error, android.widget.Toast.LENGTH_LONG).show()
+                else { android.widget.Toast.makeText(this, String.format(Locale.US, "Saved “%s” · %.1f mi — on your watch under Saved courses", t.name, t.lengthM / 1609.344), android.widget.Toast.LENGTH_LONG).show(); open = t; render() } } }.start()
+    }
+    @Deprecated("Deprecated in Java")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: android.content.Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == 7401 && resultCode == RESULT_OK) data?.data?.let { importGpx(it) }
     }
 
     /** Search near me, or around the chosen place. */
@@ -131,6 +154,10 @@ class TrailsActivity : Activity() {
                     })
                 })
             }
+            // Import a route from Garmin Connect / Strava / AllTrails (GPX).
+            col.addView(RunUi.button(this, "📥 Import a GPX route (Garmin, Strava…)", RunUi.CARD, Color.WHITE) {
+                @Suppress("DEPRECATION") startActivityForResult(android.content.Intent(android.content.Intent.ACTION_OPEN_DOCUMENT).addCategory(android.content.Intent.CATEGORY_OPENABLE).setType("*/*"), 7401)
+            }.apply { layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(12) } })
             // Saved courses (same list on the watch).
             val saved = io.github.michealsizemore1.beyondstride.Courses.list(this)
             if (saved.isNotEmpty()) {
