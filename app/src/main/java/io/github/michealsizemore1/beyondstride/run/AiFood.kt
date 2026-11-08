@@ -38,6 +38,21 @@ object AiFood {
         return o.optJSONArray("content")?.optJSONObject(0)?.optString("text")?.trim() ?: ""
     }
 
+    /** A long answer (a whole training plan): (text, stop reason). "max_tokens" means it was cut off. Call off the main thread. */
+    fun askLong(ctx: Context, prompt: String, maxTokens: Int = 32000): Pair<String, String> {
+        val c = (URL("https://api.anthropic.com/v1/messages").openConnection() as HttpURLConnection).apply {
+            requestMethod = "POST"; doOutput = true; connectTimeout = 20_000; readTimeout = 400_000
+            setRequestProperty("x-api-key", key(ctx)); setRequestProperty("anthropic-version", "2023-06-01"); setRequestProperty("content-type", "application/json")
+        }
+        val body = JSONObject().put("model", "claude-haiku-4-5-20251001").put("max_tokens", maxTokens)
+            .put("messages", JSONArray().put(JSONObject().put("role", "user").put("content", prompt)))
+        c.outputStream.use { it.write(body.toString().toByteArray()) }
+        val ok = c.responseCode in 200..299
+        val o = JSONObject((if (ok) c.inputStream else c.errorStream).bufferedReader().readText())
+        if (!ok) throw Exception(o.optJSONObject("error")?.optString("message") ?: "HTTP ${c.responseCode}")
+        return (o.optJSONArray("content")?.optJSONObject(0)?.optString("text")?.trim() ?: "") to o.optString("stop_reason")
+    }
+
     /** A plain question → the answer text (Fuel AI). Call off the main thread. */
     fun askText(ctx: Context, prompt: String, maxTokens: Int = 3000) =
         ask(ctx, "claude-haiku-4-5-20251001", maxTokens, JSONArray().put(JSONObject().put("type", "text").put("text", prompt)))

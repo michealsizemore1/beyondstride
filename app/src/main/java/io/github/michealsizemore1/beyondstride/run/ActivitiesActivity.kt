@@ -648,6 +648,7 @@ class ActivitiesActivity : Activity() {
                 pbtn(this, "➕ Add Training Zones", 0xFF16A085.toInt()) { planDo(JSONObject().put("action", "zones").put("which", which), "Adding training zones — the Command Center updates the plan") }
                 pbtn(this, "📅 Add Dates", 0xFF2C3E50.toInt()) { planDo(JSONObject().put("action", "dates").put("which", which), "Adding dates — the Command Center updates the plan") }
                 pbtn(this, "✏ Adjust", PURPLE) { adjustDialog(which, plan) }
+                if (Standalone.on(ctx) && PlanStore.versions(ctx, which).isNotEmpty()) pbtn(this, "↩ Earlier version", 0xFF6B7280.toInt()) { restoreVersion(which) }
                 pbtn(this, "📦 Archive", 0xFF27AE60.toInt()) { confirm("Archive this ${if (up) "upcoming" else "active"} plan?", "Archive") { planDo(JSONObject().put("action", "archive").put("which", which)) } }
                 if (up) pbtn(this, "▶ Make Active Now", 0xFF2980B9.toInt()) {
                     confirm(if (PlanStore.data(ctx).has("current")) "This will archive your current active plan and make this upcoming plan active now. Continue?" else "Make this plan active now?", "Make Active") { planDo(JSONObject().put("action", "activate")) } }
@@ -671,6 +672,16 @@ class ActivitiesActivity : Activity() {
                 addView(txt(plan.optString("display").ifEmpty { plan.optString("text") }.ifEmpty { "(No plan text)" }, Color.WHITE, 13f).apply { setTextIsSelectable(true); setLineSpacing(0f, 1.15f) })
             }, LinearLayout.LayoutParams(MATCH_PARENT, dp(340)).apply { topMargin = dp(4) })
         })
+    }
+
+    /** Put back an earlier version of the plan's text (before an AI change, the Command Center's copy, or an archived plan). */
+    private fun restoreVersion(which: String) {
+        val v = PlanStore.versions(this, which); if (v.isEmpty()) return
+        AlertDialog.Builder(this).setTitle("Restore an earlier version").setItems(v.map { it.first }.toTypedArray()) { _, i ->
+            AlertDialog.Builder(this).setMessage("Replace the plan's text with this version?\n\n${v[i].first}\n\nThe current text is kept as an earlier version, so you can switch back.")
+                .setPositiveButton("Restore") { _, _ -> planDo(JSONObject().put("action", "setText").put("which", which).put("text", v[i].second).put("adjusted", false).put("rebuild", true), "Plan restored.") }
+                .setNegativeButton("Cancel", null).show()
+        }.setNegativeButton("Cancel", null).show()
     }
 
     private fun adjustDialog(which: String, plan: JSONObject) {
@@ -700,12 +711,21 @@ class ActivitiesActivity : Activity() {
             "\n\nATHLETE'S REQUEST:\n" + instruction + "\n\nPlease rewrite the training plan incorporating the requested adjustments. Keep the same format and structure as the original plan. Return only the updated plan text."
         val wait = AlertDialog.Builder(this).setMessage(if (instruction == null) "⏳ Reformatting…" else "⏳ Adjusting…").setCancelable(false).show()
         Thread {
-            val res = try { Result.success(AiFood.askText(ctx, prompt, if (instruction == null) 6000 else 5000)) } catch (e: Exception) { Result.failure(e) }
+            val res = try { Result.success(AiFood.askLong(ctx, prompt)) } catch (e: Exception) { Result.failure(e) }
             runOnUiThread {
                 wait.dismiss(); if (isFinishing) return@runOnUiThread
-                res.onSuccess { t -> if (t.isBlank()) android.widget.Toast.makeText(ctx, "The AI did not return any text. Please try again.", android.widget.Toast.LENGTH_LONG).show()
-                    else planDo(JSONObject().put("action", "setText").put("which", which).put("text", t).put("adjusted", instruction != null).put("rebuild", instruction == null),
+                res.onSuccess { (t, stop) ->
+                    fun lastWeek(x: String) = x.lines().mapNotNull { PlanEngine.WEEK_HEAD.find(it)?.groupValues?.get(1)?.toIntOrNull() }.maxOrNull() ?: 0
+                    val save = { planDo(JSONObject().put("action", "setText").put("which", which).put("text", t).put("adjusted", instruction != null).put("rebuild", instruction == null),
                         if (instruction == null) "Plan reformatted." else "Plan adjusted.") }
+                    when {
+                        t.isBlank() -> android.widget.Toast.makeText(ctx, "The AI did not return any text. Please try again.", android.widget.Toast.LENGTH_LONG).show()
+                        stop == "max_tokens" -> AlertDialog.Builder(ctx).setMessage("The AI's answer was cut off before the end of the plan, so nothing was changed. Try a shorter request, or adjust a few weeks at a time.").setPositiveButton("OK", null).show()
+                        lastWeek(t) < lastWeek(text) -> AlertDialog.Builder(ctx).setTitle("The new version is shorter")
+                            .setMessage("The original plan goes through Week ${lastWeek(text)}, but the AI's version stops at Week ${lastWeek(t)}. Weeks may be missing. Save it anyway?")
+                            .setPositiveButton("Keep the original", null).setNegativeButton("Save anyway") { _, _ -> save() }.show()
+                        else -> save()
+                    } }
                     .onFailure { android.widget.Toast.makeText(ctx, "AI error: ${it.message}", android.widget.Toast.LENGTH_LONG).show() }
             }
         }.start()

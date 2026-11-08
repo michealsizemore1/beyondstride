@@ -39,7 +39,11 @@ object PlanStore {
                 "delete" -> o.remove(k)
                 "archive" -> o.optJSONObject(k)?.let { archive(it, k); o.remove(k) }
                 "activate" -> o.optJSONObject("upcoming")?.let { up -> o.optJSONObject("current")?.let { archive(it, "current") }; o.put("current", up); o.remove("upcoming") }
-                "setText" -> o.optJSONObject(k)?.let { it.put("text", x.optString("text")).put("display", x.optString("text")); if (x.optBoolean("adjusted")) it.put("adjustedAt", archDate()) }
+                "setText" -> o.optJSONObject(k)?.let {
+                // Keep the last few versions so an AI change can be undone.
+                val prev = it.optJSONArray("prevTexts") ?: JSONArray(); val n = JSONArray().put(JSONObject().put("text", it.optString("text")).put("at", archDate()))
+                for (i in 0 until Math.min(4, prev.length())) n.put(prev.get(i)); it.put("prevTexts", n)
+                it.put("text", x.optString("text")).put("display", x.optString("text")); if (x.optBoolean("adjusted")) it.put("adjustedAt", archDate()) }
                 "deleteArchived", "restore" -> {
                     val n = JSONArray(); var hit: JSONObject? = null
                     for (i in 0 until archNow.length()) { val a = archNow.optJSONObject(i) ?: continue
@@ -96,6 +100,18 @@ object PlanStore {
     private fun local(ctx: Context): JSONObject = try { JSONObject(p(ctx).getString("local", "{}")) } catch (e: Exception) { JSONObject() }
     private fun saveLocal(ctx: Context, o: JSONObject) { p(ctx).edit().putString("local", o.toString()).putLong("localAt", System.currentTimeMillis()).apply(); daysKey = ""; viewCache = null; CloudCopy.dirty(ctx) }
     fun localJson(ctx: Context): JSONObject = local(ctx)
+    /** The Command Center's last copy of the plans (kept from before the switch). */
+    fun ccCopy(ctx: Context): JSONObject = raw(ctx)
+    /** Earlier versions of a plan's text, newest first: (label, text). Saved versions, the Command Center's copy, archived plans. */
+    fun versions(ctx: Context, which: String): List<Pair<String, String>> {
+        val pl = data(ctx).optJSONObject(keyOf(which)) ?: return emptyList(); val cur = pl.optString("text"); val out = ArrayList<Pair<String, String>>()
+        fun lastWeek(t: String) = t.lines().mapNotNull { PlanEngine.WEEK_HEAD.find(it)?.groupValues?.get(1)?.toIntOrNull() }.maxOrNull() ?: 0
+        fun add(label: String, t: String) { if (t.isNotBlank() && t != cur && out.none { it.second == t }) out += ("$label · through Week ${lastWeek(t)} · ${t.length / 1000}k characters") to t }
+        pl.optJSONArray("prevTexts")?.let { a -> for (i in 0 until a.length()) a.optJSONObject(i)?.let { add("Before change on " + it.optString("at"), it.optString("text")) } }
+        ccCopy(ctx).optJSONObject(keyOf(which))?.let { add("Command Center copy (from before stand-alone)", it.optString("text")) }
+        data(ctx).optJSONArray("archived")?.let { a -> for (i in 0 until a.length()) a.optJSONObject(i)?.let { add("Archived " + it.optString("archivedAt"), it.optString("text")) } }
+        return out
+    }
     fun setLocalJson(ctx: Context, o: JSONObject) = saveLocal(ctx, o)
 
     /** At cut-over: the Command Center's last copy (with anything still pending) becomes BeyondStride's own. */
