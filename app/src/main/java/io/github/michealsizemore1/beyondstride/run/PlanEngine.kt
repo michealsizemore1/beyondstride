@@ -34,15 +34,31 @@ object PlanEngine {
         return null
     }
 
+    /**
+     * A plan's dates read top to bottom. Day headers usually have no year ("Sun, Jan 3"), so a date that falls well before
+     * the one above it belongs to the next year (a plan from November to April crosses New Year).
+     */
+    class Seq(start: String) {
+        private var prev: LocalDate? = try { LocalDate.parse(start).minusDays(14) } catch (e: Exception) { null }
+        val fy = prev?.plusDays(14)?.year ?: LocalDate.now().year
+        fun date(line: String): String? {
+            var d = dateFromLine(line, fy)?.let { LocalDate.parse(it) } ?: return null
+            val explicit = Regex("\\b20\\d{2}\\b").containsMatchIn(line) || Regex("\\d{1,2}[/-]\\d{1,2}[/-]\\d{2,4}").containsMatchIn(line)
+            if (!explicit) prev?.let { p -> var n = 0; while (d.isBefore(p.minusDays(60)) && n++ < 3) d = d.plusYears(1) }
+            prev = d; return d.toString()
+        }
+    }
+
     /** {schedule: {date: text}, mode: "dated" | "weekly"} (buildUploadedTrainingSchedule). */
     fun buildSchedule(text: String, startDate: String, weeks: Int): Pair<Map<String, String>, String> {
         val ls = lines(text); val fy = try { LocalDate.parse(startDate).year } catch (e: Exception) { LocalDate.now().year }
-        val headers = ArrayList<Pair<Int, String>>()
+        val headers = ArrayList<Pair<Int, String>>(); val seq = Seq(startDate)
         ls.forEachIndexed { i, line ->
-            val key = dateFromLine(line, fy) ?: return@forEachIndexed
+            if (dateFromLine(line, fy) == null) return@forEachIndexed
             if (META_SAME.containsMatchIn(line)) return@forEachIndexed
             val prev = (i - 1 downTo 0).map { ls[it] }.firstOrNull { it.trim().isNotEmpty() }
             if (prev != null && META_ALONE.matches(prev)) return@forEachIndexed
+            val key = seq.date(line) ?: return@forEachIndexed
             headers += i to key
         }
         val sched = LinkedHashMap<String, String>()
@@ -144,12 +160,13 @@ object PlanEngine {
 
     /** The date of the first dated day under the plan's "Week 1" heading, or null. */
     fun firstWeekStart(plan: JSONObject): String? {
-        val ls = lines(plan.optString("text")); val fy = try { LocalDate.parse(plan.optString("startDate")).year } catch (e: Exception) { LocalDate.now().year }
+        val ls = lines(plan.optString("text")); val seq = Seq(plan.optString("startDate")); val fy = seq.fy
         var inWeek1 = false
         for (l in ls) {
             WEEK_HEAD.find(l)?.let { m -> if (dateFromLine(l, fy) == null) { inWeek1 = m.groupValues[1] == "1"; return@let } }
-            if (!inWeek1 || META_SAME.containsMatchIn(l)) continue
-            dateFromLine(l, fy)?.let { return it }
+            if (META_SAME.containsMatchIn(l) || dateFromLine(l, fy) == null) continue
+            val d = seq.date(l)
+            if (inWeek1 && d != null) return d
         }
         return null
     }
@@ -299,12 +316,12 @@ object PlanEngine {
      * how many dated days come before it in that week. Null when the plan has no such heading for that day.
      */
     fun weekDay(plan: JSONObject, date: String): Pair<Int, Int>? {
-        val ls = lines(plan.optString("text")); val fy = try { LocalDate.parse(date).year } catch (e: Exception) { LocalDate.now().year }
+        val ls = lines(plan.optString("text")); val seq = Seq(plan.optString("startDate")); val fy = seq.fy
         var week: Int? = null; var day = 0
         for (i in ls.indices) {
             WEEK_HEAD.find(ls[i])?.let { m -> if (dateFromLine(ls[i], fy) == null) { week = m.groupValues[1].toInt(); day = 0; return@let } }
-            val k = dateFromLine(ls[i], fy) ?: continue
-            if (META_SAME.containsMatchIn(ls[i])) continue
+            if (dateFromLine(ls[i], fy) == null || META_SAME.containsMatchIn(ls[i])) continue
+            val k = seq.date(ls[i]) ?: continue
             day++
             if (k == date) return week?.let { it to day }
         }
