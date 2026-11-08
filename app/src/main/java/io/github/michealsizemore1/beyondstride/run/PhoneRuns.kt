@@ -202,7 +202,7 @@ class RunReceiverService : WearableListenerService() {
         val n = android.app.Notification.Builder(this, "runs")
             .setSmallIcon(R.drawable.ic_stat_run)
             .setContentTitle("${PhoneRuns.title(json)} saved")
-            .setContentText(PhoneRuns.shortLine(json) + if (sentToCc) " · sent to Command Center" else "")
+            .setContentText(PhoneRuns.shortLine(json) + if (sentToCc) (if (Standalone.on(this)) " · added to Activities" else " · sent to Command Center") else "")
             .setContentIntent(open).setAutoCancel(true).build()
         try { nm.notify(json.optLong("start").toInt(), n) } catch (e: SecurityException) { }
     }

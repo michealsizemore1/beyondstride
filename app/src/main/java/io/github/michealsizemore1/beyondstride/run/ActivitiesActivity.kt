@@ -61,7 +61,7 @@ class ActivitiesActivity : Activity() {
         })
         if (S.fetchedAt(this) == 0L) col.addView(txt(if (NutritionSync.ready(this)) "Open the Command Center once (after reloading it) so it can share your Activities." else "Set up LiveTrack first — Activities come through the same database.", 0xFFF2C94C.toInt(), 12f).apply { setPadding(0, dp(6), 0, 0) })
         CcStatus.line(this).let { (tx, c) -> col.addView(txt(tx, c, 11f, true).apply { setPadding(0, dp(4), 0, 0) }) }
-        S.notice(this)?.let { (m, at) -> if (System.currentTimeMillis() - at < 15 * 60_000L) col.addView(txt("Command Center: $m", 0xFF7DD3FC.toInt(), 12f, true).apply { setPadding(0, dp(6), 0, 0) }) }
+        S.notice(this)?.let { (m, at) -> if (System.currentTimeMillis() - at < 15 * 60_000L) col.addView(txt((if (Standalone.on(this)) "" else "Command Center: ") + m, 0xFF7DD3FC.toInt(), 12f, true).apply { setPadding(0, dp(6), 0, 0) }) }
         if (all.isEmpty() && S.status(this).isNotEmpty()) col.addView(txt(S.status(this), RunUi.MUTED, 11f).apply { setPadding(0, dp(4), 0, 0) })
 
         // The Command Center's order: plans, mileage, zones, shoes, plan upload, today's workout, the log, archived plans.
@@ -665,7 +665,7 @@ class ActivitiesActivity : Activity() {
             else if (plan.optString("createdAt").isNotEmpty()) meta += "Created " + plan.optString("createdAt") else plan.optString("startDate").takeIf { it.isNotEmpty() }?.let { meta += "Start $it" }
             if (!up) plan.optString("adjustedAt").takeIf { it.isNotEmpty() }?.let { meta += "Adjusted $it" }
             if (meta.isNotEmpty()) addView(txt(meta.joinToString(" • "), RunUi.MUTED, 12f).apply { setPadding(0, dp(4), 0, dp(6)) })
-            if (plan.optBoolean("hasPdf")) addView(txt("📄 The original PDF can be viewed in the Command Center.", RunUi.DIM, 11f))
+            if (plan.optBoolean("hasPdf") && !Standalone.on(ctx)) addView(txt("📄 The original PDF can be viewed in the Command Center.", RunUi.DIM, 11f))
             addView(androidx.core.widget.NestedScrollView(ctx).apply {
                 background = RunUi.rounded(0xFF141A18.toInt(), dp(8).toFloat()); setPadding(dp(10), dp(8), dp(10), dp(8))
                 addView(txt(plan.optString("display").ifEmpty { plan.optString("text") }.ifEmpty { "(No plan text)" }, Color.WHITE, 13f).apply { setTextIsSelectable(true); setLineSpacing(0f, 1.15f) })
@@ -950,7 +950,8 @@ class ActivitiesActivity : Activity() {
             if (text.lines().count { it.isNotBlank() } < 2) { android.widget.Toast.makeText(this, "No data rows found in CSV.", android.widget.Toast.LENGTH_LONG).show(); return }
             if (text.length > 5_000_000) { android.widget.Toast.makeText(this, "That CSV is too large to send (over 5 MB).", android.widget.Toast.LENGTH_LONG).show(); return }
             S.importCsv(this, text, csvHint, name)
-            android.widget.Toast.makeText(this, "Sent $name — the Command Center imports it (duplicates are skipped).", android.widget.Toast.LENGTH_LONG).show()
+            android.widget.Toast.makeText(this, if (Standalone.on(this)) "Importing $name (duplicates are skipped)…" else "Sent $name — the Command Center imports it (duplicates are skipped).", android.widget.Toast.LENGTH_LONG).show()
+            if (Standalone.on(this)) { val h = android.os.Handler(mainLooper); h.postDelayed({ if (!isFinishing) render() }, 2500) }
         } catch (e: Exception) { android.widget.Toast.makeText(this, "The selected file could not be read.", android.widget.Toast.LENGTH_LONG).show() }
     }
 

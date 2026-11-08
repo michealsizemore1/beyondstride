@@ -24,7 +24,7 @@ object PhoneStatus {
         Thread {
             try {
                 val req = PutDataMapRequest.create("/phonestatus").apply {
-                    dataMap.putInt("ccUnsent", unsentCc(app).size)
+                    dataMap.putInt("ccUnsent", unsentCc(app).size); dataMap.putBoolean("standalone", Standalone.on(app))
                     dataMap.putInt("runs", PhoneRuns.list(app).size)
                 }.asPutDataRequest().setUrgent()
                 Tasks.await(Wearable.getDataClient(app).putDataItem(req))
@@ -53,6 +53,7 @@ object PhoneStatus {
                 }
                 // The Command Center opens in the phone's browser, which needs a tap on the phone.
                 val n = unsentCc(ctx).size
+                if (Standalone.on(ctx)) { Thread { val s = CommandCenter.upload(ctx, unsentCc(ctx)); notify(ctx, 901, if (s > 0) "Added $s run${if (s == 1) "" else "s"} to Activities" else "Activities are up to date", "All runs are in BeyondStride's Activities", Intent(ctx, RunsActivity::class.java)) }.start(); return }
                 notify(ctx, 901, if (n > 0) "Send $n run${if (n == 1) "" else "s"} to Command Center" else "Command Center is up to date",
                     if (n > 0) "Tap to open the Command Center and add them" else "All runs are already there",
                     Intent(ctx, RunsActivity::class.java).putExtra("sendCc", n > 0))

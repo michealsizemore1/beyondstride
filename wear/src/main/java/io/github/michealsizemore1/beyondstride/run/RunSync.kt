@@ -100,7 +100,7 @@ object RunSync {
                 val st = com.google.android.gms.tasks.Tasks.await(dc.getDataItems(Uri.parse("wear://*/phonestatus")))
                 st.map { DataMapItem.fromDataItem(it).dataMap }.firstOrNull()?.let { m ->
                     app.getSharedPreferences("phonestatus", 0).edit()
-                        .putInt("ccUnsent", m.getInt("ccUnsent")).putBoolean("stryd", m.getBoolean("stryd"))
+                        .putInt("ccUnsent", m.getInt("ccUnsent")).putBoolean("standalone", m.getBoolean("standalone")).putBoolean("stryd", m.getBoolean("stryd"))
                         .putLong("at", System.currentTimeMillis()).apply()
                 }
                 st.release()
@@ -271,7 +271,7 @@ class RunSettingsListener : WearableListenerService() {
             if (e.type == DataEvent.TYPE_CHANGED && e.dataItem.uri.path == "/phonestatus") {
                 val m = DataMapItem.fromDataItem(e.dataItem).dataMap
                 getSharedPreferences("phonestatus", 0).edit()
-                    .putInt("ccUnsent", m.getInt("ccUnsent"))
+                    .putInt("ccUnsent", m.getInt("ccUnsent")).putBoolean("standalone", m.getBoolean("standalone"))
                     .putBoolean("stryd", m.getBoolean("stryd")).putLong("at", System.currentTimeMillis()).apply()
                 return@forEach
             }

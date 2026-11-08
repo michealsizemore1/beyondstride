@@ -420,10 +420,11 @@ class RunActivity : Activity() {
             val lp = { last: Boolean -> LinearLayout.LayoutParams(0, MATCH_PARENT, 1f).apply { if (!last) marginEnd = dp(4) } }
             addView(column().apply {
                 gravity = Gravity.CENTER; background = rounded(0xFF7B61FF.toInt(), 14); setPadding(dp(2), dp(6), dp(2), dp(6))
-                addView(label("Command Center", Color.WHITE, 11f, true))
-                addView(label(if (ps.contains("at")) (if (cc == 0) "✓ sent" else "Send $cc") else "—", 0xDDFFFFFF.toInt(), 9f))
+                val sa = ps.getBoolean("standalone", false)
+                addView(label(if (sa) "Activities" else "Command Center", Color.WHITE, 11f, true))
+                addView(label(if (ps.contains("at")) (if (cc == 0) (if (sa) "✓ added" else "✓ sent") else (if (sa) "Add $cc" else "Send $cc")) else "—", 0xDDFFFFFF.toInt(), 9f))
                 setOnClickListener {
-                    RunSync.tellPhone(this@RunActivity, "/cmd/cc") { ok -> flash(if (ok) "Tap the notification on your phone" else "Phone not connected") }
+                    RunSync.tellPhone(this@RunActivity, "/cmd/cc") { ok -> flash(if (!ok) "Phone not connected" else if (sa) "Adding to Activities on the phone" else "Tap the notification on your phone") }
                 }
             }, lp(false))
             addView(column().apply {
@@ -1630,7 +1631,7 @@ class RunActivity : Activity() {
             chart("Water", 0xFF3498DB.toInt(), " oz") { (if (it.water + it.sportsOz + it.otherOz > 0) it.water else it.waterOz).toDouble() }
             chart("Total liquids (excl. caffeine)", 0xFF16A085.toInt(), " oz") { it.waterOz.toDouble() }
         }
-        col.addView(label("Food logged on the phone or here shows in the Command Center too.", C.DIM, 9f).apply { setPadding(0, dp(8), 0, 0) })
+        col.addView(label(if (getSharedPreferences("phonestatus", 0).getBoolean("standalone", false)) "Food logged here or on the phone shows on both." else "Food logged on the phone or here shows in the Command Center too.", C.DIM, 9f).apply { setPadding(0, dp(8), 0, 0) })
         col.addView(View(this).apply { setBackgroundColor(0x22FFFFFF) }, LinearLayout.LayoutParams(MATCH_PARENT, dp(1)).apply { topMargin = dp(10) })
         col.addView(menuRow(2))
         root.removeAllViews()

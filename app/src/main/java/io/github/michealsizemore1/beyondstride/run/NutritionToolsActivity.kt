@@ -47,7 +47,7 @@ class NutritionToolsActivity : Activity() {
     private fun ideas(col: LinearLayout) {
         val ctx = this
         col.addView(RunUi.text(this, "Meal ideas", Color.WHITE, 26f, true))
-        col.addView(RunUi.text(this, "20% protein · 60% carbs · 20% fat — the runner's ratio the Command Center uses.", RunUi.MUTED, 12f))
+        col.addView(RunUi.text(this, "20% protein · 60% carbs · 20% fat — the runner's ratio.", RunUi.MUTED, 12f))
         col.addView(android.widget.HorizontalScrollView(this).apply {
             isHorizontalScrollBarEnabled = false
             addView(LinearLayout(ctx).apply {
@@ -67,7 +67,7 @@ class NutritionToolsActivity : Activity() {
         // From your own foods.
         col.addView(RunUi.section(this, "FROM YOUR FOODS"))
         val mine = MealIdeas.personal(FoodLibrary.mine(this))
-        if (mine.isEmpty()) col.addView(RunUi.text(this, "No close matches yet — your Command Center food database (favorites and healthy foods) is used to build 20/60/20 combinations.", RunUi.MUTED, 12f))
+        if (mine.isEmpty()) col.addView(RunUi.text(this, "No close matches yet — your food database (favorites and healthy foods) is used to build 20/60/20 combinations.", RunUi.MUTED, 12f))
         mine.forEach { items ->
             col.addView(ideaCard("⭐ " + items.joinToString(" + ") { it.name }, items.map { "${it.name} — ${it.servingLabel}" },
                 items.sumOf { it.cal ?: 0.0 }, items.sumOf { it.prot ?: 0.0 }, items.sumOf { it.carbs ?: 0.0 }, items.sumOf { it.fat ?: 0.0 }, null) { meal ->
@@ -252,7 +252,7 @@ class NutritionToolsActivity : Activity() {
                     line("Activities:", if (r.activities.isEmpty() && r.otherActive == 0) "No workout yet · 0 active kcal"
                         else "${r.activities.size} run${if (r.activities.size == 1) "" else "s"} · ${CT.kcal(r.active)} active kcal")
                     if (r.activities.isNotEmpty()) line("Used:", r.activities.joinToString("; ") { String.format(Locale.US, "%s (%.2f mi · %s · %s kcal)", it.name, it.miles, it.duration, CT.kcal(it.kcal)) }, 0xFFB5D99C.toInt())
-                    if (r.otherActive > 0) line("Command Center:", "+${CT.kcal(r.otherActive)} kcal from other activities logged there", 0xFFB5D99C.toInt())
+                    if (r.otherActive > 0) line("Other activities:", "+${CT.kcal(r.otherActive)} kcal from other activities logged", 0xFFB5D99C.toInt())
                     val logged = t?.cal ?: 0
                     line("Logged so far:", "${CT.kcal(logged)} kcal · " + if (logged > r.target) "Over target: ${CT.kcal(logged - r.target)} kcal" else "Remaining: ${CT.kcal(r.target - logged)} kcal",
                         if (logged > r.target) 0xFFFF8A80.toInt() else Color.WHITE)

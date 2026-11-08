@@ -123,7 +123,7 @@ class ActivityEditActivity : Activity() {
         put("humidity", (f("humidity").toDoubleOrNull() ?: 0.0).coerceIn(0.0, 100.0)); put("aqi", (f("aqi").toIntOrNull() ?: 0).coerceIn(0, 500))
         put("execScore", f("execScore").toDoubleOrNull() ?: 0.0); put("routeUrl", route); put("notes", f("notes")); put("injuryReport", f("injuryReport"))
         ActivityStore.save(this, act, clear)
-        Toast.makeText(this, "Saved — also goes to the Command Center", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, if (Standalone.on(this)) "Saved" else "Saved — also goes to the Command Center", Toast.LENGTH_SHORT).show()
         finish()
     }
 

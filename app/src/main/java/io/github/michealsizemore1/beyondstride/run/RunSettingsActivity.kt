@@ -199,7 +199,7 @@ class RunSettingsActivity : Activity() {
         }.apply { layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(16) } })
         }
         // ---- Command Center
-        if (on("cc")) {
+        if (!Standalone.on(this) && on("cc")) {
             val cc = input("Command Center page", RunSettings.ccUrl(this), InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI)
             col.addView(RunUi.text(this, "Where finished runs are sent and where \"Send plan to BeyondStride\" comes from.", RunUi.MUTED, 12f).apply { setPadding(dp(4), dp(6), 0, 0) })
             switch("Send runs automatically", "Each finished run goes straight to the Command Center (through your LiveTrack database) — it shows in Activities next time the Command Center is open. Off: tap Command Center to send.",
@@ -360,7 +360,7 @@ class RunSettingsActivity : Activity() {
         row("∿", "Zones & power", "Max ${fmt(RunSettings.hrMax(ctx))} · Rest ${fmt(RunSettings.hrRest(ctx))} · CP ${RunSettings.cp(ctx)} W") { page = "zones"; render() }
         row("◉", "LiveTrack", if (Live.db(ctx).isBlank()) "Not set up" else if (p.getBoolean("liveOn", false)) "On · ${Live.contacts(ctx).size} contact(s)" else "Off") {
             startActivity(Intent(ctx, LiveTrackActivity::class.java)) }
-        row("⌂", "Command Center", try { Uri.parse(RunSettings.ccUrl(ctx)).host ?: "" } catch (e: Exception) { "" }) { page = "cc"; render() }
+        if (!Standalone.on(ctx)) row("⌂", "Command Center", try { Uri.parse(RunSettings.ccUrl(ctx)).host ?: "" } catch (e: Exception) { "" }) { page = "cc"; render() }
         row("☁", "Stand-alone & cloud copy", if (!Standalone.on(ctx)) "Not yet — still syncing with the Command Center" else CcStatus.line(ctx).first.removePrefix("Stand-alone · ").replaceFirstChar { it.uppercase() }) { page = "standalone"; render() }
         row("✨", "AI food search", if (AiFood.hasKey(ctx)) "Key saved · AI search and label photos on" else "Add your Anthropic key") { page = "ai"; render() }
         row("⇪", "Backup", Backup.lastAt(ctx).takeIf { it > 0 }?.let { "Last: " + java.text.SimpleDateFormat("MMM d, h:mm a", java.util.Locale.getDefault()).format(java.util.Date(it)) +

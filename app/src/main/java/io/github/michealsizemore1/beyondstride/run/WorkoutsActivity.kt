@@ -73,8 +73,8 @@ class WorkoutsActivity : Activity() {
         col.addView(RunUi.text(this,
             "Workouts go to the watch automatically (your whole plan plus your library). On the watch, today's workout " +
             "is preloaded on the Running screen; tap Workouts & Plan to pick any planned day or a library workout. " +
-            "To bring in your Command Center plan, open it and tap " +
-            "“Send plan to BeyondStride” under Upcoming / Active Training Plan.", RunUi.MUTED, 13f).apply { setPadding(dp(4), dp(12), dp(4), 0) })
+            (if (Standalone.on(ctx)) "Your training plan's workouts can be sent here from Activities → training plan → Send to watch."
+            else "To bring in your Command Center plan, open it and tap “Send plan to BeyondStride” under Upcoming / Active Training Plan."), RunUi.MUTED, 13f).apply { setPadding(dp(4), dp(12), dp(4), 0) })
         col.addView(RunUi.button(this, "+ Add a workout to a date", RunUi.CARD, Color.WHITE) { pickDateThenWorkout() }.apply {
             layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(10) }
         })

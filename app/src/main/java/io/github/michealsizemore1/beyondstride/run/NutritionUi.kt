@@ -296,7 +296,7 @@ object NutritionUi {
         box.addView(android.widget.TextView(ctx).apply { text = "Post-run weight (lb)"; setPadding(0, dp(8), 0, 0) })
         val post = field("e.g. 171.2", today?.postWeight ?: 0.0); box.addView(post)
         box.addView(android.widget.TextView(ctx).apply {
-            text = "Also goes to the Command Center (its Wellness weight fields). Drinks are in Liquids on the Nutrition tab."; textSize = 12f; setPadding(0, dp(8), 0, 0)
+            text = (if (Standalone.on(ctx)) "" else "Also goes to the Command Center (its Wellness weight fields). ") + "Drinks are in Liquids on the Nutrition tab."; textSize = 12f; setPadding(0, dp(8), 0, 0)
         })
         android.app.AlertDialog.Builder(ctx).setTitle("Weight · " + if (NutriDay.isToday()) "today" else java.time.LocalDate.parse(NutriDay.date()).format(java.time.format.DateTimeFormatter.ofPattern("EEE, MMM d", Locale.US))).setView(ScrollView(ctx).apply { addView(box) })
             .setPositiveButton("Save") { _, _ ->

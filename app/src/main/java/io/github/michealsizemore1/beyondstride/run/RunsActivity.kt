@@ -268,7 +268,7 @@ open class RunsActivity : Activity() {
                     addView(RunUi.text(ctx, PhoneRuns.title(run), Color.WHITE, 17f, true), LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
                     val badges = buildList {
                         if (run.has("stryd")) add("Stryd ✓")
-                        if (PhoneRuns.sentToCommandCenter(ctx, start)) add("CC ✓")
+                        if (PhoneRuns.sentToCommandCenter(ctx, start)) add(if (Standalone.on(ctx)) "In Activities ✓" else "CC ✓")
                     }.joinToString("  ")
                     addView(RunUi.text(ctx, badges, RunUi.MUTED, 12f))
                 })
