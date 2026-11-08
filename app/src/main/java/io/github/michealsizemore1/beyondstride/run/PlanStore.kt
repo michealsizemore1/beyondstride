@@ -108,9 +108,10 @@ object PlanStore {
 
     @Volatile private var daysKey = ""; @Volatile private var daysCache: JSONObject? = null
     @Volatile private var viewKey = ""; @Volatile private var viewCache: JSONObject? = null
+    fun invalidate() { viewCache = null }
     private fun localView(ctx: Context): JSONObject {
         val str = p(ctx).getString("local", "{}") ?: "{}"
-        val vk = "${str.length}.${str.hashCode()}.${java.time.LocalDate.now()}.$daysKey"
+        val vk = "${str.length}.${str.hashCode()}.${java.time.LocalDate.now()}.$daysKey.${PlanAdjust.stamp(ctx)}"
         viewCache?.let { if (vk == viewKey) return it }
         val o = local(ctx)
         // Once: plans copied from the Command Center get a schedule built with the current rules (each day stops at the
@@ -126,10 +127,13 @@ object PlanStore {
         o.optJSONObject("current")?.let { pl ->
             val k = pl.optString("text").hashCode().toString() + pl.optString("startDate") + pl.optJSONObject("schedule")?.length() + java.time.LocalDate.now()
             if (k != daysKey || daysCache == null) { daysCache = PlanEngine.days(pl); daysKey = k }
-            pl.put("days", daysCache).put("race", PlanEngine.race(pl))
+            // Accepted plan adjustments replace those days (the plan's text stays as it is).
+            val shown = JSONObject(daysCache.toString())
+            try { PlanAdjust.accepted(ctx, pl).forEach { (d, t) -> shown.put(d, t) } } catch (e: Exception) { }
+            pl.put("days", shown).put("race", PlanEngine.race(pl))
         }
         o.optJSONObject("upcoming")?.let { it.put("race", PlanEngine.race(it)) }
-        viewCache = o; viewKey = "${str.length}.${str.hashCode()}.${java.time.LocalDate.now()}.$daysKey"
+        viewCache = o; viewKey = "${str.length}.${str.hashCode()}.${java.time.LocalDate.now()}.$daysKey.${PlanAdjust.stamp(ctx)}"
         return o
     }
 

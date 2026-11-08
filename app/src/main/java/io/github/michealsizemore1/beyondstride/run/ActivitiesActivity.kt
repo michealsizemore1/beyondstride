@@ -821,6 +821,27 @@ class ActivitiesActivity : Activity() {
                 Insights.adherence(ctx, today.toString())?.let { a -> addView(txt(a.status, a.color, 13f, true)) }
                 Insights.weekScore(ctx)?.let { addView(txt(it, RunUi.MUTED, 12f)) }
                 Insights.recoveryWarning(ctx)?.let { addView(txt(it, 0xFFF2C94C.toInt(), 12f, true).apply { setPadding(0, dp(6), 0, 0) }) }
+                // 🔧 Plan adjustments: suggested ones wait for Accept; accepted ones can be undone.
+                val sug = PlanAdjust.suggestions(ctx); val acc = PlanAdjust.acceptedList(ctx)
+                if (sug.isNotEmpty() || acc.isNotEmpty()) addView(LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL
+                    background = RunUi.rounded(0xFF2B2F55.toInt(), dp(10).toFloat()); setPadding(dp(10), dp(8), dp(10), dp(8))
+                    layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(8) }
+                    addView(txt("🔧 Plan adjustments", 0xFFC4B5FD.toInt(), 13f, true))
+                    sug.forEach { s ->
+                        addView(txt(s.optString("note"), Color.WHITE, 12f).apply { setPadding(0, dp(6), 0, dp(4)) })
+                        addView(LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL
+                            pbtn(this, "✓ Accept", 0xFF16A34A.toInt()) { PlanAdjust.decide(ctx, s, true); android.widget.Toast.makeText(ctx, "Plan adjusted (phone and watch)", android.widget.Toast.LENGTH_SHORT).show(); render() }
+                            addView(android.view.View(ctx), LinearLayout.LayoutParams(dp(8), 1))
+                            pbtn(this, "Keep original", 0xFF4B5563.toInt()) { PlanAdjust.decide(ctx, s, false); render() }
+                        })
+                    }
+                    acc.forEach { a ->
+                        addView(LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(0, dp(6), 0, 0)
+                            addView(txt("✓ " + a.optString("note"), 0xFF9AA5A0.toInt(), 11f), LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
+                            pbtn(this, "Undo", 0xFF4B5563.toInt()) { PlanAdjust.undo(ctx, a.optString("id")); render() }
+                        })
+                    }
+                })
             })
             if (!collapsedCard) addView(txt(PlanStore.workoutFor(plan, today.toString()), Color.WHITE, 14f).apply { setPadding(dp(14), dp(12), dp(14), dp(12)); setLineSpacing(0f, 1.2f); setTextIsSelectable(true) })
         })

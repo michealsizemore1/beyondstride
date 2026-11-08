@@ -169,6 +169,8 @@ open class RunsActivity : Activity() {
                 orientation = LinearLayout.VERTICAL
                 addView(RunUi.text(ctx, todayW?.optString("name") ?: "No workout planned", Color.WHITE, 17f, true))
                 Insights.adherence(ctx, R.today())?.let { a -> if (a.planned > 0 || a.done > 0) addView(RunUi.text(ctx, a.status, a.color, 12f, true)) }
+                PlanAdjust.suggestions(ctx).size.takeIf { it > 0 }?.let { n -> addView(RunUi.text(ctx, "🔧 $n plan adjustment${if (n == 1) "" else "s"} suggested — review in Activities ▸", 0xFFC4B5FD.toInt(), 12f, true).apply {
+                    setPadding(0, dp(4), 0, 0); setOnClickListener { startActivity(Intent(ctx, ActivitiesActivity::class.java)) } }) }
                 todayW?.let { w ->
                     addView(RunUi.text(ctx, io.github.michealsizemore1.beyondstride.Workouts.outline(w, hrMax, hrRest, RunSettings.cp(ctx)).take(4).joinToString("\n"), RunUi.MUTED, 12f))
                     // Just the name and outline here; the full notes are on the Plan tab and the Activities workout card.

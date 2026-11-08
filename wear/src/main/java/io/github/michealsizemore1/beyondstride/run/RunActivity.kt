@@ -1668,6 +1668,7 @@ class RunActivity : Activity() {
                     ins.optString("adh").takeIf { it.isNotEmpty() }?.let { addView(label(it, ins.optInt("adhColor", Color.WHITE), 10f, true).apply { setPadding(0, dp(3), 0, 0) }) }
                     ins.optString("week").takeIf { it.isNotEmpty() }?.let { addView(label(it, 0xCCFFFFFF.toInt(), 9f)) }
                     ins.optString("warn").takeIf { it.isNotEmpty() }?.let { addView(label(it, 0xFFF2C94C.toInt(), 9f, true).apply { setPadding(0, dp(3), 0, 0) }) }
+                    ins.optString("adjust").takeIf { it.isNotEmpty() }?.let { addView(label(it, 0xFFC4B5FD.toInt(), 9f, true).apply { setPadding(0, dp(3), 0, 0) }) }
                 }
                 if (actPlanOpen) addView(label(p.optString("text"), Color.WHITE, 10f).apply { gravity = Gravity.START; setPadding(0, dp(4), 0, 0) })
                 setOnClickListener { actPlanOpen = !actPlanOpen; showActivities() }

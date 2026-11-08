@@ -21,8 +21,11 @@ object Insights {
 
     // ── Planned vs done ──
     /** Miles in a plan day's first line ("Sat, Nov 7: 8 E + STRENGTH" → 8; "Long run 14 mi" → 14). 0 for rest / none. */
+    /** Lines added by an accepted plan adjustment ("↪ Moved from …") — the workout itself is on the next line. */
+    fun isMarker(l: String) = l.trimStart().let { it.startsWith("↪") || it.startsWith("⇄") || it.startsWith("↘") || it.startsWith("＋") }
+    fun headLine(text: String) = text.lines().firstOrNull { it.isNotBlank() && !isMarker(it) }
     fun plannedMiles(text: String): Double {
-        val first = text.lines().firstOrNull { it.isNotBlank() } ?: return 0.0
+        val first = headLine(text) ?: return 0.0
         if (Regex("rest\\s*day|no workout", RegexOption.IGNORE_CASE).containsMatchIn(first)) return 0.0
         val body = if (first.contains(":")) first.substringAfter(":") else first
         val units = Regex("(\\d+(?:\\.\\d+)?)\\s*(?:-\\s*\\d+(?:\\.\\d+)?\\s*)?(mi|miles?|E|LR|L|MP|M|T|R|easy|long|recovery|rec|steady|tempo|progression)\\b", RegexOption.IGNORE_CASE)
@@ -63,7 +66,13 @@ object Insights {
     private fun mi(d: Double) = if (d == Math.floor(d)) d.toLong().toString() else String.format(java.util.Locale.US, "%.1f", d)
 
     // ── Recovery warning ──
-    fun readiness(ctx: Context): Readiness.Result? = try {
+    @Volatile private var rdAt = 0L; @Volatile private var rdKey = ""; @Volatile private var rdCache: Readiness.Result? = null
+    fun readiness(ctx: Context): Readiness.Result? {
+        val key = "${ReadinessSync.checks(ctx).size}.${ReadinessSync.nightsAt(ctx)}.${PhoneRuns.list(ctx).size}.${Readiness.today()}"
+        if (key == rdKey && System.currentTimeMillis() - rdAt < 5 * 60_000L) return rdCache
+        val r = readinessCalc(ctx); rdCache = r; rdKey = key; rdAt = System.currentTimeMillis(); return r
+    }
+    private fun readinessCalc(ctx: Context): Readiness.Result? = try {
         Readiness.compute(ReadinessSync.checks(ctx), ReadinessSync.nights(ctx), PhoneRuns.list(ctx).take(120).mapNotNull { PhoneRuns.read(it) },
             Readiness.today(), fuelYesterday = NutritionStore.yesterday(ctx))
     } catch (e: Exception) { null }
@@ -167,6 +176,7 @@ object Insights {
         val dr = drinkTarget(ctx); o.put("drink", "Drink target ~${dr.total} oz (${dr.base} base + ${dr.run} for ${dr.note})")
         sweatRate(ctx)?.let { o.put("sweat", "Sweat rate ~${it.ozPerHr} oz/hr (${it.runs} run${if (it.runs == 1) "" else "s"})") }
         longRun(ctx)?.let { lr -> o.put("lrTitle", lr.title).put("lr", org.json.JSONArray(lr.lines)) }
+        PlanAdjust.suggestions(ctx).size.takeIf { it > 0 }?.let { o.put("adjust", "🔧 $it plan adjustment${if (it == 1) "" else "s"} suggested — accept on the phone (Activities)") }
         return o
     }
 }
