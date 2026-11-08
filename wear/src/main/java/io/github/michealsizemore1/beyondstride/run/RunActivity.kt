@@ -411,6 +411,14 @@ class RunActivity : Activity() {
             setOnClickListener { startRun() }
         })
 
+        // ☀️ Morning report from the phone (today, until noon).
+        io.github.michealsizemore1.beyondstride.NutritionStore.acts(this)?.optJSONObject("morning")?.takeIf {
+            it.optString("date") == java.time.LocalDate.now().toString() && java.time.LocalTime.now().hour < 12 }?.let { m ->
+            col.addView(LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; background = rounded(0xFF243B2E.toInt(), 16); setPadding(dp(12), dp(8), dp(12), dp(8))
+                layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(8) }
+                addView(label("☀️ Morning report ▸", Color.WHITE, 12f, true)); addView(label(m.optString("headline"), C.MUTED, 9f))
+                setOnClickListener { showMorning() } })
+        }
         // 2. Command Center + LiveTrack (same buttons as the phone).
         val ps = getSharedPreferences("phonestatus", 0)
         col.addView(LinearLayout(this).apply {
@@ -1065,6 +1073,26 @@ class RunActivity : Activity() {
         prefs.edit().putString("screens", screens.toString()).apply()
         builtScreen = -1
         // (sent to the phone by SettingsSync, like every other setting)
+    }
+
+    /** ☀️ Morning report (same as the phone's). */
+    private fun showMorning(): Unit = overlay { col ->
+        val m = io.github.michealsizemore1.beyondstride.NutritionStore.acts(this)?.optJSONObject("morning")
+        col.addView(label("☀️ Morning", Color.WHITE, 18f, true))
+        if (m == null) { col.addView(label("Open BeyondStride on the phone once to send it here.", C.MUTED, 10f)); return@overlay }
+        col.addView(LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; background = rounded(0xFF243B2E.toInt(), 16); setPadding(dp(10), dp(8), dp(10), dp(8))
+            layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(6) }
+            addView(label(m.optString("advice"), Color.WHITE, 10f, true)) })
+        val secs = m.optJSONArray("sections")
+        for (i in 0 until (secs?.length() ?: 0)) { val sct = secs!!.optJSONObject(i) ?: continue
+            col.addView(LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; background = rounded(C.CARD, 16); setPadding(dp(10), dp(6), dp(10), dp(6))
+                layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(6) }
+                addView(label(sct.optString("icon") + " " + sct.optString("title").uppercase(), C.MUTED, 9f, true))
+                addView(label(sct.optString("main"), sct.optInt("color", Color.WHITE), 13f, true))
+                val ls = sct.optJSONArray("lines"); for (j in 0 until (ls?.length() ?: 0)) addView(label(ls!!.optString(j), Color.WHITE, 9f).apply { gravity = Gravity.START })
+            })
+        }
+        col.addView(label("‹ Back", C.ACCENT, 12f, true).apply { setPadding(0, dp(10), 0, 0); setOnClickListener { overlayOpen = false; startBuilt = false; renderStart() } })
     }
 
     private fun overlay(build: (LinearLayout) -> Unit) {

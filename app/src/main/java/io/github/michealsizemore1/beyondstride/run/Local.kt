@@ -123,6 +123,7 @@ object Local {
         }
         commit(ctx)
         try { PlanStore.syncWatchIfNeeded(ctx) } catch (e: Exception) { }
+        Reminders.morning(ctx)
         if (WeightImport.enabled(ctx) && (hourly || now - p.getLong("wtAt", 0L) > 15 * 60_000L)) { p.edit().putLong("wtAt", now).apply(); try { WeightImport.sync(ctx) } catch (e: Exception) { } }
         try { DailySummary.publish(ctx) } catch (e: Exception) { }
         if (now - p.getLong("cloudTry", 0L) > 3 * 60_000L || hourly) { p.edit().putLong("cloudTry", now).apply(); try { CloudCopy.sync(ctx) } catch (e: Exception) { } }

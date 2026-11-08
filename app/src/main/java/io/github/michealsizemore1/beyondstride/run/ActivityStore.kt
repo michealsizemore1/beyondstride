@@ -176,6 +176,7 @@ object ActivityStore {
         }
         // Planned vs done, recovery warning, drink target / sweat rate, long-run fueling.
         try { o.put("insights", Insights.watch(ctx)) } catch (e: Exception) { }
+        try { o.put("morning", MorningReport.json(MorningReport.build(ctx))) } catch (e: Exception) { }
         // Recent activities.
         val rec = org.json.JSONArray()
         all.sortedByDescending { str(it, "date") }.take(25).forEach { a -> rec.put(JSONObject().put("date", str(a, "date")).put("title", str(a, "title").ifEmpty { str(a, "type") }).put("type", str(a, "type"))

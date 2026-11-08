@@ -150,6 +150,14 @@ open class RunsActivity : Activity() {
             io.github.michealsizemore1.beyondstride.ReadinessSync.nights(this), runs.take(120), R.today(), fuelYesterday = io.github.michealsizemore1.beyondstride.NutritionStore.yesterday(this))
         val todayW = WorkoutStore.plan(this).optJSONObject(WorkoutStore.dayFmt.format(Date()))
         col.addView(RunUi.section(this, "TODAY"))
+        // ☀️ Morning report (until noon).
+        if (java.time.LocalTime.now().hour < 12 && MorningReport.enabled(this)) col.addView(RunUi.card(this).apply {
+            background = RunUi.rounded(0xFF243B2E.toInt(), dp(14).toFloat())
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dp(8) }
+            addView(RunUi.text(ctx, "☀️ Morning report ▸", Color.WHITE, 16f, true))
+            addView(RunUi.text(ctx, "Sleep, readiness, today's workout, weather, fuel, weight and your week — on one screen", RunUi.MUTED, 12f))
+            setOnClickListener { startActivity(Intent(ctx, MorningReportActivity::class.java)) }
+        })
         col.addView(RunUi.card(this).apply {
             addView(LinearLayout(ctx).apply {
                 orientation = LinearLayout.VERTICAL

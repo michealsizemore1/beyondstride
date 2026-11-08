@@ -261,6 +261,12 @@ class RunSettingsActivity : Activity() {
         switch("Update the backup after every run", "Keeps the saved backup file current automatically", Backup.auto(this)) { Backup.setAuto(ctx, it) }
         // 🔔 Reminders (checked about once an hour; each one at most once).
         col.addView(RunUi.text(this, "🔔 Reminders", Color.WHITE, 15f, true).apply { setPadding(0, dp(14), 0, 0) })
+        switch("☀️ Morning report", "When your sleep is in — or by " + java.time.LocalTime.of(MorningReport.time(this) / 60, MorningReport.time(this) % 60).format(java.time.format.DateTimeFormatter.ofPattern("h:mm a", java.util.Locale.US)) +
+            " at the latest: readiness, today's workout, weather, fuel, weight, week so far", MorningReport.enabled(this)) { MorningReport.setEnabled(ctx, it) }
+        col.addView(RunUi.text(this, "Morning report time: change ›", RunUi.ACCENT, 13f, true).apply { setPadding(dp(4), dp(2), 0, dp(6))
+            setOnClickListener { val m = MorningReport.time(ctx); android.app.TimePickerDialog(ctx, { _, h, mi -> MorningReport.setTime(ctx, h * 60 + mi); render() }, m / 60, m % 60, false).show() } })
+        col.addView(RunUi.text(this, "Open the morning report ›", RunUi.ACCENT, 13f, true).apply { setPadding(dp(4), 0, 0, dp(6))
+            setOnClickListener { startActivity(Intent(ctx, MorningReportActivity::class.java)) } })
         Reminders.KINDS.forEach { (k, label) -> switch(label, when (k) {
             "prefuel" -> "5–9 pm the day before a long / hard workout: calories and carbs so far vs target"
             "rehydrate" -> "After a run with a post-run weight: how much more to drink"
