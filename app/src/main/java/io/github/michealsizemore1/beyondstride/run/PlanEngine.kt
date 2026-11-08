@@ -142,10 +142,27 @@ object PlanEngine {
         return (if (isRaceL) l else l.plusDays(1)).toString()
     }
 
+    /** The date of the first dated day under the plan's "Week 1" heading, or null. */
+    fun firstWeekStart(plan: JSONObject): String? {
+        val ls = lines(plan.optString("text")); val fy = try { LocalDate.parse(plan.optString("startDate")).year } catch (e: Exception) { LocalDate.now().year }
+        var inWeek1 = false
+        for (l in ls) {
+            WEEK_HEAD.find(l)?.let { m -> if (dateFromLine(l, fy) == null) { inWeek1 = m.groupValues[1] == "1"; return@let } }
+            if (!inWeek1 || META_SAME.containsMatchIn(l)) continue
+            dateFromLine(l, fy)?.let { return it }
+        }
+        return null
+    }
+
     /** The race date shown on the workout card (confirmed, detected, set, or start + weeks). */
     fun race(plan: JSONObject): String {
         if (plan.optString("raceDate").isNotEmpty() && plan.optBoolean("raceDateConfirmed")) return plan.optString("raceDate")
-        raceDate(plan.optString("text"))?.let { return it }
+        // A dated plan ends on race day: its last dated day (or a "Month D, YYYY" race mention within the plan's dates).
+        val start = plan.optString("startDate")
+        val last = if (plan.optString("scheduleMode") == "dated") plan.optJSONObject("schedule")?.keys()?.asSequence()?.maxOrNull() else null
+        val det = raceDate(plan.optString("text"))?.takeIf { start.isEmpty() || it >= start }
+        if (last != null) return if (det != null && det >= last && det <= LocalDate.parse(last).plusDays(1).toString()) det else last
+        det?.let { return it }
         if (plan.optString("raceDate").isNotEmpty()) return plan.optString("raceDate")
         val st = plan.optString("startDate"); val w = plan.optInt("weeks")
         return if (st.isNotEmpty() && w > 0) try { LocalDate.parse(st).plusDays(w * 7L).toString() } catch (e: Exception) { "" } else ""

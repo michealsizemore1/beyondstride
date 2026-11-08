@@ -116,13 +116,15 @@ object PlanStore {
         val o = local(ctx)
         // Once: plans copied from the Command Center get a schedule built with the current rules (each day stops at the
         // next "Week N" heading), and a dated plan starts on its first dated day (so the header says the right week).
-        if (!p(ctx).getBoolean("fixed2", false)) {
+        if (!p(ctx).getBoolean("fixed3", false)) {
             listOf("current", "upcoming").forEach { k -> o.optJSONObject(k)?.let { pl ->
                 PlanEngine.rebuild(pl)
-                if (pl.optString("scheduleMode") == "dated") pl.optJSONObject("schedule")?.keys()?.asSequence()?.minOrNull()?.let { first ->
-                    if (pl.optString("startDate").isEmpty() || first > pl.optString("startDate")) pl.put("startDate", first) }
+                // The plan starts on the first day under its "Week 1" heading (else its first dated day).
+                (PlanEngine.firstWeekStart(pl) ?: if (pl.optString("scheduleMode") == "dated") pl.optJSONObject("schedule")?.keys()?.asSequence()?.minOrNull() else null)?.let { pl.put("startDate", it) }
+                // A race date carried over without being confirmed is worked out again from the plan.
+                if (!pl.optBoolean("raceDateConfirmed")) pl.put("raceDate", "")
             } }
-            p(ctx).edit().putBoolean("fixed2", true).apply(); saveLocal(ctx, o); return localView(ctx)
+            p(ctx).edit().putBoolean("fixed3", true).apply(); saveLocal(ctx, o); return localView(ctx)
         }
         o.optJSONObject("current")?.let { pl ->
             val k = pl.optString("text").hashCode().toString() + pl.optString("startDate") + pl.optJSONObject("schedule")?.length() + java.time.LocalDate.now()

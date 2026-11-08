@@ -852,7 +852,7 @@ class ActivitiesActivity : Activity() {
         fun pick(cur: String, go: (String) -> Unit) { val d = try { java.time.LocalDate.parse(cur) } catch (e: Exception) { java.time.LocalDate.now() }
             android.app.DatePickerDialog(ctx, { _, y, m, dd -> go(String.format(Locale.US, "%04d-%02d-%02d", y, m + 1, dd)) }, d.year, d.monthValue - 1, d.dayOfMonth).show() }
         AlertDialog.Builder(this).setTitle("Training plan dates")
-            .setItems(arrayOf("⚠️ Plan start date: " + fmtDate(plan.optString("startDate")), "🏁 Race date: " + fmtDate(plan.optString("race").ifEmpty { plan.optString("raceDate") }))) { _, i ->
+            .setItems(arrayOf("📅 Plan start date: " + fmtDate(plan.optString("startDate")), "🏁 Race date: " + fmtDate(plan.optString("race").ifEmpty { plan.optString("raceDate") }))) { _, i ->
                 if (i == 0) pick(plan.optString("startDate")) { planDo(JSONObject().put("action", "startDate").put("date", it)) }
                 else pick(plan.optString("race").ifEmpty { plan.optString("raceDate") }) { planDo(JSONObject().put("action", "raceDate").put("date", it)) }
             }.setNegativeButton("Close", null).show()
