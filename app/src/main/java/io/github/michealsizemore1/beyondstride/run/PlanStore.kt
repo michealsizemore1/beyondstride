@@ -113,6 +113,16 @@ object PlanStore {
         val vk = "${str.length}.${str.hashCode()}.${java.time.LocalDate.now()}.$daysKey"
         viewCache?.let { if (vk == viewKey) return it }
         val o = local(ctx)
+        // Once: plans copied from the Command Center get a schedule built with the current rules (each day stops at the
+        // next "Week N" heading), and a dated plan starts on its first dated day (so the header says the right week).
+        if (!p(ctx).getBoolean("fixed1", false)) {
+            listOf("current", "upcoming").forEach { k -> o.optJSONObject(k)?.let { pl ->
+                PlanEngine.rebuild(pl)
+                if (pl.optString("scheduleMode") == "dated") pl.optJSONObject("schedule")?.keys()?.asSequence()?.minOrNull()?.let { first ->
+                    if (pl.optString("startDate").isEmpty() || first > pl.optString("startDate")) pl.put("startDate", first) }
+            } }
+            p(ctx).edit().putBoolean("fixed1", true).apply(); saveLocal(ctx, o); return localView(ctx)
+        }
         o.optJSONObject("current")?.let { pl ->
             val k = pl.optString("text").hashCode().toString() + pl.optString("startDate") + pl.optJSONObject("schedule")?.length() + java.time.LocalDate.now()
             if (k != daysKey || daysCache == null) { daysCache = PlanEngine.days(pl); daysKey = k }
