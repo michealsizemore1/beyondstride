@@ -155,7 +155,7 @@ object PlanStore {
         return o
     }
 
-    private fun localDo(ctx: Context, x: JSONObject) {
+    @Synchronized private fun localDo(ctx: Context, x: JSONObject) {
         val o = local(ctx); val k = keyOf(x.optString("which"))
         val arch = o.optJSONArray("archived") ?: JSONArray()
         fun archive(plan: JSONObject, from: String) {
@@ -184,7 +184,7 @@ object PlanStore {
             "raceDate" -> o.optJSONObject("current")?.let { it.put("raceDate", x.optString("date")).put("raceDateConfirmed", true) }
             "zones" -> o.optJSONObject(k)?.let { val st = ActivityStore.settings(ctx)
                 msg = PlanEngine.addZones(it, st.optDouble("maxHr", 0.0).takeIf { v -> v > 0 } ?: 174.0, st.optDouble("restHr", 0.0).takeIf { v -> v > 0 } ?: 55.0) }
-            "dates" -> o.optJSONObject(k)?.let { msg = PlanEngine.addDates(it) }
+            "dates" -> o.optJSONObject(k)?.let { if (x.optString("start").isNotEmpty()) it.put("startDate", x.optString("start")); msg = PlanEngine.addDates(it) }
             "upload" -> {
                 val isPdf = x.has("pdf")
                 val text = if (isPdf) PdfText.extract(ctx, android.util.Base64.decode(x.optString("pdf"), 0))?.let { PlanEngine.reflow(it) } else x.optString("text")

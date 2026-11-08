@@ -646,7 +646,7 @@ class ActivitiesActivity : Activity() {
                 setPadding(0, dp(8), 0, dp(4))
                 pbtn(this, "🪄 Clean Up Formatting", 0xFFD35400.toInt()) { aiPlan(which, plan, null) }
                 pbtn(this, "➕ Add Training Zones", 0xFF16A085.toInt()) { planDo(JSONObject().put("action", "zones").put("which", which), "Adding training zones — the Command Center updates the plan") }
-                pbtn(this, "📅 Add Dates", 0xFF2C3E50.toInt()) { planDo(JSONObject().put("action", "dates").put("which", which), "Adding dates — the Command Center updates the plan") }
+                pbtn(this, "📅 Add Dates", 0xFF2C3E50.toInt()) { if (Standalone.on(ctx)) addDatesDialog(which, plan) else planDo(JSONObject().put("action", "dates").put("which", which), "Adding dates — the Command Center updates the plan") }
                 pbtn(this, "✏ Adjust", PURPLE) { adjustDialog(which, plan) }
                 if (Standalone.on(ctx) && PlanStore.versions(ctx, which).isNotEmpty()) pbtn(this, "↩ Earlier version", 0xFF6B7280.toInt()) { restoreVersion(which) }
                 pbtn(this, "📦 Archive", 0xFF27AE60.toInt()) { confirm("Archive this ${if (up) "upcoming" else "active"} plan?", "Archive") { planDo(JSONObject().put("action", "archive").put("which", which)) } }
@@ -672,6 +672,33 @@ class ActivitiesActivity : Activity() {
                 addView(txt(plan.optString("display").ifEmpty { plan.optString("text") }.ifEmpty { "(No plan text)" }, Color.WHITE, 13f).apply { setTextIsSelectable(true); setLineSpacing(0f, 1.15f) })
             }, LinearLayout.LayoutParams(MATCH_PARENT, dp(340)).apply { topMargin = dp(4) })
         })
+    }
+
+    /** Add Dates: choose when Week 1 starts (or pick race day and work back), see where race day lands, then add the dates. */
+    private fun addDatesDialog(which: String, plan: JSONObject) {
+        val ctx = this
+        var start = try { java.time.LocalDate.parse(plan.optString("startDate")) } catch (e: Exception) { java.time.LocalDate.now() }
+        val f = java.time.format.DateTimeFormatter.ofPattern("EEE, MMM d, yyyy", Locale.US)
+        val info = txt("", Color.WHITE, 14f).apply { setPadding(dp(20), dp(8), dp(20), dp(4)) }
+        fun show() { val last = PlanEngine.lastDayFor(plan, start)
+            info.text = "Week 1 starts: ${start.format(f)}\n" + (if (last != null) "Last day of the plan (race day): ${last.format(f)}" else "No \"Week N\" day lines found.") +
+                "\n\nPick the start, or pick race day and the start is worked back from it." }
+        show()
+        fun pick(d: java.time.LocalDate, go: (java.time.LocalDate) -> Unit) = android.app.DatePickerDialog(ctx, { _, y, m, dd -> go(java.time.LocalDate.of(y, m + 1, dd)) }, d.year, d.monthValue - 1, d.dayOfMonth).show()
+        val dlg = AlertDialog.Builder(this).setTitle("📅 Add dates to the plan").setView(LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; addView(info)
+            addView(LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; setPadding(dp(20), dp(4), dp(20), 0)
+                pbtn(this, "Change start", 0xFF4B5563.toInt()) { pick(start) { start = it; show() } }
+                addView(android.view.View(ctx), LinearLayout.LayoutParams(dp(8), 1))
+                pbtn(this, "Set by race day", 0xFF4B5563.toInt()) {
+                    val cur = PlanEngine.lastDayFor(plan, start) ?: start
+                    pick(cur) { race -> val shift = java.time.temporal.ChronoUnit.DAYS.between(cur, race); start = start.plusDays(shift); show() } }
+            }) })
+            .setPositiveButton("Add dates") { _, _ ->
+                planDo(JSONObject().put("action", "dates").put("which", which).put("start", start.toString()))
+                PlanEngine.lastDayFor(plan, start)?.let { planDo(JSONObject().put("action", "raceDate").put("date", it.toString())) }
+            }
+            .setNegativeButton("Cancel", null).create()
+        dlg.show()
     }
 
     /** Put back an earlier version of the plan's text (before an AI change, the Command Center's copy, or an archived plan). */

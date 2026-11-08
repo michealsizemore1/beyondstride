@@ -204,7 +204,7 @@ object PlanEngine {
             val at = if (wk >= 0) ((wk - 1) downTo Math.max(0, wk - 4)).firstOrNull { Regex("^\\s*=+\\s*$").matches(ls[it]) } ?: wk else ls.size
             before = ls.subList(0, at).joinToString("\n").trimEnd(); after = ls.subList(at, ls.size).joinToString("\n")
         }
-        plan.put("text", (if (before.isNotEmpty()) "$before\n\n" else "") + block + (if (after.isNotEmpty()) "\n\n$after" else ""))
+        plan.put("text", (if (before.isNotEmpty()) "$before\n\n" else "") + block + (if (after.isNotEmpty()) "\n\n$after" else "")); plan.remove("display")
         rebuild(plan)
         return if (zs >= 0) "Training zones updated." else "Training zones added to the plan."
     }
@@ -240,8 +240,22 @@ object PlanEngine {
             changed++
         }
         if (changed == 0) return "No \"Week N\" day-by-day schedule lines were found to add dates to."
-        plan.put("text", ls.joinToString("\n")); rebuild(plan)
+        plan.put("text", ls.joinToString("\n")); plan.remove("display"); rebuild(plan)
         return "Added dates to $changed day${if (changed == 1) "" else "s"} in the schedule."
+    }
+
+    /** For Add Dates: the date the last "Week N" day line lands on if Week 1 starts on [start] (usually race day), or null. */
+    fun lastDayFor(plan: JSONObject, start: LocalDate): LocalDate? {
+        val idx = mapOf("sun" to 0, "mon" to 1, "tue" to 2, "wed" to 3, "thu" to 4, "fri" to 5, "sat" to 6)
+        var week: Int? = null; var best: Pair<Int, String>? = null
+        lines(plan.optString("text")).forEach { l ->
+            Regex("^\\s*week\\s+(\\d+)\\b", RegexOption.IGNORE_CASE).find(l)?.let { week = it.groupValues[1].toInt(); return@forEach }
+            val w = week ?: return@forEach
+            val m = Regex("^\\s*(sun|mon|tue|wed|thu|fri|sat)(?:day)?\\s*[,:]", RegexOption.IGNORE_CASE).find(l) ?: return@forEach
+            best = w to m.groupValues[1].lowercase()
+        }
+        val (w, d) = best ?: return null
+        return start.plusDays((w - 1) * 7L + ((idx[d]!! - start.dayOfWeek.value % 7) + 7) % 7)
     }
 
     /** Rebuilds a plan's schedule after its text changed. */
