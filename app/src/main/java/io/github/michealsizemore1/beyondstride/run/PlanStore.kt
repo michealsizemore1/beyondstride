@@ -98,7 +98,19 @@ object PlanStore {
 
     // ── Stand-alone: the plans live here and every button runs here (PlanEngine), same as the Command Center's ──
     private fun local(ctx: Context): JSONObject = try { JSONObject(p(ctx).getString("local", "{}")) } catch (e: Exception) { JSONObject() }
-    private fun saveLocal(ctx: Context, o: JSONObject) { p(ctx).edit().putString("local", o.toString()).putLong("localAt", System.currentTimeMillis()).apply(); daysKey = ""; viewCache = null; CloudCopy.dirty(ctx) }
+    private fun saveLocal(ctx: Context, o: JSONObject) { p(ctx).edit().putString("local", o.toString()).putLong("localAt", System.currentTimeMillis()).apply(); daysKey = ""; viewCache = null; CloudCopy.dirty(ctx); syncWatch(ctx, o) }
+
+    /** The active plan's days go to Watch Workouts by themselves whenever its schedule changes (no need to tap Send to watch). */
+    private fun syncWatch(ctx: Context, o: JSONObject) {
+        val pl = o.optJSONObject("current") ?: return
+        val sig = (pl.optJSONObject("schedule")?.toString() ?: "").hashCode().toString() + "." + today()
+        if (p(ctx).getString("watchSched", "") == sig) return
+        p(ctx).edit().putString("watchSched", sig).apply()
+        val app = ctx.applicationContext; val days = upcomingDays(pl)
+        if (days.length() > 0) Thread { try { WorkoutStore.importPlan(app, days) } catch (e: Exception) { } }.start()
+    }
+    /** Called when the app opens: catches up Watch Workouts if the plan changed (or a new day started). */
+    fun syncWatchIfNeeded(ctx: Context) { if (Standalone.on(ctx)) syncWatch(ctx, local(ctx)) }
     fun localJson(ctx: Context): JSONObject = local(ctx)
     /** The Command Center's last copy of the plans (kept from before the switch). */
     fun ccCopy(ctx: Context): JSONObject = raw(ctx)

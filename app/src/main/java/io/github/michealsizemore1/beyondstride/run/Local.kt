@@ -122,6 +122,7 @@ object Local {
             try { ActivityImport.fromHealthConnect(ctx) } catch (e: Exception) { }
         }
         commit(ctx)
+        try { PlanStore.syncWatchIfNeeded(ctx) } catch (e: Exception) { }
         if (now - p.getLong("cloudTry", 0L) > 3 * 60_000L || hourly) { p.edit().putLong("cloudTry", now).apply(); try { CloudCopy.sync(ctx) } catch (e: Exception) { } }
     }
 

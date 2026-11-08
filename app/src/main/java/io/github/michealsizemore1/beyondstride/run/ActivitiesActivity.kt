@@ -37,7 +37,7 @@ class ActivitiesActivity : Activity() {
     override fun onResume() {
         io.github.michealsizemore1.beyondstride.Theme.load(this, "runsettings")
         super.onResume(); render()
-        Thread { val a = S.refresh(this); val b = PlanStore.refresh(this); if (a || b) runOnUiThread { if (!isFinishing) render() } }.start()
+        Thread { val a = S.refresh(this); val b = PlanStore.refresh(this); PlanStore.syncWatchIfNeeded(applicationContext); if (a || b) runOnUiThread { if (!isFinishing) render() } }.start()
     }
 
     private fun dp(v: Int) = RunUi.dp(this, v)
