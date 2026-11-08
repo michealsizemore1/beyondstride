@@ -171,7 +171,8 @@ object ActivityStore {
         PlanStore.data(ctx).optJSONObject("current")?.let { p ->
             val st = p.optString("startDate")
             val dn = try { java.time.temporal.ChronoUnit.DAYS.between(java.time.LocalDate.parse(st), today).toInt() + 1 } catch (e: Exception) { 0 }
-            if (dn >= 1) o.put("plan", JSONObject().put("week", (dn + 6) / 7).put("day", (dn - 1) % 7 + 1).put("text", PlanStore.workoutFor(p, today.toString()).take(1500)).put("race", p.optString("race")))
+            val wd = PlanEngine.weekDay(p, today.toString())
+            if (dn >= 1 || wd != null) o.put("plan", JSONObject().put("week", wd?.first ?: (dn + 6) / 7).put("day", wd?.second ?: ((dn - 1) % 7 + 1)).put("text", PlanStore.workoutFor(p, today.toString()).take(1500)).put("race", p.optString("race")))
         }
         // Recent activities.
         val rec = org.json.JSONArray()

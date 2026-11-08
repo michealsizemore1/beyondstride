@@ -333,20 +333,23 @@ class NutritionActivity : Activity() {
                 }
             })
             // Food Database tools (run in the Command Center, where the database lives).
-            if ((dbTab == "fav" || dbTab == "healthy") && !Standalone.on(ctx)) {
-                val stats = FoodLibrary.stats(ctx)
+            if (dbTab == "fav" || dbTab == "healthy") {
+                val sa = Standalone.on(ctx)
+                val stats = if (sa) FoodTools.stats(ctx) else FoodLibrary.stats(ctx)
                 fun tile(icon: String, title: String, sub: String, fg: Int, bg: Int, action: String, ask: String) = RunUi.text(ctx, "$icon\n$title" + (if (sub.isNotEmpty()) "\n$sub" else ""), fg, 12f, true).apply {
                     gravity = Gravity.CENTER; background = RunUi.rounded(bg, dp(10).toFloat()); setPadding(dp(4), dp(10), dp(4), dp(10))
                     setOnClickListener {
                         android.app.AlertDialog.Builder(ctx).setTitle(title).setMessage(ask)
-                            .setPositiveButton("Run") { _, _ -> FoodLibrary.libAction(ctx, action)
-                                android.widget.Toast.makeText(ctx, "Sent — the Command Center runs it next time it's open", android.widget.Toast.LENGTH_LONG).show() }
+                            .setPositiveButton("Run") { _, _ ->
+                                if (sa) runTool(action)
+                                else { FoodLibrary.libAction(ctx, action)
+                                    android.widget.Toast.makeText(ctx, "Sent — the Command Center runs it next time it's open", android.widget.Toast.LENGTH_LONG).show() } }
                             .setNegativeButton("Cancel", null).show()
                     }
                 }
                 listOf(
                     listOf(tile("🧪", "Enrich All", if (stats.first > 0) "(${stats.first} need it)" else "(all complete)", 0xFFA5B4FC.toInt(), 0xFF262A45.toInt(), "enrich",
-                        "Fill in missing nutrients in your Food Database using AI (your Command Center key). Runs one food at a time."),
+                        "Fill in missing nutrients in your Food Database using AI (your Anthropic key" + (if (sa) " on this phone" else " in the Command Center") + "). Runs one food at a time; restaurant foods are skipped."),
                         tile("↩️", "Undo All", "(${stats.second} foods)", 0xFFFDA4AF.toInt(), 0xFF3A2329.toInt(), "undo", "Remove every AI-estimated value from your Food Database. This can't be undone.")),
                     listOf(tile("↻", "Rescan Foods", "", 0xFFFDBA74.toInt(), 0xFF3A2A1A.toInt(), "rescan", "Re-check every saved Nutrition day and barcode picture for healthy foods."),
                         tile("🧹", "Remove Dupes", "", 0xFFFDBA74.toInt(), 0xFF3A2A1A.toInt(), "dedupe", "Remove duplicate foods from your saved foods."))
@@ -365,7 +368,7 @@ class NutritionActivity : Activity() {
                         layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(8) }
                     }
                     fun label() { head.text = "🧰 Database tools " + (if (tools.visibility == android.view.View.VISIBLE) "▾" else "▸") +
-                        (if (stats.first > 0) "  (${stats.first} need enriching)" else "") }
+                        (if (FoodTools.running) "  ${FoodTools.progress}" else if (stats.first > 0) "  (${stats.first} need enriching)" else "") }
                     label()
                     head.setOnClickListener {
                         val open = tools.visibility != android.view.View.VISIBLE
@@ -570,6 +573,22 @@ class NutritionActivity : Activity() {
     }
 
     @Deprecated("Activity result")
+    /** Food Database tools in stand-alone BeyondStride (run here, in the background). */
+    private fun runTool(action: String) {
+        if (FoodTools.running) { android.widget.Toast.makeText(this, "Already running — ${FoodTools.progress}", android.widget.Toast.LENGTH_SHORT).show(); return }
+        val app = applicationContext
+        android.widget.Toast.makeText(this, when (action) { "enrich" -> "Enriching — keep BeyondStride open"; "rescan" -> "Rescanning…"; else -> "Working…" }, android.widget.Toast.LENGTH_SHORT).show()
+        Thread {
+            val msg = try { when (action) {
+                "enrich" -> FoodTools.enrichAll(app) { runOnUiThread { if (!isFinishing) render() } }
+                "undo" -> FoodTools.undoAll(app)
+                "rescan" -> FoodTools.rescan(app)
+                else -> FoodTools.dedupe(app)
+            } } catch (e: Exception) { "Something went wrong: ${e.message}" }
+            runOnUiThread { if (!isFinishing) { android.app.AlertDialog.Builder(this).setMessage(msg).setPositiveButton("OK", null).show(); render() } }
+        }.start()
+    }
+
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: android.content.Intent?) {
         @Suppress("DEPRECATION") super.onActivityResult(requestCode, resultCode, data)
         if (resultCode != RESULT_OK || (requestCode != 51 && requestCode != 52)) return

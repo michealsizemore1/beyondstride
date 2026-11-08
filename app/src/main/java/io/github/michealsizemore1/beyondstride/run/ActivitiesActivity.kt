@@ -784,6 +784,8 @@ class ActivitiesActivity : Activity() {
             dayNum = try { (java.time.temporal.ChronoUnit.DAYS.between(java.time.LocalDate.parse(start), today) + 1).toInt() } catch (e: Exception) { 0 }
             if (dayNum < 1) return
             weekNum = (dayNum + 6) / 7; dow = (dayNum - 1) % 7 + 1
+            // The plan's own "Week N" heading wins (dates in the plan are what count, not the stored start).
+            PlanEngine.weekDay(plan, today.toString())?.let { (w, d) -> weekNum = w; dow = d }
             val total = plan.optInt("weeks") * 7; isFinal = total > 0 && dayNum == total
         }
         if (dayNum == 1 && Regex("rest\\s*day|no\\s*scheduled\\s*workout|recovery").containsMatchIn(plan.optString("text").split("\n").take(8).joinToString(" ").lowercase())) return
