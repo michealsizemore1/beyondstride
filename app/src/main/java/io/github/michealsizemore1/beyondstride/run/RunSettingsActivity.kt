@@ -406,12 +406,13 @@ class RunSettingsActivity : Activity() {
             addView(RunUi.text(ctx, when { !ready -> "Needs your Firebase database (set up in LiveTrack)"; !on -> "Starts when you switch to stand-alone"
                 at <= 0 -> "No cloud copy yet"; else -> "Last copy: " + java.text.SimpleDateFormat("EEE, MMM d · h:mm a", java.util.Locale.getDefault()).format(java.util.Date(at)) }, Color.WHITE, 14f, true))
             CloudCopy.lastInfo(ctx).takeIf { it.isNotBlank() && on }?.let { addView(RunUi.text(ctx, it, RunUi.MUTED, 12f)) }
+            CloudCopy.lastError(ctx).takeIf { it.isNotBlank() && on }?.let { addView(RunUi.text(ctx, "Last try didn't go through: $it — it retries automatically", 0xFFF2C94C.toInt(), 12f)) }
             addView(RunUi.text(ctx, "Kept in BeyondStride's own place in your Firebase database (not the Command Center's), updated a few minutes after anything changes. " +
                 "Your Anthropic key is never included. On a new phone: set up the same database in LiveTrack, enter this code below, then Restore from cloud.", RunUi.DIM, 12f).apply { setPadding(0, dp(6), 0, 0) })
             addView(RunUi.text(ctx, "Cloud copy code: " + NutritionSync.key(ctx), RunUi.ACCENT, 13f, true).apply { setPadding(0, dp(8), 0, 0); setTextIsSelectable(true) })
             if (ready && on) addView(RunUi.button(ctx, "Copy to cloud now", RunUi.ACCENT) {
                 Toast.makeText(ctx, "Copying…", Toast.LENGTH_SHORT).show()
-                Thread { val ok = CloudCopy.sync(applicationContext, force = true); runOnUiThread { Toast.makeText(ctx, if (ok) "Cloud copy updated" else "Couldn't reach the database — it will retry", Toast.LENGTH_LONG).show(); render() } }.start()
+                Thread { val ok = CloudCopy.sync(applicationContext, force = true); runOnUiThread { Toast.makeText(ctx, if (ok) "Cloud copy updated" else "Didn't go through: ${CloudCopy.lastError(ctx).ifEmpty { "some runs didn't upload" }} — it will retry", Toast.LENGTH_LONG).show(); render() } }.start()
             }.apply { layoutParams = lp(10) })
             if (ready) addView(RunUi.button(ctx, "Restore from cloud…", RunUi.CARD, Color.WHITE) {
                 Thread {

@@ -8,8 +8,8 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 /**
- * BeyondStride's automatic cloud copy, in its own place in your Firebase database (<db>/beyondstride/<key>/),
- * separate from anything the Command Center uses:
+ * BeyondStride's automatic cloud copy, in its own place in your Firebase database (<db>/nutrition/<key>/beyondstride/ —
+ * inside the area your rules already allow, and a part the Command Center never reads or writes):
  *  - copy:   everything except runs & courses (nutrition days and history, foods, activities, plans, settings…),
  *            as the backup zip in pieces — re-sent a few minutes after anything changes;
  *  - files/: each run and course once (they don't change).
@@ -23,7 +23,10 @@ object CloudCopy {
     fun lastAt(ctx: Context) = p(ctx).getLong("at", 0L)
     fun lastInfo(ctx: Context) = p(ctx).getString("info", "") ?: ""
     fun ready(ctx: Context) = NutritionSync.ready(ctx)
-    private fun base(ctx: Context) = Live.db(ctx) + "/beyondstride/" + NutritionSync.key(ctx)
+    private fun base(ctx: Context) = Live.db(ctx) + "/nutrition/" + NutritionSync.key(ctx) + "/beyondstride"
+    /** Why the last copy didn't go through ("" when it did). */
+    fun lastError(ctx: Context) = p(ctx).getString("err", "") ?: ""
+    @Volatile private var code = 0
 
     private fun http(url: String, method: String = "GET", body: String? = null): String? = try {
         val c = (URL(url).openConnection() as HttpURLConnection).apply {
@@ -31,8 +34,9 @@ object CloudCopy {
             if (body != null) { doOutput = true; setRequestProperty("Content-Type", "application/json") }
         }
         body?.let { b -> c.outputStream.use { it.write(b.toByteArray()) } }
-        if (c.responseCode in 200..299) c.inputStream.bufferedReader().readText() else null
-    } catch (e: Exception) { null }
+        code = c.responseCode
+        if (code in 200..299) c.inputStream.bufferedReader().readText() else null
+    } catch (e: Exception) { code = -1; null }
 
     private fun safe(name: String) = name.replace(Regex("[.$#\\[\\]/]"), "_")
 
@@ -48,8 +52,8 @@ object CloudCopy {
             val parts = JSONArray(); var i = 0; while (i < b64.length) { parts.put(b64.substring(i, Math.min(b64.length, i + CHUNK))); i += CHUNK }
             val info = Backup.info(ctx, java.io.File(ctx.filesDir, "runs").listFiles()?.size ?: 0, java.io.File(ctx.filesDir, "courses").listFiles()?.size ?: 0)
             val doc = JSONObject().put("at", System.currentTimeMillis()).put("version", Backup.VERSION).put("parts", parts).put("info", info)
-            if (http(base(ctx) + "/copy.json", "PUT", doc.toString()) != null) pr.edit().putLong("at", System.currentTimeMillis()).putString("info", info).apply()
-            else { ok = false; pr.edit().putBoolean("dirty", true).apply() }
+            if (http(base(ctx) + "/copy.json", "PUT", doc.toString()) != null) pr.edit().putLong("at", System.currentTimeMillis()).putString("info", info).putString("err", "").apply()
+            else { ok = false; pr.edit().putBoolean("dirty", true).putString("err", when (code) { 401, 403 -> "Firebase rules refused it"; -1 -> "No connection"; else -> "HTTP $code" }).apply() }
         }
         // Runs and courses: each one once.
         val sent = HashSet(pr.getStringSet("sent", emptySet()) ?: emptySet())
