@@ -36,8 +36,10 @@ object WeightImport {
         val zone = ZoneId.systemDefault(); val pr = p(ctx)
         val from = LocalDate.now().minusDays((days - 1).toLong()).atStartOfDay(zone).toInstant()
         val client = HealthConnectClient.getOrCreate(ctx)
-        val weights = try { runBlocking { client.readRecords(ReadRecordsRequest(WeightRecord::class, TimeRangeFilter.between(from, Instant.now()))).records } } catch (e: Exception) { emptyList() }
-            .map { it.time to it.weight.inPounds }.filter { it.second in 70.0..500.0 }.sortedBy { it.first }
+        var err = ""
+        val raw = try { runBlocking { client.readRecords(ReadRecordsRequest(WeightRecord::class, TimeRangeFilter.between(from, Instant.now()))).records } } catch (e: Exception) { err = e.javaClass.simpleName + ": " + (e.message ?: ""); emptyList() }
+        val apps = raw.map { it.metadata.dataOrigin.packageName.substringAfterLast('.') }.distinct().joinToString(", ")
+        val weights = raw.map { it.time to it.weight.inPounds }.filter { it.second in 70.0..500.0 }.sortedBy { it.first }
         // When runs ended: BeyondStride's own runs (id = start time) and running sessions in Health Connect.
         val ends = ArrayList<Instant>()
         ActivityStore.list(ctx).forEach { a -> val start = ActivityStore.idStr(a.opt("id")).toLongOrNull() ?: return@forEach
@@ -63,7 +65,7 @@ object WeightImport {
             if (post != null && post != wake) put("postWeight", post, day?.postWeight ?: 0.0)
         }
         pr.edit().putString("info", "Last checked " + java.text.SimpleDateFormat("MMM d, h:mm a", java.util.Locale.US).format(java.util.Date()) +
-            " · " + (weights.lastOrNull()?.let { "latest ${r1(it.second)} lb" } ?: "no weigh-ins in Health Connect yet")).apply()
+            " · " + (weights.lastOrNull()?.let { "latest ${r1(it.second)} lb (from $apps)" } ?: if (err.isNotEmpty()) "couldn't read Health Connect — ${err.take(120)}" else "no weigh-ins in Health Connect in the last $days days")).apply()
         return filled
     }
 }
