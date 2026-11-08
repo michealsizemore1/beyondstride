@@ -14,7 +14,18 @@ import java.net.URL
  */
 object ActivityStore {
     private fun p(ctx: Context) = ctx.getSharedPreferences("activities", 0)
-    private fun raw(ctx: Context): JSONObject = try { JSONObject(p(ctx).getString("data", "{}")) } catch (e: Exception) { JSONObject() }
+    // Parsed once per change (the list is read many times while drawing a screen; 150+ activities is a lot to re-read each time).
+    @Volatile private var rawKey: String? = null; @Volatile private var rawCache = JSONObject()
+    private fun rawStr(ctx: Context) = p(ctx).getString("data", "{}") ?: "{}"
+    private fun chStr(ctx: Context) = ctx.getSharedPreferences("hydration", 0).getString("changes", "[]") ?: "[]"
+    private fun raw(ctx: Context): JSONObject {
+        val s = rawStr(ctx); if (s == rawKey) return rawCache
+        val o = try { JSONObject(s) } catch (e: Exception) { JSONObject() }
+        rawCache = o; rawKey = s; return o
+    }
+    /** Changes whenever the activities or anything waiting changes. */
+    fun stamp(ctx: Context): String { val s = rawStr(ctx); val c = chStr(ctx); return "${s.length}.${s.hashCode()}.${c.hashCode()}" }
+    @Volatile private var listKey: String? = null; @Volatile private var listCache: List<JSONObject> = emptyList()
 
     /** An activity id as the Command Center writes it (decimals without "E12"). */
     fun idStr(v: Any?): String = when (v) {
@@ -30,7 +41,8 @@ object ActivityStore {
 
     /** Every activity: the Command Center's list with changes made here (not taken by it yet) on top. */
     fun list(ctx: Context): List<JSONObject> {
-        val a = raw(ctx).optJSONArray("list") ?: JSONArray()
+        val key = stamp(ctx); if (key == listKey) return listCache
+        val a = try { JSONObject(rawStr(ctx)).optJSONArray("list") } catch (e: Exception) { null } ?: JSONArray()
         val out = (0 until a.length()).mapNotNull { a.optJSONObject(it) }.toMutableList()
         Hydration.changes(ctx).filter { it.f == "actSave" || it.f == "actDel" }.sortedBy { it.at }.forEach { c ->
             val x = try { JSONObject(c.x ?: "{}") } catch (e: Exception) { return@forEach }
@@ -43,6 +55,7 @@ object ActivityStore {
                 else { val keep = out[i]; act.keys().forEach { k -> keep.put(k, act.get(k)) }; x.optJSONArray("clear")?.let { cl -> for (j in 0 until cl.length()) keep.remove(cl.optString(j)) } }
             }
         }
+        listCache = out; listKey = key
         return out
     }
 
@@ -188,7 +201,7 @@ object ActivityStore {
     fun saveWeekNote(ctx: Context, week: String, text: String) { Hydration.queue(ctx, "wrnSave", JSONObject().put("week", week).put("text", text)); Thread { HydrationSync.flush(ctx.applicationContext) }.start() }
     /** A Garmin / Stryd / Strava CSV, imported by the Command Center's own importer. */
     /** Stand-alone: the whole data (list, settings, goals, shoes, notes…) saved as BeyondStride's own. */
-    fun rawJson(ctx: Context) = raw(ctx)
+    fun rawJson(ctx: Context) = try { JSONObject(rawStr(ctx)) } catch (e: Exception) { JSONObject() }
     fun setRaw(ctx: Context, o: JSONObject) { p(ctx).edit().putString("data", o.toString()).putLong("at", Math.max(1L, fetchedAt(ctx))).apply(); CloudCopy.dirty(ctx) }
     fun setNotice(ctx: Context, msg: String) = p(ctx).edit().putString("notice", JSONObject().put("msg", msg).put("at", System.currentTimeMillis()).toString()).apply()
     fun importCsv(ctx: Context, csv: String, hint: String, name: String) {

@@ -11,7 +11,13 @@ object NutritionStore {
     const val PATH = "/nutrition"
     private fun p(ctx: Context) = ctx.getSharedPreferences("nutrition", 0)
 
-    fun days(ctx: Context) = Nutrition.parse(p(ctx).getString("days", null))
+    // Parsed once per change (read many times while drawing a screen).
+    @Volatile private var daysKey: String? = null; @Volatile private var daysCache: List<Nutrition.Day> = emptyList()
+    fun days(ctx: Context): List<Nutrition.Day> {
+        val s = p(ctx).getString("days", null)
+        if (s != null && s == daysKey) return daysCache
+        val d = Nutrition.parse(s); daysCache = d; daysKey = s; return d
+    }
     fun fetchedAt(ctx: Context) = p(ctx).getLong("at", 0L)
     fun yesterday(ctx: Context) = Nutrition.yesterday(days(ctx))
 

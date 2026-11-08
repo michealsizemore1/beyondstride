@@ -44,19 +44,20 @@ object ActivityEngine {
     /** Chips for every activity, by id (cached until activities, settings or nutrition change). */
     fun extras(ctx: Context): Map<String, JSONObject> {
         val all = S.list(ctx); val st = S.settings(ctx)
-        val key = "${all.size}|${all.hashCode()}|$st|${NutritionStore.fetchedAt(ctx)}|${LocalDate.now()}"
+        val key = "${S.stamp(ctx)}|$st|${NutritionStore.fetchedAt(ctx)}|${LocalDate.now()}"
         if (key == cacheKey) return cache
         val cp = st.optDouble("cp", 0.0); val max = st.optDouble("maxHr", 0.0).takeIf { it > 0 } ?: 174.0; val rest = st.optDouble("restHr", 0.0).takeIf { it > 0 } ?: 55.0
         val b = listOf(0.5, 0.6, 0.7, 0.8, 0.9).map { Math.round(rest + Math.max(1.0, max - rest) * it).toDouble() }
         val ha = haByDate(all)
         val nights = ReadinessSync.nights(ctx).associateBy { it.day }
+        val recent = NutritionStore.days(ctx).associateBy { it.date }
         val dayCtx = HashMap<String, JSONObject>()
         fun ctxFor(date: String): JSONObject = dayCtx.getOrPut(date) {
             val c = JSONObject()
             nights[date]?.let { n -> if (n.minutes > 0) c.put("sleepMins", n.minutes) }
             try {
                 val prev = LocalDate.parse(date).minusDays(1).toString()
-                val pd = NutriDay.raw(ctx, prev)
+                val pd = recent[prev] ?: NutriDay.rawHistory(ctx, prev)
                 if (pd != null) {
                     if (pd.waterOz > 0) c.put("prevWaterOz", pd.waterOz)
                     if (pd.cal > 0) { c.put("prevCal", pd.cal); val kc = pd.cal.toDouble()

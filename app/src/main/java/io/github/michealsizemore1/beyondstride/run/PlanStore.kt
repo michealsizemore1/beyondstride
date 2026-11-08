@@ -94,7 +94,7 @@ object PlanStore {
 
     // ── Stand-alone: the plans live here and every button runs here (PlanEngine), same as the Command Center's ──
     private fun local(ctx: Context): JSONObject = try { JSONObject(p(ctx).getString("local", "{}")) } catch (e: Exception) { JSONObject() }
-    private fun saveLocal(ctx: Context, o: JSONObject) { p(ctx).edit().putString("local", o.toString()).putLong("localAt", System.currentTimeMillis()).apply(); daysKey = ""; CloudCopy.dirty(ctx) }
+    private fun saveLocal(ctx: Context, o: JSONObject) { p(ctx).edit().putString("local", o.toString()).putLong("localAt", System.currentTimeMillis()).apply(); daysKey = ""; viewCache = null; CloudCopy.dirty(ctx) }
     fun localJson(ctx: Context): JSONObject = local(ctx)
     fun setLocalJson(ctx: Context, o: JSONObject) = saveLocal(ctx, o)
 
@@ -107,7 +107,11 @@ object PlanStore {
     private fun dataShared(ctx: Context): JSONObject { val on = Standalone.on(ctx); return if (!on) data(ctx) else raw(ctx) }
 
     @Volatile private var daysKey = ""; @Volatile private var daysCache: JSONObject? = null
+    @Volatile private var viewKey = ""; @Volatile private var viewCache: JSONObject? = null
     private fun localView(ctx: Context): JSONObject {
+        val str = p(ctx).getString("local", "{}") ?: "{}"
+        val vk = "${str.length}.${str.hashCode()}.${java.time.LocalDate.now()}.$daysKey"
+        viewCache?.let { if (vk == viewKey) return it }
         val o = local(ctx)
         o.optJSONObject("current")?.let { pl ->
             val k = pl.optString("text").hashCode().toString() + pl.optString("startDate") + pl.optJSONObject("schedule")?.length() + java.time.LocalDate.now()
@@ -115,6 +119,7 @@ object PlanStore {
             pl.put("days", daysCache).put("race", PlanEngine.race(pl))
         }
         o.optJSONObject("upcoming")?.let { it.put("race", PlanEngine.race(it)) }
+        viewCache = o; viewKey = "${str.length}.${str.hashCode()}.${java.time.LocalDate.now()}.$daysKey"
         return o
     }
 
