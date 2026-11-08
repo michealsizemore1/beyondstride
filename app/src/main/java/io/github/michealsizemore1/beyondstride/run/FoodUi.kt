@@ -63,8 +63,16 @@ object FoodUi {
     private fun box(a: Activity) = LinearLayout(a).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(a, 22), dp(a, 8), dp(a, 22), 0) }
 
     /** A logged food: servings, meal, delete. */
+    /** The food's name, editable (top of the edit / add dialogs). */
+    private fun nameField(a: Activity, b: LinearLayout, name: String): android.widget.EditText {
+        b.addView(TextView(a).apply { text = "Name"; textSize = 13f })
+        return android.widget.EditText(a).apply { setText(name); inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+            setSingleLine(); b.addView(this) }
+    }
+
     fun edit(a: Activity, f: Food.Item, done: () -> Unit) {
         val b = box(a)
+        val nameF = nameField(a, b, f.name)
         val serving = servingPicker(a, b, f.servingLabel)
         val total = TextView(a).apply { text = per(f, f.servings); textSize = 14f; setPadding(0, dp(a, 4), 0, dp(a, 6)) }
         b.addView(total)
@@ -94,7 +102,9 @@ object FoodUi {
             .setPositiveButton("Save") { _, _ ->
                 val s = field.text.toString().toDoubleOrNull()?.takeIf { it > 0 } ?: f.servings
                 val label = serving().ifEmpty { f.servingLabel }
-                var upd = nutrients(f).copy(servings = s, meal = meal(), servingLabel = label)
+                val newName = nameF.text.toString().trim().ifEmpty { f.name }
+                var upd = nutrients(f).copy(servings = s, meal = meal(), servingLabel = label, name = newName)
+                if (newName != f.name) FoodLibrary.rename(a, f.name, newName)
                 val srcChanged = (ps != null && ps[0] != inf.proteinSource.ifEmpty { "unknown" }) || (cs != null && cs[0] != inf.carbSource.ifEmpty { "unknown" }) || (fs != null && fs[0] != inf.fatSource.ifEmpty { "unknown" })
                 if (srcChanged) upd = upd.copy(proteinSource = ps?.get(0) ?: upd.proteinSource, carbSource = cs?.get(0) ?: upd.carbSource, fatSource = fs?.get(0) ?: upd.fatSource)
                 if (upd != f) HydrationSync.food(a, "foodEdit", upd, extra = if (srcChanged) org.json.JSONObject().put("srcSet", true) else null)
@@ -110,6 +120,7 @@ object FoodUi {
     /** A food chosen on the Add screen: how many servings, then add. */
     fun confirmAdd(a: Activity, f: Food.Item, meal: String, done: () -> Unit) {
         val b = box(a)
+        val nameF = nameField(a, b, f.name)
         val total = TextView(a).apply { text = per(f, f.servings); textSize = 14f; setPadding(0, dp(a, 4), 0, dp(a, 6)) }
         b.addView(total)
         val field = servingsRow(a, b, f.servings) { total.text = per(f, it) }
@@ -118,8 +129,9 @@ object FoodUi {
         AlertDialog.Builder(a).setTitle(f.name).setView(ScrollView(a).apply { addView(b) })
             .setPositiveButton("Add to ${Nutrition.MEAL_NAMES[meal] ?: meal}") { _, _ ->
                 val s = field.text.toString().toDoubleOrNull()?.takeIf { it > 0 } ?: f.servings
-                HydrationSync.food(a, "foodAdd", nutrients(f).copy(id = Food.newId(), meal = meal, servings = s, servingLabel = serving().ifEmpty { f.servingLabel }))
-                Toast.makeText(a, "Added ${f.name}", Toast.LENGTH_SHORT).show()
+                val newName = nameF.text.toString().trim().ifEmpty { f.name }
+                HydrationSync.food(a, "foodAdd", nutrients(f).copy(id = Food.newId(), meal = meal, servings = s, servingLabel = serving().ifEmpty { f.servingLabel }, name = newName))
+                Toast.makeText(a, "Added $newName", Toast.LENGTH_SHORT).show()
                 done()
             }
             .setNegativeButton("Cancel", null).show()

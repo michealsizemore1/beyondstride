@@ -54,6 +54,17 @@ object FoodLibrary {
         io.github.michealsizemore1.beyondstride.Hydration.queue(ctx, "foodPhoto", JSONObject().put("id", f.id).put("image", dataUrl), date)
         Thread { HydrationSync.flush(ctx.applicationContext) }.start()
     }
+    /** A food renamed in a meal: the same food in Favorites / Healthy 7+ / saved meals (and its photo) gets the new name too (stand-alone). */
+    fun rename(ctx: Context, old: String, new: String) {
+        if (!Standalone.on(ctx) || old.equals(new, false)) return
+        val key = old.trim().lowercase(); val l = lib(ctx); var changed = false
+        fun fix(a: JSONArray?) { if (a == null) return; for (i in 0 until a.length()) a.optJSONObject(i)?.let { o -> if (o.optString("name").trim().lowercase() == key) { o.put("name", new); changed = true } } }
+        fix(l.optJSONArray("favorites")); fix(l.optJSONArray("healthy"))
+        l.optJSONArray("meals")?.let { m -> for (i in 0 until m.length()) fix(m.optJSONObject(i)?.optJSONArray("items")) }
+        if (changed) { setLib(ctx, l); libraryToWatch(ctx); quickToWatch(ctx) }
+        val ph = photos(ctx); ph.optString("n:$key").takeIf { it.isNotEmpty() }?.let { ph.put("n:" + new.trim().lowercase(), it); p(ctx).edit().putString("photos", ph.toString()).apply() }
+    }
+
     /** Stand-alone: the database saved as BeyondStride's own. */
     fun libJson(ctx: Context) = lib(ctx)
     fun setLib(ctx: Context, o: JSONObject) { p(ctx).edit().putString("lib", o.toString()).putLong("at", System.currentTimeMillis()).apply(); CloudCopy.dirty(ctx) }
