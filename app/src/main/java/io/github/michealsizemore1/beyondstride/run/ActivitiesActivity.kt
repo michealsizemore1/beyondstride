@@ -645,15 +645,14 @@ class ActivitiesActivity : Activity() {
                 if (m.isNotEmpty()) addView(txt(m, RunUi.MUTED, 12f).apply { setPadding(0, dp(4), 0, 0) })
                 return@apply
             }
-            addView(FlowLayout(ctx, dp(6), dp(6)).apply {
-                setPadding(0, dp(8), 0, dp(4))
-                // The buttons you use; the rest are under ⋯ More.
-                pbtn(this, "✏ Adjust", PURPLE) { adjustDialog(which, plan) }
-                if (Standalone.on(ctx) && PlanStore.versions(ctx, which).isNotEmpty()) pbtn(this, "↩ Earlier version", 0xFF6B7280.toInt()) { restoreVersion(which) }
-                pbtn(this, "⌚ Send to watch", 0xFFD4E635.toInt(), 0xFF121A17.toInt()) { sendToWatch(plan) }
-                if (up) pbtn(this, "▶ Make Active Now", 0xFF2980B9.toInt()) {
-                    confirm(if (PlanStore.data(ctx).has("current")) "This will archive your current active plan and make this upcoming plan active now. Continue?" else "Make this plan active now?", "Make Active") { planDo(JSONObject().put("action", "activate")) } }
-                pbtn(this, "⋯ More", 0xFF374151.toInt()) {
+            // The buttons you use, in an even grid; the rest are under ⋯ More.
+            fun row(vararg b: Triple<String, Pair<Int, Int>, () -> Unit>) = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL
+                layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(6) }
+                b.forEachIndexed { i, (t, c, go) -> pbtn(this, t, c.first, c.second, go)
+                    getChildAt(childCount - 1).apply { (this as TextView).gravity = Gravity.CENTER
+                        layoutParams = LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f).apply { if (i < b.size - 1) marginEnd = dp(6) } } } }
+            val showEarlier = Standalone.on(ctx) && PlanStore.versions(ctx, which).isNotEmpty()
+            val more: () -> Unit = {
                     val items = ArrayList<Pair<String, () -> Unit>>()
                     items += "🪄 Clean Up Formatting" to { aiPlan(which, plan, null) }
                     if (PlanEngine.needsDates(plan)) items += "📅 Add Dates" to { if (Standalone.on(ctx)) addDatesDialog(which, plan) else planDo(JSONObject().put("action", "dates").put("which", which), "Adding dates — the Command Center updates the plan") }
@@ -661,7 +660,15 @@ class ActivitiesActivity : Activity() {
                     items += "📦 Archive" to { confirm("Archive this ${if (up) "upcoming" else "active"} plan?", "Archive") { planDo(JSONObject().put("action", "archive").put("which", which)) } }
                     items += "🗑 Delete" to { confirm("Delete the ${if (up) "upcoming" else "active training"} plan? This cannot be undone.", "Delete") { planDo(JSONObject().put("action", "delete").put("which", which)) } }
                     AlertDialog.Builder(ctx).setTitle("Plan tools").setItems(items.map { it.first }.toTypedArray()) { _, i -> items[i].second() }.setNegativeButton("Close", null).show()
-                }
+            }
+            addView(LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL; setPadding(0, dp(4), 0, dp(4))
+                val watch = Triple("⌚ Send to watch", 0xFFD4E635.toInt() to 0xFF121A17.toInt()) { sendToWatch(plan) }
+                val adjust = Triple("✏ Adjust", PURPLE to Color.WHITE) { adjustDialog(which, plan) }
+                val moreB = Triple("⋯ More", 0xFF374151.toInt() to Color.WHITE, more)
+                if (showEarlier) { addView(row(Triple("↩ Earlier version", 0xFF6B7280.toInt() to Color.WHITE) { restoreVersion(which) }, watch)); addView(row(adjust, moreB)) }
+                else { addView(row(adjust, watch)); addView(row(moreB)) }
+                if (up) addView(row(Triple("▶ Make Active Now", 0xFF2980B9.toInt() to Color.WHITE) {
+                    confirm(if (PlanStore.data(ctx).has("current")) "This will archive your current active plan and make this upcoming plan active now. Continue?" else "Make this plan active now?", "Make Active") { planDo(JSONObject().put("action", "activate")) } }))
             })
             if (up && plan.optString("startDate").let { it.isNotEmpty() && it <= java.time.LocalDate.now().toString() })
                 addView(txt("⚠️ This plan was set to start ${fmtDate(plan.optString("startDate"))}, which has passed, but it's still sitting here as Upcoming — your Activities card and Daily calendar won't show any of its workouts until you tap ▶ Make Active Now.",
