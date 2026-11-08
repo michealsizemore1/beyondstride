@@ -816,6 +816,12 @@ class ActivitiesActivity : Activity() {
                 round(if (collapsedCard) "▸" else "▾") { planDo(JSONObject().put("action", "collapse").put("on", !collapsedCard)) }
             })
             if (start.isEmpty()) addView(txt("⚠️ Plan start date not set — tap ✏️ to set it.", 0xFF795548.toInt(), 12f, true).apply { setBackgroundColor(0xFFFFF8E1.toInt()); setPadding(dp(12), dp(8), dp(12), dp(8)) })
+            // Planned vs done, the plan week so far, and a recovery warning on a hard day after poor sleep / low readiness.
+            addView(LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(14), dp(10), dp(14), 0)
+                Insights.adherence(ctx, today.toString())?.let { a -> addView(txt(a.status, a.color, 13f, true)) }
+                Insights.weekScore(ctx)?.let { addView(txt(it, RunUi.MUTED, 12f)) }
+                Insights.recoveryWarning(ctx)?.let { addView(txt(it, 0xFFF2C94C.toInt(), 12f, true).apply { setPadding(0, dp(6), 0, 0) }) }
+            })
             if (!collapsedCard) addView(txt(PlanStore.workoutFor(plan, today.toString()), Color.WHITE, 14f).apply { setPadding(dp(14), dp(12), dp(14), dp(12)); setLineSpacing(0f, 1.2f); setTextIsSelectable(true) })
         })
     }

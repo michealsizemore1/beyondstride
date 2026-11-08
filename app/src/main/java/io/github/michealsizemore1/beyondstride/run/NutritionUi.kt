@@ -129,6 +129,10 @@ object NutritionUi {
             qualityBar(act, col, "Top 7 micronutrient quality", nd.microScore, nd.microLabel(), microNote(nd))
             micros(act, col, nd, header = false)
             col.addView(RunUi.text(ctx, "Tap a nutrient to see which foods it came from.", RunUi.DIM, 11f).apply { setPadding(0, dp(4), 0, 0) })
+            Insights.gapFoods(act, nd).takeIf { it.isNotEmpty() }?.let { gaps ->
+                col.addView(RunUi.text(ctx, "🥕 Fill the gaps (from your Healthy 7+ foods)", 0xFF5FD38D.toInt(), 13f, true).apply { setPadding(0, dp(10), 0, 0) })
+                gaps.forEach { (m, foods) -> col.addView(RunUi.text(ctx, "Low on ${m.name} (${Math.round(m.pct)}%): " + foods.joinToString(" · "), Color.WHITE, 12f).apply { setPadding(0, dp(3), 0, 0) }) }
+            }
             fold(act, col, "Nutrient Interactions") { box ->
                 box.addView(RunUi.text(ctx, "How these 12 can affect each other -- mostly meal-timing or supplement-dose issues, not a concern from food alone.", RunUi.DIM, 11f))
                 INTERACTIONS.forEach { (k, v) -> box.addView(RunUi.text(ctx, k, Color.WHITE, 13f, true).apply { setPadding(0, dp(8), 0, 0) }); box.addView(RunUi.text(ctx, v, RunUi.MUTED, 12f)) }

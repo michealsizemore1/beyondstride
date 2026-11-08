@@ -410,6 +410,12 @@ class RunSettingsActivity : Activity() {
             addView(RunUi.text(ctx, "Kept in BeyondStride's own place in your Firebase database (not the Command Center's), updated a few minutes after anything changes. " +
                 "Your Anthropic key is never included. On a new phone: set up the same database in LiveTrack, enter this code below, then Restore from cloud.", RunUi.DIM, 12f).apply { setPadding(0, dp(6), 0, 0) })
             addView(RunUi.text(ctx, "Cloud copy code: " + NutritionSync.key(ctx), RunUi.ACCENT, 13f, true).apply { setPadding(0, dp(8), 0, 0); setTextIsSelectable(true) })
+            addView(RunUi.button(ctx, "Save this code (email, notes, Drive…)", RunUi.CARD, Color.WHITE) {
+                val code = NutritionSync.key(ctx)
+                startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain")
+                    .putExtra(Intent.EXTRA_SUBJECT, "BeyondStride cloud copy code")
+                    .putExtra(Intent.EXTRA_TEXT, "BeyondStride cloud copy code: $code\n\nTo restore on a new phone: set up the same Firebase database in LiveTrack, then Settings → Stand-alone & cloud copy → Use a code from another phone → Restore from cloud."), "Save the code"))
+            }.apply { layoutParams = lp() })
             if (ready && on) addView(RunUi.button(ctx, "Copy to cloud now", RunUi.ACCENT) {
                 Toast.makeText(ctx, "Copying…", Toast.LENGTH_SHORT).show()
                 Thread { val ok = CloudCopy.sync(applicationContext, force = true); runOnUiThread { Toast.makeText(ctx, if (ok) "Cloud copy updated" else "Didn't go through: ${CloudCopy.lastError(ctx).ifEmpty { "some runs didn't upload" }} — it will retry", Toast.LENGTH_LONG).show(); render() } }.start()

@@ -149,6 +149,16 @@ class NutritionActivity : Activity() {
             })
         } catch (e: Exception) { } }
 
+        // 🏃 Long-run fueling (today's or tomorrow's long run).
+        if (NutriDay.isToday()) Insights.longRun(this)?.let { lr ->
+            col.addView(RunUi.section(this, "LONG-RUN FUELING"))
+            col.addView(RunUi.card(this).apply {
+                addView(RunUi.text(ctx, "🏃 " + lr.title, 0xFFF2C94C.toInt(), 15f, true))
+                lr.lines.forEach { addView(RunUi.text(ctx, "• $it", Color.WHITE, 13f).apply { setPadding(0, dp(4), 0, 0) }) }
+                addView(RunUi.text(ctx, "General sports-nutrition guidance (ACSM) scaled to your weight, pace and sweat rate — adjust to what your stomach tolerates.", RunUi.DIM, 11f).apply { setPadding(0, dp(6), 0, 0) })
+            })
+        }
+
         // FOOD LOG: every meal with its foods. Tap a food to change it; ＋ to add.
         col.addView(RunUi.section(this, "FOOD LOG"))
         // Food log tools — the Command Center's six buttons, same colors and place (above the meals).
@@ -388,6 +398,17 @@ class NutritionActivity : Activity() {
 
         // LIQUIDS — like the Command Center's: Water, Sports Nutrition Drinks, Other Drinks (tap ± for a cup, hold for 1 oz).
         col.addView(RunUi.section(this, "LIQUIDS"))
+        run {
+            val dr = Insights.drinkTarget(this, NutriDay.date()); val sw = Insights.sweatRate(this)
+            val had = NutriDay.day(this)?.waterOz ?: 0
+            col.addView(RunUi.card(this).apply {
+                layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(8) }
+                addView(RunUi.text(ctx, "🎯 Drink target ~${dr.total} oz · $had so far", Color.WHITE, 15f, true))
+                addView(RunUi.text(ctx, "${dr.base} oz base (about half your weight in oz) + ${dr.run} oz for ${dr.note}", RunUi.MUTED, 12f))
+                addView(RunUi.text(ctx, if (sw != null) "💦 Sweat rate ~${sw.ozPerHr} oz/hr — from ${sw.runs} run${if (sw.runs == 1) "" else "s"} with wake-up and post-run weights (drinks during the run aren't counted, so it may read a little low)"
+                    else "💦 Sweat rate: log a wake-up weight and a post-run weight on a run day to get your own number (20 oz/hr is used until then).", RunUi.DIM, 11f).apply { setPadding(0, dp(4), 0, 0) })
+            })
+        }
         run {
             val H = io.github.michealsizemore1.beyondstride.Hydration
             fun row(icon: String, title: String, note: String?, f: String, oz: Int) = col.addView(RunUi.card(this).apply {

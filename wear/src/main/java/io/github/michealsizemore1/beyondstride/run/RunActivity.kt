@@ -1583,6 +1583,10 @@ class RunActivity : Activity() {
         // LIQUIDS — like the phone's: tap − / + for a cup (8 oz), hold for 1 oz.
         box {
             addView(label("LIQUIDS", C.ACCENT, 11f, true))
+            if (nutDate == null) io.github.michealsizemore1.beyondstride.NutritionStore.acts(this@RunActivity)?.optJSONObject("insights")?.let { ins ->
+                ins.optString("drink").takeIf { it.isNotEmpty() }?.let { addView(label("🎯 $it", Color.WHITE, 10f, true).apply { setPadding(0, dp(3), 0, 0) }) }
+                ins.optString("sweat").takeIf { it.isNotEmpty() }?.let { addView(label("💦 $it", C.DIM, 9f)) }
+            }
             val H = io.github.michealsizemore1.beyondstride.Hydration
             listOf(Triple("💧 Water Intake", "water", t?.water ?: 0), Triple("🏃 Sports Nutrition Drinks", "sports", t?.sportsOz ?: 0), Triple("🥤 Other Drinks", "other", t?.otherOz ?: 0)).forEach { (name, f, oz) ->
                 addView(label("$name:", Color.WHITE, 11f, true).apply { gravity = Gravity.START; setPadding(0, dp(6), 0, dp(2)) })
@@ -1660,8 +1664,18 @@ class RunActivity : Activity() {
                 addView(label((if (actPlanOpen) "▼ " else "▶ ") + "🏃 Plan · Week ${p.optInt("week")}, Day ${p.optInt("day")}", Color.WHITE, 11f, true))
                 p.optString("race").takeIf { it.isNotEmpty() }?.let { r -> try { val dd = java.time.temporal.ChronoUnit.DAYS.between(java.time.LocalDate.now(), java.time.LocalDate.parse(r)).toInt()
                     if (dd >= 0) addView(label(if (dd == 0) "🏁 Race day!" else "🏁 $dd days to race day", 0xCCFFFFFF.toInt(), 9f)) } catch (e: Exception) { } }
+                a.optJSONObject("insights")?.let { ins ->
+                    ins.optString("adh").takeIf { it.isNotEmpty() }?.let { addView(label(it, ins.optInt("adhColor", Color.WHITE), 10f, true).apply { setPadding(0, dp(3), 0, 0) }) }
+                    ins.optString("week").takeIf { it.isNotEmpty() }?.let { addView(label(it, 0xCCFFFFFF.toInt(), 9f)) }
+                    ins.optString("warn").takeIf { it.isNotEmpty() }?.let { addView(label(it, 0xFFF2C94C.toInt(), 9f, true).apply { setPadding(0, dp(3), 0, 0) }) }
+                }
                 if (actPlanOpen) addView(label(p.optString("text"), Color.WHITE, 10f).apply { gravity = Gravity.START; setPadding(0, dp(4), 0, 0) })
                 setOnClickListener { actPlanOpen = !actPlanOpen; showActivities() }
+            } }
+            // Long-run fueling (today's or tomorrow's long run).
+            a.optJSONObject("insights")?.optJSONArray("lr")?.let { lr -> box {
+                addView(label("🏃 " + a.optJSONObject("insights")!!.optString("lrTitle"), 0xFFF2C94C.toInt(), 11f, true))
+                for (i in 0 until lr.length()) addView(label("• " + lr.optString(i), Color.WHITE, 9f).apply { gravity = Gravity.START; setPadding(0, dp(2), 0, 0) })
             } }
             // Mileage.
             col.addView(label("MILEAGE", C.ACCENT, 11f, true).apply { setPadding(0, dp(8), 0, 0) })

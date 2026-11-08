@@ -159,6 +159,7 @@ open class RunsActivity : Activity() {
                     if (!rd.checkedToday) addView(RunUi.text(ctx, "No morning check yet — based on sleep and training", RunUi.MUTED, 12f))
                     addView(RunUi.text(ctx, rd.parts.filter { it.pts >= 0 }.joinToString(" · ") { "${it.name} ${it.value}" }, RunUi.MUTED, 12f))
                     addView(RunUi.text(ctx, rd.advice.substringBefore(". ") + ".", Color.WHITE, 13f).apply { setPadding(0, dp(4), 0, 0) })
+                    Insights.recoveryWarning(ctx, rd)?.let { addView(RunUi.text(ctx, it, 0xFFF2C94C.toInt(), 12f, true).apply { setPadding(0, dp(4), 0, 0) }) }
                     addView(RunUi.text(ctx, "Details, sleep, resting HR and critical power ▸", RunUi.ACCENT, 12f, true).apply { setPadding(0, dp(6), 0, 0) })
                 }
                 setOnClickListener { startActivity(Intent(ctx, ReadinessActivity::class.java)) }
@@ -167,6 +168,7 @@ open class RunsActivity : Activity() {
             addView(LinearLayout(ctx).apply {
                 orientation = LinearLayout.VERTICAL
                 addView(RunUi.text(ctx, todayW?.optString("name") ?: "No workout planned", Color.WHITE, 17f, true))
+                Insights.adherence(ctx, R.today())?.let { a -> if (a.planned > 0 || a.done > 0) addView(RunUi.text(ctx, a.status, a.color, 12f, true)) }
                 todayW?.let { w ->
                     addView(RunUi.text(ctx, io.github.michealsizemore1.beyondstride.Workouts.outline(w, hrMax, hrRest, RunSettings.cp(ctx)).take(4).joinToString("\n"), RunUi.MUTED, 12f))
                     // Just the name and outline here; the full notes are on the Plan tab and the Activities workout card.
