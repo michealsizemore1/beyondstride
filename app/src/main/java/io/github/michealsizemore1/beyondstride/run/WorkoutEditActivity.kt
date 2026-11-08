@@ -201,8 +201,8 @@ class WorkoutEditActivity : Activity() {
             valueRow.visibility = if (dur == "open") View.GONE else View.VISIBLE
             unitSp.visibility = if (dur == "dist") View.VISIBLE else View.GONE
             val v = s.optInt("value")
-            if (dur == "time") { value.hint = "mm:ss"; value.inputType = InputType.TYPE_CLASS_DATETIME
-                value.setText(if (s.optString("dur") == "time") RunMath.clock(v) else "5:00") }
+            if (dur == "time") { value.hint = "min.sec (5.30 = 5:30)"; value.inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL
+                value.setText(if (s.optString("dur") == "time") dot(v) else "5.00") }
             else if (dur == "dist") { value.hint = "distance"; value.inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL
                 value.setText(if (s.optString("dur") != "dist") "1" else if (unitSp.selectedItemPosition == 1) "$v"
                     else String.format(Locale.US, "%.2f", v / RunMath.METERS_PER_MILE).trimEnd('0').trimEnd('.')) }
@@ -250,8 +250,8 @@ class WorkoutEditActivity : Activity() {
             }
             val sameKind = curT == t
             when (t) {
-                "pace" -> { lo.hint = "fast 7:30"; hi.hint = "slow 7:50"; lo.inputType = InputType.TYPE_CLASS_DATETIME; hi.inputType = InputType.TYPE_CLASS_DATETIME
-                    lo.setText(if (sameKind) RunMath.clock(s.optInt("lo")) else ""); hi.setText(if (sameKind) RunMath.clock(s.optInt("hi")) else "") }
+                "pace" -> { lo.hint = "fast 9.00"; hi.hint = "slow 9.30"; lo.inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL; hi.inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL
+                    lo.setText(if (sameKind) dot(s.optInt("lo")) else ""); hi.setText(if (sameKind) dot(s.optInt("hi")) else "") }
                 "hr", "power" -> { lo.hint = "low"; hi.hint = "high"; lo.inputType = InputType.TYPE_CLASS_NUMBER; hi.inputType = InputType.TYPE_CLASS_NUMBER
                     lo.setText(if (sameKind) "${s.optInt("lo")}" else ""); hi.setText(if (sameKind) "${s.optInt("hi")}" else "") }
             }
@@ -288,9 +288,20 @@ class WorkoutEditActivity : Activity() {
             .setNegativeButton("Cancel", null).show()
     }
 
-    private fun parseClock(t: String): Int? {
-        val p = t.split(":").map { it.trim().toIntOrNull() ?: return null }
-        return when (p.size) { 1 -> p[0] * 60; 2 -> p[0] * 60 + p[1]; 3 -> p[0] * 3600 + p[1] * 60 + p[2]; else -> null }
+    /** Seconds as min.sec for the number keypad (570 → "9.30"; 3900 → "65.00"). */
+    private fun dot(sec: Int) = "${sec / 60}.${String.format(Locale.US, "%02d", sec % 60)}"
+
+    /** "9", "9.30", "9:30", "9.5" (= 9:50), "930" (= 9:30), "1:05:00" → seconds. */
+    private fun parseClock(t0: String): Int? {
+        val t = t0.trim().replace(',', '.'); if (t.isEmpty()) return null
+        val parts = t.split(':', '.')
+        if (parts.size == 1) {
+            val d = parts[0].toIntOrNull() ?: return null
+            return if (parts[0].length >= 3) (d / 100) * 60 + (d % 100).coerceAtMost(59) else d * 60
+        }
+        val nums = parts.mapIndexed { i, x -> if (x.isEmpty()) 0 else { val n = x.toIntOrNull() ?: return null
+            if (i == parts.size - 1 && x.length == 1) n * 10 else n } }
+        return when (nums.size) { 2 -> nums[0] * 60 + nums[1].coerceAtMost(59); 3 -> nums[0] * 3600 + nums[1] * 60 + nums[2].coerceAtMost(59); else -> null }
     }
 
     private fun simple(f: () -> Unit) = object : AdapterView.OnItemSelectedListener {
