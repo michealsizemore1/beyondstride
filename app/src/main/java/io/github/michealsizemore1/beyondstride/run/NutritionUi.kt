@@ -121,6 +121,7 @@ object NutritionUi {
                         addView(RunUi.text(ctx, "${t.remaining}g remaining", RunUi.MUTED, 11f))
                         val sc = when (t.status) { "On target" -> 0xFF4ADE80.toInt(); "High" -> 0xFFF87171.toInt(); else -> 0xFFFBBF24.toInt() }
                         addView(RunUi.text(ctx, t.status, sc, 12f, true).apply { setPadding(0, dp(3), 0, 0) })
+                        setOnClickListener { macroSources(act, nd2, t) }
                     }, LinearLayout.LayoutParams(0, MATCH_PARENT, 1f).apply { if (i < 2) marginEnd = dp(6) })
                 }
             })
@@ -183,6 +184,22 @@ object NutritionUi {
             }
             .setNeutralButton("Use Automatic") { _, _ -> NutriDay.setRatio(ctx, nd.date, org.json.JSONObject().put("enabled", false)); act.recreate() }
             .setNegativeButton("Cancel", null).show()
+    }
+
+    /** Which foods a macro came from (tap a Protein / Carbs / Fat tile): grams, calories and share, plus the target. */
+    fun macroSources(act: Activity, nd: Nutrition.Day, t: Nutrition.MacroTile) {
+        val per = if (t.name == "Fat") 9 else 4
+        val rows = nd.foods.map { it to it.total(when (t.name) { "Protein" -> it.prot; "Carbs" -> it.carbs; else -> it.fat }) }.filter { it.second > 0.05 }.sortedByDescending { it.second }
+        val tot = rows.sumOf { it.second }
+        val kcal = if (nd.mtCal > 0) nd.mtCal else nd.target
+        val goalG = Math.round(kcal * (t.goal / 100.0) / per)
+        fun g(v: Double) = if (v >= 10) Math.round(v).toString() else (Math.round(v * 10) / 10.0).toString()
+        val head = "${g(tot)}g so far (${Math.round(tot * per)} kcal · " + String.format(Locale.US, "%.1f", t.actual) + "% of calories)\n" +
+            "Target ${t.goal}% of ${Nutrition.kcal(kcal)} kcal ≈ ${goalG}g · ${t.remaining}g remaining · ${t.status}"
+        val msg = if (rows.isEmpty()) "$head\n\nNone of the foods logged this day have ${t.name.lowercase()} recorded yet."
+            else "$head\n\nFrom ${rows.size} logged food${if (rows.size == 1) "" else "s"}:\n\n" + rows.joinToString("\n") { (f, v) ->
+                "${f.name} (${Nutrition.MEAL_NAMES[f.meal] ?: f.meal}) — ${g(v)}g · ${if (tot > 0) Math.round(v / tot * 100) else 0}%" }
+        android.app.AlertDialog.Builder(act).setTitle("${t.name} sources").setMessage(msg).setPositiveButton("OK", null).show()
     }
 
     /** Which foods a micronutrient came from (tap a tile), like the Command Center's sources list. */
