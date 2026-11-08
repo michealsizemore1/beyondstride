@@ -72,6 +72,9 @@ object WorkoutStore {
         val today = dayFmt.format(java.util.Date())
         var n = 0
         restDays = 0; keptEdited = 0; pastDays = 0
+        // The plan replaces what's there from today on: upcoming days from an older plan that this one doesn't have are cleared
+        // (days you edited yourself are kept).
+        p.keys().asSequence().toList().forEach { d -> if (d >= today && !days.has(d) && p.optJSONObject(d)?.optBoolean("edited") != true) p.remove(d) }
         days.keys().forEach { date ->
             if (date < today) { pastDays++; return@forEach }
             val text = days.optString(date)
