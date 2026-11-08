@@ -299,7 +299,7 @@ class NutritionActivity : Activity() {
                     r = when (dbSort) {
                         "prot" -> r.sortedByDescending { it.prot ?: 0.0 }; "carbs" -> r.sortedByDescending { it.carbs ?: 0.0 }; "fat" -> r.sortedBy { it.fat ?: Double.MAX_VALUE }
                         "saved" -> r; else -> r.sortedByDescending { it.micros[dbSort] ?: 0.0 } }
-                    if (r.isEmpty()) list.addView(RunUi.text(ctx, if (favs.isEmpty() && healthy.isEmpty()) "Your Command Center food database shows here once it's been opened there." else "No match.", RunUi.MUTED, 12f).apply { setPadding(0, dp(8), 0, 0) })
+                    if (r.isEmpty()) list.addView(RunUi.text(ctx, if (favs.isEmpty() && healthy.isEmpty()) (if (Standalone.on(ctx)) "No saved foods yet — tap ⭐ on a food to add it." else "Your Command Center food database shows here once it's been opened there.") else "No match.", RunUi.MUTED, 12f).apply { setPadding(0, dp(8), 0, 0) })
                     r.take(200).forEach { f ->
                         list.addView(dbRow(f.name, f.servingLabel + " · P ${(f.prot ?: 0.0).toInt()} · C ${(f.carbs ?: 0.0).toInt()} · F ${(f.fat ?: 0.0).toInt()} g", ((f.cal ?: 0.0) * f.servings).toInt(),
                             delete = { FoodLibrary.delete(ctx, dbTab, f.name) }, image = FoodLibrary.imageFor(ctx, f)) {
@@ -333,7 +333,7 @@ class NutritionActivity : Activity() {
                 }
             })
             // Food Database tools (run in the Command Center, where the database lives).
-            if (dbTab == "fav" || dbTab == "healthy") {
+            if ((dbTab == "fav" || dbTab == "healthy") && !Standalone.on(ctx)) {
                 val stats = FoodLibrary.stats(ctx)
                 fun tile(icon: String, title: String, sub: String, fg: Int, bg: Int, action: String, ask: String) = RunUi.text(ctx, "$icon\n$title" + (if (sub.isNotEmpty()) "\n$sub" else ""), fg, 12f, true).apply {
                     gravity = Gravity.CENTER; background = RunUi.rounded(bg, dp(10).toFloat()); setPadding(dp(4), dp(10), dp(4), dp(10))
@@ -466,11 +466,13 @@ class NutritionActivity : Activity() {
         }
 
         // The Command Center's own Nutrition page (AI search, label scan, food database) — still there too.
-        col.addView(RunUi.button(this, "Open Nutrition in the Command Center", RunUi.CARD, Color.WHITE) { RunUi.openNutrition(this) }.apply {
-            layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(22) }
-        })
-        col.addView(RunUi.text(this, "Food logged in either app shows in both.", RunUi.DIM, 11f).apply {
-            gravity = Gravity.CENTER; setPadding(0, dp(6), 0, 0) })
+        if (!Standalone.on(this)) {
+            col.addView(RunUi.button(this, "Open Nutrition in the Command Center", RunUi.CARD, Color.WHITE) { RunUi.openNutrition(this) }.apply {
+                layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(22) }
+            })
+            col.addView(RunUi.text(this, "Food logged in either app shows in both.", RunUi.DIM, 11f).apply {
+                gravity = Gravity.CENTER; setPadding(0, dp(6), 0, 0) })
+        }
 
         // Keep the page where it was when it's redrawn (opening a meal, adding or editing a food…).
         val keepY = scroller?.scrollY ?: 0
