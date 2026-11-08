@@ -123,6 +123,7 @@ object Local {
         }
         commit(ctx)
         try { PlanStore.syncWatchIfNeeded(ctx) } catch (e: Exception) { }
+        try { DailySummary.publish(ctx) } catch (e: Exception) { }
         if (now - p.getLong("cloudTry", 0L) > 3 * 60_000L || hourly) { p.edit().putLong("cloudTry", now).apply(); try { CloudCopy.sync(ctx) } catch (e: Exception) { } }
     }
 
