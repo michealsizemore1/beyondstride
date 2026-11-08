@@ -647,16 +647,21 @@ class ActivitiesActivity : Activity() {
             }
             addView(FlowLayout(ctx, dp(6), dp(6)).apply {
                 setPadding(0, dp(8), 0, dp(4))
-                pbtn(this, "🪄 Clean Up Formatting", 0xFFD35400.toInt()) { aiPlan(which, plan, null) }
-                pbtn(this, "➕ Add Training Zones", 0xFF16A085.toInt()) { planDo(JSONObject().put("action", "zones").put("which", which), "Adding training zones — the Command Center updates the plan") }
-                pbtn(this, "📅 Add Dates", 0xFF2C3E50.toInt()) { if (Standalone.on(ctx)) addDatesDialog(which, plan) else planDo(JSONObject().put("action", "dates").put("which", which), "Adding dates — the Command Center updates the plan") }
+                // The buttons you use; the rest are under ⋯ More.
                 pbtn(this, "✏ Adjust", PURPLE) { adjustDialog(which, plan) }
                 if (Standalone.on(ctx) && PlanStore.versions(ctx, which).isNotEmpty()) pbtn(this, "↩ Earlier version", 0xFF6B7280.toInt()) { restoreVersion(which) }
-                pbtn(this, "📦 Archive", 0xFF27AE60.toInt()) { confirm("Archive this ${if (up) "upcoming" else "active"} plan?", "Archive") { planDo(JSONObject().put("action", "archive").put("which", which)) } }
+                pbtn(this, "⌚ Send to watch", 0xFFD4E635.toInt(), 0xFF121A17.toInt()) { sendToWatch(plan) }
                 if (up) pbtn(this, "▶ Make Active Now", 0xFF2980B9.toInt()) {
                     confirm(if (PlanStore.data(ctx).has("current")) "This will archive your current active plan and make this upcoming plan active now. Continue?" else "Make this plan active now?", "Make Active") { planDo(JSONObject().put("action", "activate")) } }
-                pbtn(this, "⌚ Send to watch", 0xFFD4E635.toInt(), 0xFF121A17.toInt()) { sendToWatch(plan) }
-                pbtn(this, "🗑 Delete", 0xFFE74C3C.toInt()) { confirm("Delete the ${if (up) "upcoming" else "active training"} plan? This cannot be undone.", "Delete") { planDo(JSONObject().put("action", "delete").put("which", which)) } }
+                pbtn(this, "⋯ More", 0xFF374151.toInt()) {
+                    val items = ArrayList<Pair<String, () -> Unit>>()
+                    items += "🪄 Clean Up Formatting" to { aiPlan(which, plan, null) }
+                    if (PlanEngine.needsDates(plan)) items += "📅 Add Dates" to { if (Standalone.on(ctx)) addDatesDialog(which, plan) else planDo(JSONObject().put("action", "dates").put("which", which), "Adding dates — the Command Center updates the plan") }
+                    items += (if (PlanEngine.hasZones(plan.optString("text"))) "➕ Update Training Zones" else "➕ Add Training Zones") to { planDo(JSONObject().put("action", "zones").put("which", which), "Adding training zones — the Command Center updates the plan") }
+                    items += "📦 Archive" to { confirm("Archive this ${if (up) "upcoming" else "active"} plan?", "Archive") { planDo(JSONObject().put("action", "archive").put("which", which)) } }
+                    items += "🗑 Delete" to { confirm("Delete the ${if (up) "upcoming" else "active training"} plan? This cannot be undone.", "Delete") { planDo(JSONObject().put("action", "delete").put("which", which)) } }
+                    AlertDialog.Builder(ctx).setTitle("Plan tools").setItems(items.map { it.first }.toTypedArray()) { _, i -> items[i].second() }.setNegativeButton("Close", null).show()
+                }
             })
             if (up && plan.optString("startDate").let { it.isNotEmpty() && it <= java.time.LocalDate.now().toString() })
                 addView(txt("⚠️ This plan was set to start ${fmtDate(plan.optString("startDate"))}, which has passed, but it's still sitting here as Upcoming — your Activities card and Daily calendar won't show any of its workouts until you tap ▶ Make Active Now.",

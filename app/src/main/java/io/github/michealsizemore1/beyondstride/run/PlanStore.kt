@@ -155,6 +155,17 @@ object PlanStore {
         return o
     }
 
+    /** After Max / Resting HR change: plans that have a TRAINING ZONES block get it updated (stand-alone). */
+    @Synchronized fun refreshZones(ctx: Context) {
+        if (!Standalone.on(ctx)) return
+        val o = local(ctx); val st = ActivityStore.settings(ctx); var changed = false
+        val max = st.optDouble("maxHr", 0.0).takeIf { it > 0 } ?: 174.0; val rest = st.optDouble("restHr", 0.0).takeIf { it > 0 } ?: 55.0
+        listOf("current", "upcoming").forEach { k -> o.optJSONObject(k)?.let { pl ->
+            val before = pl.optString("text"); if (!PlanEngine.hasZones(before)) return@let
+            PlanEngine.addZones(pl, max, rest); if (pl.optString("text") != before) changed = true } }
+        if (changed) saveLocal(ctx, o)
+    }
+
     @Synchronized private fun localDo(ctx: Context, x: JSONObject) {
         val o = local(ctx); val k = keyOf(x.optString("which"))
         val arch = o.optJSONArray("archived") ?: JSONArray()

@@ -188,6 +188,16 @@ object PlanEngine {
             "Set the $z2c bpm Zone 2 ceiling as a custom HR alert on your Galaxy Watch Ultra. Use the Polar H10 for long runs so the readings are trustworthy.").joinToString("\n")
     }
 
+    /** True when a week-by-week plan still has day lines without dates ("Sun: …" under a "Week N" heading). */
+    fun needsDates(plan: JSONObject): Boolean {
+        var inWeek = false
+        lines(plan.optString("text")).forEach { l ->
+            if (Regex("^\\s*week\\s+\\d+\\b", RegexOption.IGNORE_CASE).containsMatchIn(l)) { inWeek = true; return@forEach }
+            if (inWeek && Regex("^\\s*(sun|mon|tue|wed|thu|fri|sat)(day)?\\s*:", RegexOption.IGNORE_CASE).containsMatchIn(l)) return true
+        }
+        return false
+    }
+
     fun hasZones(text: String) = lines(text).any { Regex("^\\s*training zones\\s*$", RegexOption.IGNORE_CASE).matches(it) }
 
     /** Adds / replaces the TRAINING ZONES block (addTrainingZonesToPlan). Returns the message. */

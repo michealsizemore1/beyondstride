@@ -35,7 +35,7 @@ object Local {
                 o.remove("extras")
                 ActivityStore.setRaw(ctx, o)
                 // Training zones also go to the run settings (the watch uses those).
-                ch.filter { it.f == "actSettings" }.lastOrNull()?.let { RunSettings.pushToWatch(ctx) }
+                ch.filter { it.f == "actSettings" }.lastOrNull()?.let { RunSettings.pushToWatch(ctx); try { PlanStore.refreshZones(ctx) } catch (e: Exception) { } }
             }
             // ⭐ Favorites (photos, saved meals, deleted foods and calorie settings were already saved here).
             ch.filter { it.f == "favAdd" }.forEach { c ->
