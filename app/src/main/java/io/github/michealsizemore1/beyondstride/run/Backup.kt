@@ -21,7 +21,7 @@ object Backup {
     /** BeyondStride settings files. */
     private val PREFS = listOf("runsettings", "readiness", "runflags", "trailsel",
         // Nutrition (recent days, food photos & favorites), Activities, training plans, reminders — the Anthropic key is never included.
-        "nutrition", "foodlib", "activities", "plans", "reminders", "foodlog", "activitiesUi", "standalone", "nutritionEngine", "hcimport", "nutHistory", "planadjust")
+        "nutrition", "foodlib", "activities", "plans", "reminders", "foodlog", "activitiesUi", "standalone", "nutritionEngine", "hcimport", "nutHistory", "planadjust", "hcweight")
     /** Folders and files in the app's storage. */
     private val DIRS = listOf("runs", "courses")
     private val FILES = listOf("workout_library.json", "workout_plan.json", "nutrition_history.json")

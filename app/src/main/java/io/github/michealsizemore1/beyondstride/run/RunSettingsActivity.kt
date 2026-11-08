@@ -455,6 +455,22 @@ class RunSettingsActivity : Activity() {
             }.apply { layoutParams = lp(10) })
             addView(RunUi.text(ctx, "Tap once: the Command Center opens in your browser and remembers the link (if it was linked before, it already works).", RunUi.DIM, 11f).apply { setPadding(0, dp(6), 0, 0) })
         })
+        // Smart scale (Health Connect).
+        col.addView(RunUi.text(this, "⚖ Weight from your scale (Health Connect)", Color.WHITE, 15f, true).apply { setPadding(0, dp(14), 0, 0) })
+        col.addView(RunUi.card(this).apply {
+            addView(Switch(ctx).apply {
+                text = "Fill in weights from the scale"; setTextColor(Color.WHITE); textSize = 15f
+                isChecked = WeightImport.enabled(ctx)
+                setOnCheckedChangeListener { _, v -> WeightImport.setEnabled(ctx, v)
+                    if (v) Thread { val g = WeightImport.granted(applicationContext); runOnUiThread { if (!g) askHealth(WeightImport.PERMS) else syncWeights() } }.start() }
+            })
+            addView(RunUi.text(ctx, "Withings: in Health Mate, turn on Health Connect and allow Weight. The first weigh-in of the morning becomes your wake-up weight; " +
+                "one within 2 hours after a run becomes post-run (for your sweat rate). A weight you type yourself is never replaced. Checks when you open the app and about every 15 minutes.", RunUi.MUTED, 12f))
+            WeightImport.lastInfo(ctx).takeIf { it.isNotBlank() }?.let { addView(RunUi.text(ctx, it, RunUi.DIM, 12f).apply { setPadding(0, dp(4), 0, 0) }) }
+            if (on) addView(RunUi.button(ctx, "Check the scale now", RunUi.CARD, Color.WHITE) {
+                Thread { val g = WeightImport.granted(applicationContext); runOnUiThread { if (!g) askHealth(WeightImport.PERMS) else syncWeights() } }.start()
+            }.apply { layoutParams = lp(10) })
+        })
         // Health Connect import.
         col.addView(RunUi.text(this, "⤓ Import workouts from Health Connect", Color.WHITE, 15f, true).apply { setPadding(0, dp(14), 0, 0) })
         col.addView(RunUi.card(this).apply {
@@ -478,6 +494,17 @@ class RunSettingsActivity : Activity() {
         })
     }
 
+    private fun syncWeights() {
+        val app = applicationContext
+        Thread { val n = try { WeightImport.sync(app, 7) } catch (e: Exception) { 0 }
+            runOnUiThread { Toast.makeText(this, if (n > 0) "Filled $n weight${if (n == 1) "" else "s"} from the scale" else WeightImport.lastInfo(app).ifEmpty { "Nothing new from the scale" }, Toast.LENGTH_LONG).show(); render() } }.start()
+    }
+    private fun askHealth(p: Set<String>) {
+        if (android.os.Build.VERSION.SDK_INT >= 34) { requestPermissions(p.toTypedArray(), 84); return }
+        try { @Suppress("DEPRECATION") startActivityForResult(androidx.health.connect.client.PermissionController.createRequestPermissionResultContract().createIntent(this, p), 84) }
+        catch (e: Exception) { Toast.makeText(this, "Install or update Health Connect from the Play Store, then try again", Toast.LENGTH_LONG).show() }
+    }
+
     /** Health Connect workout permissions: Android 14+ asks like any app permission; older phones open the Health Connect app. */
     private fun askHealthConnect() {
         val perms = ActivityImport.PERMS.toTypedArray()
@@ -487,6 +514,7 @@ class RunSettingsActivity : Activity() {
     }
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == 84) { if (WeightImport.granted(applicationContext)) syncWeights() else Toast.makeText(this, "Weight access wasn't allowed — turn it on in Settings → Apps → BeyondStride → Permissions → Health Connect", Toast.LENGTH_LONG).show(); return }
         if (requestCode != 83) return
         val app = applicationContext
         Thread { val g = ActivityImport.granted(app); val n = if (g) try { ActivityImport.fromHealthConnect(app) } catch (e: Exception) { 0 } else 0
