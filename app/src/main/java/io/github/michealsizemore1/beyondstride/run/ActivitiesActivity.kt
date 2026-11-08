@@ -614,7 +614,10 @@ class ActivitiesActivity : Activity() {
             // Runs here (an uploaded PDF is read off the main thread).
             val app = applicationContext
             Thread { PlanStore.lastMessage = null; PlanStore.action(app, x); val m = PlanStore.lastMessage
-                runOnUiThread { if (isFinishing) return@runOnUiThread; m?.let { android.widget.Toast.makeText(this, it, android.widget.Toast.LENGTH_LONG).show() }; render() } }.start()
+                runOnUiThread { if (isFinishing) return@runOnUiThread
+                    m?.let { msg -> if (x.optString("action") in setOf("zones", "dates", "upload")) AlertDialog.Builder(this).setMessage(msg + if (x.optString("action") == "zones") "\n\nThey're at the top of the plan text, and under 🎯 Training zones in this plan." else "").setPositiveButton("OK", null).show()
+                        else android.widget.Toast.makeText(this, msg, android.widget.Toast.LENGTH_LONG).show() }
+                    render() } }.start()
             return
         }
         PlanStore.action(this, x); toast?.let { android.widget.Toast.makeText(this, it, android.widget.Toast.LENGTH_LONG).show() }; render()
@@ -667,9 +670,21 @@ class ActivitiesActivity : Activity() {
             if (!up) plan.optString("adjustedAt").takeIf { it.isNotEmpty() }?.let { meta += "Adjusted $it" }
             if (meta.isNotEmpty()) addView(txt(meta.joinToString(" • "), RunUi.MUTED, 12f).apply { setPadding(0, dp(4), 0, dp(6)) })
             if (plan.optBoolean("hasPdf") && !Standalone.on(ctx)) addView(txt("📄 The original PDF can be viewed in the Command Center.", RunUi.DIM, 11f))
+            // The plan's TRAINING ZONES block, shown on its own (tap to open) so it's easy to find.
+            if (Standalone.on(ctx)) plan.optString("text").lines().let { ls ->
+                val zs = ls.indexOfFirst { Regex("^\\s*training zones\\s*$", RegexOption.IGNORE_CASE).matches(it) }
+                if (zs >= 0) {
+                    var ze = ls.size; for (e in zs + 1 until ls.size) if (Regex("^\\s*=+\\s*$").matches(ls[e]) || PlanEngine.WEEK_HEAD.containsMatchIn(ls[e])) { ze = e; break }
+                    val zKey = "zones_$which"; val zOpen = zKey in panels
+                    addView(txt((if (zOpen) "▼ " else "▶ ") + "🎯 Training zones in this plan", 0xFF5FD38D.toInt(), 13f, true).apply { setPadding(0, dp(4), 0, dp(4))
+                        setOnClickListener { if (zOpen) panels.remove(zKey) else panels.add(zKey); render() } })
+                    if (zOpen) addView(txt(ls.subList(zs + 1, ze).joinToString("\n").trim(), Color.WHITE, 12f).apply {
+                        background = RunUi.rounded(0xFF15302A.toInt(), dp(8).toFloat()); setPadding(dp(10), dp(8), dp(10), dp(8)); setTextIsSelectable(true) })
+                }
+            }
             addView(androidx.core.widget.NestedScrollView(ctx).apply {
                 background = RunUi.rounded(0xFF141A18.toInt(), dp(8).toFloat()); setPadding(dp(10), dp(8), dp(10), dp(8))
-                addView(txt(plan.optString("display").ifEmpty { plan.optString("text") }.ifEmpty { "(No plan text)" }, Color.WHITE, 13f).apply { setTextIsSelectable(true); setLineSpacing(0f, 1.15f) })
+                addView(txt((if (Standalone.on(ctx)) plan.optString("text") else plan.optString("display").ifEmpty { plan.optString("text") }).ifEmpty { "(No plan text)" }, Color.WHITE, 13f).apply { setTextIsSelectable(true); setLineSpacing(0f, 1.15f) })
             }, LinearLayout.LayoutParams(MATCH_PARENT, dp(340)).apply { topMargin = dp(4) })
         })
     }
