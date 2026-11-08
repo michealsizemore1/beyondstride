@@ -65,8 +65,8 @@ class ActivityAnalysis(private val act: Activity, private val open: MutableSet<S
 
     /** 📈 Charts: 12-week streak, 26-week volume and daily miles (collapsible). */
     fun charts(col: LinearLayout, all: List<JSONObject>) {
-        if (!toggle(col, "charts", "📈 Charts  (12 weeks · 26 weeks · 60 days)")) return
-        streakLoad(col, all); volume(col, all); dailyMiles(col, all)
+        if (!toggle(col, "charts", "📈 Charts  (26 weeks · 60 days)")) return
+        volume(col, all); dailyMiles(col, all)
     }
 
     // ── Streak + 12-week load ──
@@ -144,14 +144,18 @@ class ActivityAnalysis(private val act: Activity, private val open: MutableSet<S
     fun volume(col: LinearLayout, all: List<JSONObject>) {
         val power = "volPower" in open
         val thisMon = monday(today); val N = 26
-        val mi = DoubleArray(N); val ps = DoubleArray(N); val pc = IntArray(N)
+        val mi = DoubleArray(N); val ps = DoubleArray(N); val pc = IntArray(N); val cnt = IntArray(N)
         all.forEach { a -> val d = date(a) ?: return@forEach; val slot = N - 1 - (ChronoUnit.DAYS.between(monday(d), thisMon) / 7).toInt()
-            if (slot in 0 until N) { mi[slot] += S.num(a, "distance"); val p = S.num(a, "power"); if (p > 0) { ps[slot] += p; pc[slot]++ } } }
+            if (slot in 0 until N) { cnt[slot]++; mi[slot] += S.num(a, "distance"); val p = S.num(a, "power"); if (p > 0) { ps[slot] += p; pc[slot]++ } } }
+        // Weeks in a row with an activity (was the 12-week streak chart).
+        var streak = 0; for (i in N - 1 downTo 0) { if (cnt[i] > 0) streak++ else break }
         val vals = if (power) (0 until N).map { if (pc[it] > 0) Math.round(ps[it] / pc[it]).toDouble() else 0.0 } else mi.toList()
         val box = card(col)
         box.addView(LinearLayout(act).apply {
             orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
-            addView(txt("📊 26-Week Volume", Color.WHITE, 14f, true), LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
+            addView(LinearLayout(act).apply { orientation = LinearLayout.VERTICAL
+                addView(txt("📊 26-Week Volume", Color.WHITE, 14f, true))
+                if (streak > 0) addView(txt("🔥 $streak-week streak", ORANGE, 12f, true)) }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
             listOf("Miles" to false, "Power" to true).forEach { (l, pw) -> addView(txt(l, if (pw == power) Color.BLACK else Color.WHITE, 12f, true).apply {
                 background = RunUi.rounded(if (pw == power) ORANGE else 0xFF26302C.toInt(), dp(6).toFloat()); setPadding(dp(10), dp(4), dp(10), dp(4))
                 layoutParams = LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { marginStart = dp(4) }
@@ -161,7 +165,7 @@ class ActivityAnalysis(private val act: Activity, private val open: MutableSet<S
         chart(box, 130) {
             values = vals; colors = (0 until N).map { if (it == N - 1) ORANGE else if (vals[it] > 0) 0xFFF0A050.toInt() else 0xFF3A3F3D.toInt() }
             labels = (0 until N).map { val m = thisMon.minusWeeks((N - 1 - it).toLong()); "${m.monthValue}/${m.dayOfMonth}" }
-            showLabel = { it % 4 == 0 || it == N - 1 }
+            showLabel = { (N - 1 - it) % 4 == 0 }
             barText = { i -> if (vals[i] > 0 && (i % 2 == 1 || i == N - 1)) (if (power) n(vals[i]) else f1(vals[i])) else null }
             tip = { i -> labels[i] + ": " + (if (power) "${n(vals[i])} W" else "${f1(vals[i])} mi") }
         }
