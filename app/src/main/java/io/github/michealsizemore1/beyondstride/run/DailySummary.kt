@@ -62,8 +62,13 @@ object DailySummary {
             lines += "Fluids: ${nd.waterOz} oz (water ${nd.water} · sports ${nd.sportsOz} · other ${nd.otherOz})"
             if (nd.weight > 0) lines += "Weight: wake-up ${f1(nd.weight)} lb" + (if (nd.postWeight > 0) " · post-run ${f1(nd.postWeight)} lb" else "")
         }
+        // Numbers the Command Center's Wellness fields fill in (Sleep, Weight, Resting HR).
+        val w = JSONObject()
+        ReadinessSync.nights(ctx).lastOrNull { it.day == date }?.takeIf { it.minutes > 0 }?.let { w.put("sleep", "${it.minutes / 60}:${String.format("%02d", it.minutes % 60)}") }
+        ReadinessSync.checks(ctx).lastOrNull { it.day == date }?.takeIf { it.hr > 0 }?.let { w.put("restHr", it.hr) }
+        nd?.weight?.takeIf { it > 0 }?.let { w.put("weight", f1(it)) }
         return JSONObject().put("date", date).put("text", lines.joinToString("\n")).put("miles", Math.round(miles * 100) / 100.0)
-            .put("cal", nd?.cal ?: 0).put("at", System.currentTimeMillis())
+            .put("cal", nd?.cal ?: 0).put("wellness", w).put("at", System.currentTimeMillis())
     }
 
     /** Posts today's and yesterday's summaries when they changed (at most every 10 minutes). Call off the main thread. */
@@ -74,10 +79,10 @@ object DailySummary {
         pr.edit().putLong("at", now).apply()
         val base = Live.db(ctx) + "/nutrition/" + NutritionSync.key(ctx) + "/beyondstride/daily/"
         // The first time: the last 2 weeks, so this week's review has every day.
-        val back = if (pr.getBoolean("back14", false)) 1L else 13L
+        val back = if (pr.getBoolean("back14b", false)) 1L else 13L
         (back downTo 0L).map { LocalDate.now().minusDays(it).toString() }.forEach { d ->
             try {
-                val o = build(ctx, d); val sig = o.optString("text").hashCode()
+                val o = build(ctx, d); val sig = (o.optString("text") + o.optJSONObject("wellness")).hashCode()
                 if (!force && pr.getInt("sig_$d", 0) == sig) return@forEach
                 val c = (URL("$base$d.json").openConnection() as HttpURLConnection).apply {
                     requestMethod = "PUT"; doOutput = true; connectTimeout = 15_000; readTimeout = 20_000; setRequestProperty("Content-Type", "application/json") }
@@ -85,6 +90,6 @@ object DailySummary {
                 if (c.responseCode in 200..299) pr.edit().putInt("sig_$d", sig).apply()
             } catch (e: Exception) { }
         }
-        pr.edit().putBoolean("back14", true).apply()
+        pr.edit().putBoolean("back14b", true).apply()
     }
 }
