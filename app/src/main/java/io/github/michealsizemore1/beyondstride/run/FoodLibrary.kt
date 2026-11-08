@@ -54,6 +54,9 @@ object FoodLibrary {
         io.github.michealsizemore1.beyondstride.Hydration.queue(ctx, "foodPhoto", JSONObject().put("id", f.id).put("image", dataUrl), date)
         Thread { HydrationSync.flush(ctx.applicationContext) }.start()
     }
+    /** Stand-alone: the database saved as BeyondStride's own. */
+    fun libJson(ctx: Context) = lib(ctx)
+    fun setLib(ctx: Context, o: JSONObject) { p(ctx).edit().putString("lib", o.toString()).putLong("at", System.currentTimeMillis()).apply(); CloudCopy.dirty(ctx) }
     fun healthy(ctx: Context) = Food.parseList(lib(ctx).optJSONArray("healthy"))
     /** Healthy 7+ foods as stored (with meal counts and scores) — for Pre-Run Meal Ideas. */
     fun healthyRaw(ctx: Context): List<JSONObject> = lib(ctx).optJSONArray("healthy")?.let { a -> (0 until a.length()).mapNotNull { a.optJSONObject(it) } } ?: emptyList()
@@ -140,7 +143,7 @@ object FoodLibrary {
 
     /** Reads the Command Center's food database (every 10 minutes at most). Call off the main thread. */
     fun refresh(ctx: Context, force: Boolean = false): Boolean {
-        if (!NutritionSync.ready(ctx)) return false
+        if (Standalone.on(ctx) || !NutritionSync.ready(ctx)) return false
         if (!force && System.currentTimeMillis() - p(ctx).getLong("at", 0) < 10 * 60_000L) return false
         return try {
             val c = (URL(Live.db(ctx) + "/nutrition/" + NutritionSync.key(ctx) + "/library.json").openConnection() as HttpURLConnection)

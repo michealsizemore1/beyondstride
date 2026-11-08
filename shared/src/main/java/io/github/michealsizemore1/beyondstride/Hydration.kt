@@ -40,6 +40,10 @@ object Hydration {
     /** Local values per day: {"2026-11-06": {"water":8,"sports":0,"other":20,"weight":172.4,"postWeight":171.2}}. */
     private fun local(ctx: Context): JSONObject = try { JSONObject(p(ctx).getString("days", "{}")) } catch (e: Exception) { JSONObject() }
 
+    /** Stand-alone: the days with values entered here, and clearing them once they're saved as BeyondStride's own. */
+    fun localDates(ctx: Context): List<String> = local(ctx).keys().asSequence().toList()
+    fun clearLocal(ctx: Context, dates: Collection<String>) { val l = local(ctx); dates.forEach { l.remove(it) }; p(ctx).edit().putString("days", l.toString()).apply() }
+
     /** Drops local values for days with nothing still waiting (the Command Center's copy has them now). */
     fun settle(ctx: Context) {
         // Only fluids, weights and foods change a day's values; the other changes (meals, activities, plans…) don't.

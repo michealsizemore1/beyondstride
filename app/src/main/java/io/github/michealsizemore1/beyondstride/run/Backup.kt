@@ -21,7 +21,7 @@ object Backup {
     /** BeyondStride settings files. */
     private val PREFS = listOf("runsettings", "readiness", "runflags", "trailsel",
         // Nutrition (recent days, food photos & favorites), Activities, training plans, reminders — the Anthropic key is never included.
-        "nutrition", "foodlib", "activities", "plans", "reminders", "foodlog", "activitiesUi")
+        "nutrition", "foodlib", "activities", "plans", "reminders", "foodlog", "activitiesUi", "standalone", "nutritionEngine", "hcimport", "nutHistory")
     /** Folders and files in the app's storage. */
     private val DIRS = listOf("runs", "courses")
     private val FILES = listOf("workout_library.json", "workout_plan.json", "nutrition_history.json")
@@ -56,24 +56,29 @@ object Backup {
         return out
     }
 
+    /** Writes the backup zip to [os] (with or without the runs / courses folders). Returns (runs, courses). */
+    fun writeTo(ctx: Context, os: java.io.OutputStream, dirs: Boolean = true): Pair<Int, Int> {
+        var runs = 0; var courses = 0
+        ZipOutputStream(os.buffered()).use { z ->
+            fun put(name: String, bytes: ByteArray) { z.putNextEntry(ZipEntry(name)); z.write(bytes); z.closeEntry() }
+            if (dirs) DIRS.forEach { d ->
+                File(ctx.filesDir, d).listFiles()?.filter { it.isFile }?.forEach { f ->
+                    put("$d/${f.name}", f.readBytes()); if (d == "runs") runs++ else courses++
+                }
+            }
+            FILES.forEach { n -> File(ctx.filesDir, n).takeIf { it.exists() }?.let { put(n, it.readBytes()) } }
+            put("prefs.json", prefsJson(ctx).toString().toByteArray())
+            put("backup.json", JSONObject().put("app", "BeyondStride").put("version", VERSION)
+                .put("created", System.currentTimeMillis()).put("runs", runs).put("courses", courses).toString(2).toByteArray())
+        }
+        return runs to courses
+    }
+    fun info(ctx: Context, runs: Int, courses: Int) = "$runs runs · $courses courses · ${ReadinessSync.checks(ctx).size} morning checks · ${NutriDay.historyCount(ctx) + io.github.michealsizemore1.beyondstride.NutritionStore.days(ctx).size} nutrition days · ${ActivityStore.list(ctx).size} activities"
+
     /** Writes the backup to [uri]. Returns a short summary ("42 runs · 3 courses"). */
     fun write(ctx: Context, uri: Uri): String {
-        var runs = 0; var courses = 0
-        ctx.contentResolver.openOutputStream(uri, "wt")!!.use { os ->
-            ZipOutputStream(os.buffered()).use { z ->
-                fun put(name: String, bytes: ByteArray) { z.putNextEntry(ZipEntry(name)); z.write(bytes); z.closeEntry() }
-                DIRS.forEach { d ->
-                    File(ctx.filesDir, d).listFiles()?.filter { it.isFile }?.forEach { f ->
-                        put("$d/${f.name}", f.readBytes()); if (d == "runs") runs++ else courses++
-                    }
-                }
-                FILES.forEach { n -> File(ctx.filesDir, n).takeIf { it.exists() }?.let { put(n, it.readBytes()) } }
-                put("prefs.json", prefsJson(ctx).toString().toByteArray())
-                put("backup.json", JSONObject().put("app", "BeyondStride").put("version", VERSION)
-                    .put("created", System.currentTimeMillis()).put("runs", runs).put("courses", courses).toString(2).toByteArray())
-            }
-        }
-        val info = "$runs runs · $courses courses · ${ReadinessSync.checks(ctx).size} morning checks · ${NutriDay.historyCount(ctx) + io.github.michealsizemore1.beyondstride.NutritionStore.days(ctx).size} nutrition days · ${ActivityStore.list(ctx).size} activities"
+        val (runs, courses) = ctx.contentResolver.openOutputStream(uri, "wt")!!.use { writeTo(ctx, it) }
+        val info = info(ctx, runs, courses)
         meta(ctx).edit().putLong("at", System.currentTimeMillis()).putString("info", info).apply()
         return info
     }
@@ -100,29 +105,30 @@ object Backup {
      * Restores a backup: runs and courses are added (existing ones with the same name are replaced, others kept),
      * workouts/plan and settings are replaced. Then everything is sent to the watch.
      */
-    fun restore(ctx: Context, uri: Uri): String {
+    fun restore(ctx: Context, uri: Uri): String = ctx.contentResolver.openInputStream(uri)!!.use { restoreFrom(ctx, it) }
+
+    /** Restores from a backup zip stream (a file, or the cloud copy). */
+    fun restoreFrom(ctx: Context, ins: java.io.InputStream, push: Boolean = true): String {
         var runs = 0; var courses = 0
         var prefs: JSONObject? = null
         val base = ctx.filesDir.canonicalPath
-        ctx.contentResolver.openInputStream(uri)!!.use { ins ->
-            ZipInputStream(ins.buffered()).use { z ->
-                var e = z.nextEntry
-                while (e != null) {
-                    val name = e.name
-                    val bytes = z.readBytes()
-                    when {
-                        name == "prefs.json" -> prefs = JSONObject(bytes.toString(Charsets.UTF_8))
-                        name == "backup.json" -> { }
-                        (DIRS.any { name.startsWith("$it/") } || name in FILES) && !name.contains("..") -> {
-                            val f = File(ctx.filesDir, name)
-                            if (f.canonicalPath.startsWith(base)) {
-                                f.parentFile?.mkdirs(); f.writeBytes(bytes)
-                                if (name.startsWith("runs/")) runs++ else if (name.startsWith("courses/")) courses++
-                            }
+        ZipInputStream(ins.buffered()).use { z ->
+            var e = z.nextEntry
+            while (e != null) {
+                val name = e.name
+                val bytes = z.readBytes()
+                when {
+                    name == "prefs.json" -> prefs = JSONObject(bytes.toString(Charsets.UTF_8))
+                    name == "backup.json" -> { }
+                    (DIRS.any { name.startsWith("$it/") } || name in FILES) && !name.contains("..") -> {
+                        val f = File(ctx.filesDir, name)
+                        if (f.canonicalPath.startsWith(base)) {
+                            f.parentFile?.mkdirs(); f.writeBytes(bytes)
+                            if (name.startsWith("runs/")) runs++ else if (name.startsWith("courses/")) courses++
                         }
                     }
-                    e = z.nextEntry
                 }
+                e = z.nextEntry
             }
         }
         NutriDay.forget()
@@ -150,12 +156,16 @@ object Backup {
                 ed.commit()
             }
         }
-        // Send it all to the watch.
+        if (push) pushAll(ctx)
+        return "$runs runs · $courses courses restored"
+    }
+
+    /** Sends it all to the watch. */
+    fun pushAll(ctx: Context) {
         RunSettings.pushToWatch(ctx)
         WorkoutStore.pushToWatch(ctx)
         io.github.michealsizemore1.beyondstride.Courses.list(ctx).forEach { io.github.michealsizemore1.beyondstride.Courses.save(ctx, it, "phone") }
         ReadinessSync.pushAll(ctx)
         RunSettings.sendAllToWatch(ctx, force = true)
-        return "$runs runs · $courses courses restored"
     }
 }

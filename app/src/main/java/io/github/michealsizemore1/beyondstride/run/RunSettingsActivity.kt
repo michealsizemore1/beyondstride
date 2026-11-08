@@ -42,7 +42,7 @@ class RunSettingsActivity : Activity() {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(16), dp(40), dp(16), dp(40))
         }
-        val titles = mapOf("run" to "Run options", "audio" to "Audio prompts", "zones" to "Zones & power", "cc" to "Command Center", "ai" to "AI food search", "backup" to "Backup", "about" to "About")
+        val titles = mapOf("run" to "Run options", "audio" to "Audio prompts", "zones" to "Zones & power", "cc" to "Command Center", "standalone" to "Stand-alone & cloud copy", "ai" to "AI food search", "backup" to "Backup", "about" to "About")
         col.addView(RunUi.text(this, page?.let { titles[it] } ?: "Settings", Color.WHITE, 26f, true))
         val classic = getSharedPreferences("runsettings", 0).getString("menuStyle", "cards") == "classic"
         if (page == null && !classic) { renderList(col); return }
@@ -232,6 +232,9 @@ class RunSettingsActivity : Activity() {
         //  The pod itself still pairs with the watch for pace, distance, power and cadence.)
         getSharedPreferences("strydcloud", 0).edit().clear().apply()   // forget any old Stryd login
 
+        // ---- stand-alone & cloud copy
+        if (on("standalone")) standalonePage(col)
+
         // ---- backup
         if (on("backup")) {
         col.addView(RunUi.card(this).apply {
@@ -358,6 +361,7 @@ class RunSettingsActivity : Activity() {
         row("◉", "LiveTrack", if (Live.db(ctx).isBlank()) "Not set up" else if (p.getBoolean("liveOn", false)) "On · ${Live.contacts(ctx).size} contact(s)" else "Off") {
             startActivity(Intent(ctx, LiveTrackActivity::class.java)) }
         row("⌂", "Command Center", try { Uri.parse(RunSettings.ccUrl(ctx)).host ?: "" } catch (e: Exception) { "" }) { page = "cc"; render() }
+        row("☁", "Stand-alone & cloud copy", if (!Standalone.on(ctx)) "Not yet — still syncing with the Command Center" else CcStatus.line(ctx).first.removePrefix("Stand-alone · ").replaceFirstChar { it.uppercase() }) { page = "standalone"; render() }
         row("✨", "AI food search", if (AiFood.hasKey(ctx)) "Key saved · AI search and label photos on" else "Add your Anthropic key") { page = "ai"; render() }
         row("⇪", "Backup", Backup.lastAt(ctx).takeIf { it > 0 }?.let { "Last: " + java.text.SimpleDateFormat("MMM d, h:mm a", java.util.Locale.getDefault()).format(java.util.Date(it)) +
             (if (Backup.auto(ctx) && Backup.uri(ctx) != null) " · auto" else "") } ?: "Not set up") { page = "backup"; render() }
@@ -365,6 +369,95 @@ class RunSettingsActivity : Activity() {
         row("☰", "Menu style", "Cards · tap to switch back to classic (phone and watch)") { setMenuStyle("classic") }
         row("◐", "Background", if (io.github.michealsizemore1.beyondstride.Theme.light) "Lighter · tap for dark" else "Dark · tap for lighter") { toggleBg() }
         show(col)
+    }
+
+    private fun standalonePage(col: LinearLayout) {
+        val ctx = this
+        fun dp(v: Int) = RunUi.dp(ctx, v)
+        fun lp(top: Int = 8) = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(top) }
+        val on = Standalone.on(this)
+        col.addView(RunUi.card(this).apply {
+            addView(RunUi.text(ctx, if (on) "BeyondStride is stand-alone" else "Still syncing with the Command Center", Color.WHITE, 15f, true))
+            if (on) {
+                addView(RunUi.text(ctx, "Since " + java.text.SimpleDateFormat("EEE, MMM d, yyyy", java.util.Locale.getDefault()).format(java.util.Date(Standalone.since(ctx))) +
+                    ". Nutrition, foods, Activities, training plans and settings are kept here and worked out here. The Command Center was left exactly as it was.", RunUi.MUTED, 12f).apply { setPadding(0, dp(4), 0, 0) })
+            } else {
+                addView(RunUi.text(ctx, "Switching reads everything one last time from the Command Center — every nutrition day, foods & favorites, Activities, training plans, settings — and keeps it here. " +
+                    "After that BeyondStride stops sending to and reading from the Command Center. Nothing in the Command Center is changed or removed; it stays as it is now.", RunUi.MUTED, 12f).apply { setPadding(0, dp(4), 0, 0) })
+                val prog = RunUi.text(ctx, "", 0xFFF2C94C.toInt(), 12f).apply { setPadding(0, dp(6), 0, 0) }
+                addView(RunUi.button(ctx, "Switch to stand-alone", RunUi.ACCENT) {
+                    android.app.AlertDialog.Builder(ctx).setTitle("Switch to stand-alone?")
+                        .setMessage("BeyondStride will copy everything from the Command Center and stop syncing with it. The Command Center keeps all its data. Make a backup file first if you like.\n\nKeep the phone online until it finishes (it can take a minute).")
+                        .setPositiveButton("Switch") { _, _ ->
+                            prog.text = "Starting…"
+                            Thread {
+                                val r = try { Local.cutOver(applicationContext) { runOnUiThread { prog.text = Local.progress } } } catch (e: Exception) { "Something went wrong: ${e.message}" }
+                                runOnUiThread { android.app.AlertDialog.Builder(ctx).setMessage(r).setPositiveButton("OK", null).show(); render() }
+                            }.start()
+                        }.setNegativeButton("Cancel", null).show()
+                }.apply { layoutParams = lp(10) })
+                addView(prog)
+            }
+        })
+        // Cloud copy.
+        col.addView(RunUi.text(this, "☁ Automatic cloud copy", Color.WHITE, 15f, true).apply { setPadding(0, dp(14), 0, 0) })
+        col.addView(RunUi.card(this).apply {
+            val ready = CloudCopy.ready(ctx); val at = CloudCopy.lastAt(ctx)
+            addView(RunUi.text(ctx, when { !ready -> "Needs your Firebase database (set up in LiveTrack)"; !on -> "Starts when you switch to stand-alone"
+                at <= 0 -> "No cloud copy yet"; else -> "Last copy: " + java.text.SimpleDateFormat("EEE, MMM d · h:mm a", java.util.Locale.getDefault()).format(java.util.Date(at)) }, Color.WHITE, 14f, true))
+            CloudCopy.lastInfo(ctx).takeIf { it.isNotBlank() && on }?.let { addView(RunUi.text(ctx, it, RunUi.MUTED, 12f)) }
+            addView(RunUi.text(ctx, "Kept in BeyondStride's own place in your Firebase database (not the Command Center's), updated a few minutes after anything changes. " +
+                "Your Anthropic key is never included. On a new phone: set up the same database in LiveTrack, enter this code below, then Restore from cloud.", RunUi.DIM, 12f).apply { setPadding(0, dp(6), 0, 0) })
+            addView(RunUi.text(ctx, "Cloud copy code: " + NutritionSync.key(ctx), RunUi.ACCENT, 13f, true).apply { setPadding(0, dp(8), 0, 0); setTextIsSelectable(true) })
+            if (ready && on) addView(RunUi.button(ctx, "Copy to cloud now", RunUi.ACCENT) {
+                Toast.makeText(ctx, "Copying…", Toast.LENGTH_SHORT).show()
+                Thread { val ok = CloudCopy.sync(applicationContext, force = true); runOnUiThread { Toast.makeText(ctx, if (ok) "Cloud copy updated" else "Couldn't reach the database — it will retry", Toast.LENGTH_LONG).show(); render() } }.start()
+            }.apply { layoutParams = lp(10) })
+            if (ready) addView(RunUi.button(ctx, "Restore from cloud…", RunUi.CARD, Color.WHITE) {
+                Thread {
+                    val meta = CloudCopy.peek(applicationContext)
+                    runOnUiThread {
+                        if (meta == null) { Toast.makeText(ctx, "No cloud copy found for this code", Toast.LENGTH_LONG).show(); return@runOnUiThread }
+                        android.app.AlertDialog.Builder(ctx).setTitle("Restore from cloud?")
+                            .setMessage("Cloud copy from " + java.text.SimpleDateFormat("EEE, MMM d · h:mm a", java.util.Locale.getDefault()).format(java.util.Date(meta.optLong("at"))) + "\n" + meta.optString("info") +
+                                "\n\nThis replaces BeyondStride's data on this phone with the cloud copy.")
+                            .setPositiveButton("Restore") { _, _ -> Thread { val r = try { CloudCopy.restore(applicationContext) ?: "Couldn't read the cloud copy" } catch (e: Exception) { "Restore failed: ${e.message}" }
+                                runOnUiThread { android.app.AlertDialog.Builder(ctx).setMessage(r).setPositiveButton("OK", null).show(); render() } }.start() }
+                            .setNegativeButton("Cancel", null).show()
+                    }
+                }.start()
+            }.apply { layoutParams = lp() })
+            addView(RunUi.button(ctx, "Use a code from another phone…", RunUi.CARD, Color.WHITE) {
+                val e = EditText(ctx).apply { hint = "Cloud copy code"; setText("") }
+                android.app.AlertDialog.Builder(ctx).setTitle("Cloud copy code").setView(e).setPositiveButton("Use") { _, _ ->
+                    val k = e.text.toString().trim().lowercase()
+                    if (k.length < 16 || !k.all { it.isLetterOrDigit() }) Toast.makeText(ctx, "That doesn't look like a code", Toast.LENGTH_LONG).show()
+                    else { getSharedPreferences("runsettings", 0).edit().putString("nutritionKey", k).apply(); Toast.makeText(ctx, "Code saved — now tap Restore from cloud", Toast.LENGTH_LONG).show(); render() }
+                }.setNegativeButton("Cancel", null).show()
+            }.apply { layoutParams = lp() })
+        })
+        // Health Connect import.
+        col.addView(RunUi.text(this, "⤓ Import workouts from Health Connect", Color.WHITE, 15f, true).apply { setPadding(0, dp(14), 0, 0) })
+        col.addView(RunUi.card(this).apply {
+            addView(Switch(ctx).apply {
+                text = "Add new workouts automatically"; setTextColor(Color.WHITE); textSize = 15f
+                isChecked = ActivityImport.enabled(ctx)
+                setOnCheckedChangeListener { _, v ->
+                    ActivityImport.setEnabled(ctx, v)
+                    if (v) Thread { val g = ActivityImport.granted(applicationContext); runOnUiThread { if (!g) try {
+                        @Suppress("DEPRECATION") startActivityForResult(androidx.health.connect.client.PermissionController.createRequestPermissionResultContract().createIntent(ctx, ActivityImport.PERMS), 83)
+                    } catch (e: Exception) { Toast.makeText(ctx, "Health Connect isn't available on this phone", Toast.LENGTH_LONG).show() } } }.start()
+                }
+            })
+            addView(RunUi.text(ctx, "Garmin, Strava, Samsung Health and others that write to Health Connect: each new workout (last 2 weeks) is added to Activities about once an hour. " +
+                "BeyondStride's own runs and ones already in Activities are skipped. You can also import a CSV from the Activities tab." +
+                (if (!on) " Works after you switch to stand-alone." else ""), RunUi.MUTED, 12f))
+            ActivityImport.lastInfo(ctx).takeIf { it.isNotBlank() }?.let { addView(RunUi.text(ctx, it, RunUi.DIM, 12f).apply { setPadding(0, dp(4), 0, 0) }) }
+            if (on) addView(RunUi.button(ctx, "Import now", RunUi.CARD, Color.WHITE) {
+                Thread { val n = try { ActivityImport.fromHealthConnect(applicationContext) } catch (e: Exception) { 0 }
+                    runOnUiThread { Toast.makeText(ctx, if (n > 0) "Added $n workout${if (n == 1) "" else "s"}" else if (!ActivityImport.granted(ctx)) "Allow BeyondStride to read workouts in Health Connect first" else "Nothing new", Toast.LENGTH_LONG).show(); render() } }.start()
+            }.apply { layoutParams = lp(10) })
+        })
     }
 
     private fun newBackup() {

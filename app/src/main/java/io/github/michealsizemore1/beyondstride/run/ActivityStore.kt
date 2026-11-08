@@ -48,6 +48,7 @@ object ActivityStore {
 
     /** Extras are keyed by id with . $ # [ ] / replaced by _ (Firebase can't store those in keys). */
     fun extras(ctx: Context, id: Any?): JSONObject {
+        if (Standalone.on(ctx)) return ActivityEngine.extras(ctx)[idStr(id)] ?: JSONObject()
         val ex = raw(ctx).optJSONObject("extras") ?: return JSONObject()
         val raw = idStr(id)
         return ex.optJSONObject(raw.replace(Regex("[.$#\\[\\]/]"), "_").ifEmpty { "_" }) ?: ex.optJSONObject(raw) ?: JSONObject()
@@ -186,7 +187,13 @@ object ActivityStore {
     }
     fun saveWeekNote(ctx: Context, week: String, text: String) { Hydration.queue(ctx, "wrnSave", JSONObject().put("week", week).put("text", text)); Thread { HydrationSync.flush(ctx.applicationContext) }.start() }
     /** A Garmin / Stryd / Strava CSV, imported by the Command Center's own importer. */
-    fun importCsv(ctx: Context, csv: String, hint: String, name: String) { Hydration.queue(ctx, "actImport", JSONObject().put("csv", csv).put("hint", hint).put("name", name)); Thread { HydrationSync.flush(ctx.applicationContext) }.start() }
+    /** Stand-alone: the whole data (list, settings, goals, shoes, notes…) saved as BeyondStride's own. */
+    fun rawJson(ctx: Context) = raw(ctx)
+    fun setRaw(ctx: Context, o: JSONObject) { p(ctx).edit().putString("data", o.toString()).putLong("at", Math.max(1L, fetchedAt(ctx))).apply(); CloudCopy.dirty(ctx) }
+    fun setNotice(ctx: Context, msg: String) = p(ctx).edit().putString("notice", JSONObject().put("msg", msg).put("at", System.currentTimeMillis()).toString()).apply()
+    fun importCsv(ctx: Context, csv: String, hint: String, name: String) {
+        if (Standalone.on(ctx)) { val app = ctx.applicationContext; Thread { setNotice(app, ActivityImport.importCsv(app, csv, hint)) }.start(); return }
+        Hydration.queue(ctx, "actImport", JSONObject().put("csv", csv).put("hint", hint).put("name", name)); Thread { HydrationSync.flush(ctx.applicationContext) }.start() }
     /** The Command Center's last message (e.g. "Imported 12 activities (garmin).") and when. */
     fun notice(ctx: Context): Pair<String, Long>? = try { JSONObject(p(ctx).getString("notice", "") ?: "").let { it.optString("msg") to it.optLong("at") }.takeIf { it.first.isNotEmpty() } } catch (e: Exception) { null }
 
@@ -215,6 +222,7 @@ object ActivityStore {
 
     /** Reads the Command Center's Activities. Call off the main thread. */
     fun refresh(ctx: Context): Boolean {
+        if (Standalone.on(ctx)) { Local.commit(ctx); return false }
         if (!NutritionSync.ready(ctx)) return false
         HydrationSync.reconcile(ctx)
         CcStatus.fetch(ctx)

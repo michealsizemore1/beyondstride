@@ -48,6 +48,7 @@ open class RunsActivity : Activity() {
         io.github.michealsizemore1.beyondstride.Theme.load(this, "runsettings")
         super.onResume()
         if (wrongDevice) return
+        if (Standalone.on(this)) { val app = applicationContext; Thread { try { Local.upkeep(app) } catch (e: Exception) { } }.start() }
         // LiveTrack is on (e.g. restored from a backup) but this app may not text yet: ask once per launch.
         if (!askedSms && getSharedPreferences("runsettings", 0).getBoolean("liveOn", false) && Live.smsOn(this) && Live.contacts(this).isNotEmpty() &&
             checkSelfPermission(android.Manifest.permission.SEND_SMS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
@@ -201,11 +202,12 @@ open class RunsActivity : Activity() {
                 setOnClickListener { onClick() }
             }
             val lp = { last: Boolean -> LinearLayout.LayoutParams(0, MATCH_PARENT, 1f).apply { if (!last) marginEnd = dp(6) } }
-            addView(tile("Command Center", if (unsentCc.isEmpty()) "✓ sent" else "Send ${unsentCc.size}", RunUi.CC) {
-                if (unsentCc.isEmpty()) Toast.makeText(ctx, "All runs are already in the Command Center", Toast.LENGTH_SHORT).show()
+            val sa = Standalone.on(ctx)
+            addView(tile(if (sa) "Activities" else "Command Center", if (unsentCc.isEmpty()) (if (sa) "✓ added" else "✓ sent") else (if (sa) "Add ${unsentCc.size}" else "Send ${unsentCc.size}"), RunUi.CC) {
+                if (unsentCc.isEmpty()) Toast.makeText(ctx, if (sa) "All runs are already in Activities" else "All runs are already in the Command Center", Toast.LENGTH_SHORT).show()
                 else if (CommandCenter.autoOn(ctx)) Thread {
                     val n = CommandCenter.upload(ctx, unsentCc)
-                    runOnUiThread { Toast.makeText(ctx, if (n > 0) "Sent $n — they appear in Activities next time the Command Center is open" else "Couldn't send — check your connection", Toast.LENGTH_LONG).show(); render() }
+                    runOnUiThread { Toast.makeText(ctx, if (n > 0) (if (sa) "Added $n to Activities" else "Sent $n — they appear in Activities next time the Command Center is open") else "Couldn't send — check your connection", Toast.LENGTH_LONG).show(); render() }
                 }.start()
                 else CommandCenter.send(ctx, unsentCc)
             }, lp(false))

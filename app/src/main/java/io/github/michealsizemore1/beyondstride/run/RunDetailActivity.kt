@@ -76,7 +76,7 @@ class RunDetailActivity : Activity() {
         col.addView(LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             setPadding(0, dp(10), 0, 0)
-            addView(RunUi.button(ctx, if (PhoneRuns.sentToCommandCenter(ctx, start)) "Resend to CC" else "Send to Command Center",
+            addView(RunUi.button(ctx, if (Standalone.on(ctx)) "Add to Activities" else if (PhoneRuns.sentToCommandCenter(ctx, start)) "Resend to CC" else "Send to Command Center",
                 RunUi.CC, Color.WHITE) { CommandCenter.send(ctx, listOf(start)) },
                 LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
         })

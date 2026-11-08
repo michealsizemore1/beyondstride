@@ -37,6 +37,7 @@ object NutritionSync {
 
     /** Reads the last 21 days. Returns true if anything changed. Call off the main thread. */
     fun fetch(ctx: Context): Boolean {
+        if (Standalone.on(ctx)) return Local.refreshDays(ctx)
         if (!ready(ctx)) return false
         val sp = ctx.getSharedPreferences("nutrition", 0)
         // Fluids / weights entered here: send any waiting, and drop the ones the Command Center has taken (first,

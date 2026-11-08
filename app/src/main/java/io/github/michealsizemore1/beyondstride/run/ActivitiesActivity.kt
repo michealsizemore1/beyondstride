@@ -610,6 +610,13 @@ class ActivitiesActivity : Activity() {
         background = RunUi.rounded(bg, dp(6).toFloat()); setPadding(dp(10), dp(6), dp(10), dp(6)); setOnClickListener { go() } })
     private fun confirm(msg: String, yes: String, go: () -> Unit) = AlertDialog.Builder(this).setMessage(msg).setPositiveButton(yes) { _, _ -> go() }.setNegativeButton("Cancel", null).show()
     private fun planDo(x: JSONObject, toast: String? = null) {
+        if (Standalone.on(this)) {
+            // Runs here (an uploaded PDF is read off the main thread).
+            val app = applicationContext
+            Thread { PlanStore.lastMessage = null; PlanStore.action(app, x); val m = PlanStore.lastMessage
+                runOnUiThread { if (isFinishing) return@runOnUiThread; m?.let { android.widget.Toast.makeText(this, it, android.widget.Toast.LENGTH_LONG).show() }; render() } }.start()
+            return
+        }
         PlanStore.action(this, x); toast?.let { android.widget.Toast.makeText(this, it, android.widget.Toast.LENGTH_LONG).show() }; render()
     }
     private fun fmtDate(ds: String, pattern: String = "MMM d, yyyy") = try { java.time.LocalDate.parse(ds).format(java.time.format.DateTimeFormatter.ofPattern(pattern, Locale.US)) } catch (e: Exception) { ds.ifEmpty { "—" } }

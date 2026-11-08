@@ -44,7 +44,7 @@ object NutriDay {
      * Returns how many days were added. Call off the main thread.
      */
     fun fetchAll(ctx: Context, onProgress: () -> Unit = {}): Int {
-        if (!NutritionSync.ready(ctx) || loading) return 0
+        if (Standalone.on(ctx) || !NutritionSync.ready(ctx) || loading) return 0
         loading = true; loaded = 0
         try {
             val base = Live.db(ctx) + "/nutrition/" + NutritionSync.key(ctx) + "/days"
@@ -91,11 +91,11 @@ object NutriDay {
     }
 
     /** True when this day is older than the store and hasn't been read yet (or the Command Center hasn't shared it). */
-    fun missing(ctx: Context, date: String) = NutritionStore.days(ctx).none { it.date == date } && !cache(ctx).has(date)
+    fun missing(ctx: Context, date: String) = !Standalone.on(ctx) && NutritionStore.days(ctx).none { it.date == date } && !cache(ctx).has(date)
 
     /** Reads an older day. Returns true if it changed. If the Command Center hasn't shared it yet, asks it to. Call off the main thread. */
     fun fetch(ctx: Context, date: String): Boolean {
-        if (!NutritionSync.ready(ctx) || NutritionStore.days(ctx).any { it.date == date }) return false
+        if (Standalone.on(ctx) || !NutritionSync.ready(ctx) || NutritionStore.days(ctx).any { it.date == date }) return false
         HydrationSync.reconcile(ctx)
         return try {
             val c = (URL(Live.db(ctx) + "/nutrition/" + NutritionSync.key(ctx) + "/days/" + date + ".json").openConnection() as HttpURLConnection)
@@ -123,11 +123,22 @@ object NutriDay {
 
     /** A Change Ratio made here, not yet applied by the Command Center: (enabled, p, c, f) or null. */
     fun pendingRatio(ctx: Context, date: String): JSONObject? = Hydration.changes(ctx).lastOrNull { it.f == "macroRatio" && it.date == date }?.x?.let { try { JSONObject(it) } catch (e: Exception) { null } }
-    fun setRatio(ctx: Context, date: String, x: JSONObject) { Hydration.queue(ctx, "macroRatio", x, date); Thread { HydrationSync.flush(ctx.applicationContext) }.start() }
+    fun setRatio(ctx: Context, date: String, x: JSONObject) {
+        if (Standalone.on(ctx)) { NutritionEngine.setRatio(ctx, date, x); Thread { Local.refill(ctx.applicationContext, date) }.start(); return } Hydration.queue(ctx, "macroRatio", x, date); Thread { HydrationSync.flush(ctx.applicationContext) }.start() }
     /** A meal's notes, with any typed here on top. */
     fun note(ctx: Context, d: Nutrition.Day?, date: String, meal: String): String =
         Hydration.changes(ctx).lastOrNull { it.f == "mealNote" && it.date == date && it.x?.contains("\"$meal\"") == true }?.x?.let { try { JSONObject(it).optString("text") } catch (e: Exception) { null } } ?: d?.notes?.get(meal) ?: ""
     fun setNote(ctx: Context, date: String, meal: String, text: String) { Hydration.queue(ctx, "mealNote", JSONObject().put("meal", meal).put("text", text), date); Thread { HydrationSync.flush(ctx.applicationContext) }.start() }
+
+    /** Stand-alone: every day lives in the history file (the last 3 weeks are copied to the store for the screens and the watch). */
+    fun allJson(ctx: Context): JSONObject = cache(ctx)
+    fun putDay(ctx: Context, d: Nutrition.Day) {
+        val all = JSONObject(cache(ctx).toString()); all.put(d.date, JSONObject(Nutrition.json(listOf(d))).getJSONObject(d.date)); write(ctx, all); CloudCopy.dirty(ctx)
+    }
+    fun putAll(ctx: Context, days: List<Nutrition.Day>) {
+        val all = JSONObject(cache(ctx).toString()); val o = JSONObject(Nutrition.json(days)); o.keys().forEach { all.put(it, o.get(it)) }; write(ctx, all); CloudCopy.dirty(ctx)
+    }
+    fun rawHistory(ctx: Context, date: String): Nutrition.Day? = cache(ctx).optJSONObject(date)?.let { Nutrition.parse(JSONObject().put(date, it).toString()).firstOrNull() }
 
     fun waiting(ctx: Context, date: String) = Hydration.changes(ctx).any { it.f == "dayRequest" && it.x?.contains(date) == true }
 }

@@ -18,9 +18,11 @@ object CalorieTargets {
         val pending = Hydration.changes(ctx).any { it.f == "calSettings" }
         val mine = p(ctx).getString("settings", null)?.let { try { JSONObject(it) } catch (e: Exception) { null } }
         val cc = FoodLibrary.calSettings(ctx)
-        return CalorieTarget.Settings.from(if (pending || cc == null) mine else cc)
+        return CalorieTarget.Settings.from(if (pending || cc == null || (Standalone.on(ctx) && mine != null)) mine else cc)
     }
 
+    /** At cut-over: keep the Command Center's last settings as BeyondStride's own. */
+    fun keep(ctx: Context) { p(ctx).edit().putString("settings", settings(ctx).json().toString()).apply() }
     fun set(ctx: Context, s: CalorieTarget.Settings) {
         p(ctx).edit().putString("settings", s.json().toString()).apply()
         Hydration.queue(ctx, "calSettings", s.json())

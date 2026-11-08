@@ -153,13 +153,28 @@ object CommandCenter {
     }
 
     /** Send runs automatically (through the cloud) — on unless turned off in Settings, and needs the LiveTrack database. */
-    fun autoOn(ctx: Context) = ctx.getSharedPreferences("runsettings", 0).getBoolean("ccAuto", true) && NutritionSync.ready(ctx)
+    fun autoOn(ctx: Context) = Standalone.on(ctx) || (ctx.getSharedPreferences("runsettings", 0).getBoolean("ccAuto", true) && NutritionSync.ready(ctx))
 
     /**
      * Puts each run in the cloud (<db>/nutrition/<key>/runs/<start>); the Command Center adds them to Activities the next
      * time it's open (and every minute while it is), then clears them. Returns how many were sent. Call off the main thread.
      */
     fun upload(ctx: Context, starts: List<Long>): Int {
+        if (Standalone.on(ctx)) {
+            // Stand-alone: the run goes straight into BeyondStride's own Activities (once).
+            var n = 0
+            starts.forEach { s ->
+                try {
+                    PhoneRuns.read(ctx, s)?.let { if (!RunWeather.has(it)) try { RunWeather.fill(ctx, s) } catch (e: Exception) { } }
+                    val run = PhoneRuns.read(ctx, s) ?: return@forEach
+                    val act = activity(ctx, run)
+                    if (ActivityStore.list(ctx).none { ActivityStore.idOf(it) == ActivityStore.idStr(act.opt("id")) }) ActivityStore.save(ctx, act)
+                    PhoneRuns.setUploadedToCommandCenter(ctx, s); n++
+                } catch (e: Exception) { }
+            }
+            if (n > 0) PhoneStatus.push(ctx)
+            return n
+        }
         if (!NutritionSync.ready(ctx)) return 0
         var n = 0
         starts.forEach { s ->
@@ -182,6 +197,11 @@ object CommandCenter {
 
     /** Opens the Command Center with these runs; it adds them to Activities and syncs. */
     fun send(ctx: Context, starts: List<Long>) {
+        if (Standalone.on(ctx)) {
+            Thread { val n = upload(ctx, starts)
+                android.os.Handler(android.os.Looper.getMainLooper()).post { android.widget.Toast.makeText(ctx, if (n > 0) "Added $n run${if (n == 1) "" else "s"} to Activities" else "Already in Activities", android.widget.Toast.LENGTH_SHORT).show() } }.start()
+            return
+        }
         // Fill in weather/AQI first for any run that doesn't have it yet (quick lookup), then open.
         Thread {
             starts.forEach { s -> PhoneRuns.read(ctx, s)?.let { if (!RunWeather.has(it)) try { RunWeather.fill(ctx, s) } catch (e: Exception) { } } }

@@ -62,6 +62,7 @@ object Reminders {
     fun check(ctx: Context) {
         val now = LocalTime.now(); val today = LocalDate.now()
         try { NutritionSync.refreshIfStale(ctx, 30 * 60_000L) } catch (e: Exception) { }
+        try { Local.upkeep(ctx, hourly = true) } catch (e: Exception) { }
         val d = Nutrition.today(NutritionStore.days(ctx))
 
         // Pre-fueling: 5–9 pm on the day before a hard workout (the Command Center's "Pre-fueling day").

@@ -14,7 +14,7 @@ object CcStatus {
 
     /** Reads the heartbeat. Call off the main thread. */
     fun fetch(ctx: Context) {
-        if (!NutritionSync.ready(ctx)) return
+        if (Standalone.on(ctx) || !NutritionSync.ready(ctx)) return
         try {
             val c = (URL(Live.db(ctx) + "/nutrition/" + NutritionSync.key(ctx) + "/ccSeen.json").openConnection() as HttpURLConnection).apply { connectTimeout = 8_000; readTimeout = 8_000 }
             if (c.responseCode == 200) c.inputStream.bufferedReader().readText().trim().toLongOrNull()?.let { p(ctx).edit().putLong("seen", it).apply() }
@@ -25,6 +25,12 @@ object CcStatus {
 
     /** The line and its color (green when recent, yellow when it's been a while or changes are waiting). */
     fun line(ctx: Context): Pair<String, Int> {
+        if (Standalone.on(ctx)) {
+            val at = CloudCopy.lastAt(ctx)
+            val t = if (!CloudCopy.ready(ctx)) "Stand-alone · cloud copy off (set up the database in LiveTrack settings)"
+                else if (at <= 0) "Stand-alone · cloud copy not made yet" else "Stand-alone · cloud copy " + android.text.format.DateUtils.getRelativeTimeSpanString(at)
+            return t to (if (CloudCopy.ready(ctx) && at > 0) 0xFF5FD38D.toInt() else 0xFFF2C94C.toInt())
+        }
         val s = seen(ctx); val w = waiting(ctx)
         val ago = if (s <= 0) null else System.currentTimeMillis() - s
         val agoTxt = when {

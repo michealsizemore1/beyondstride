@@ -55,6 +55,7 @@ object HydrationSync {
 
     /** Posts changes not sent yet. Call off the main thread. */
     @Synchronized fun flush(ctx: Context) {
+        if (Standalone.on(ctx)) { Local.commit(ctx); return }
         if (!NutritionSync.ready(ctx)) return
         for (c in Hydration.changes(ctx).filter { it.id == null }) {
             try {
@@ -83,6 +84,7 @@ object HydrationSync {
      * goes back to its totals. Call off the main thread, before reading the days.
      */
     fun reconcile(ctx: Context) {
+        if (Standalone.on(ctx)) { Local.commit(ctx); return }
         if (!NutritionSync.ready(ctx)) return
         flush(ctx)
         if (Hydration.changes(ctx).none { it.id != null }) { synchronized(Hydration) { Hydration.settle(ctx) }; return }
