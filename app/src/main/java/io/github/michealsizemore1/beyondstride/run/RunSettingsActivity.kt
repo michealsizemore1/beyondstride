@@ -451,9 +451,7 @@ class RunSettingsActivity : Activity() {
                 isChecked = ActivityImport.enabled(ctx)
                 setOnCheckedChangeListener { _, v ->
                     ActivityImport.setEnabled(ctx, v)
-                    if (v) Thread { val g = ActivityImport.granted(applicationContext); runOnUiThread { if (!g) try {
-                        @Suppress("DEPRECATION") startActivityForResult(androidx.health.connect.client.PermissionController.createRequestPermissionResultContract().createIntent(ctx, ActivityImport.PERMS), 83)
-                    } catch (e: Exception) { Toast.makeText(ctx, "Health Connect isn't available on this phone", Toast.LENGTH_LONG).show() } } }.start()
+                    if (v) Thread { val g = ActivityImport.granted(applicationContext); runOnUiThread { if (!g) askHealthConnect() } }.start()
                 }
             })
             addView(RunUi.text(ctx, "Garmin, Strava, Samsung Health and others that write to Health Connect: each new workout (last 2 weeks) is added to Activities about once an hour. " +
@@ -461,10 +459,26 @@ class RunSettingsActivity : Activity() {
                 (if (!on) " Works after you switch to stand-alone." else ""), RunUi.MUTED, 12f))
             ActivityImport.lastInfo(ctx).takeIf { it.isNotBlank() }?.let { addView(RunUi.text(ctx, it, RunUi.DIM, 12f).apply { setPadding(0, dp(4), 0, 0) }) }
             if (on) addView(RunUi.button(ctx, "Import now", RunUi.CARD, Color.WHITE) {
-                Thread { val n = try { ActivityImport.fromHealthConnect(applicationContext) } catch (e: Exception) { 0 }
+                Thread { if (!ActivityImport.granted(applicationContext)) { runOnUiThread { askHealthConnect() }; return@Thread }
+                    val n = try { ActivityImport.fromHealthConnect(applicationContext) } catch (e: Exception) { 0 }
                     runOnUiThread { Toast.makeText(ctx, if (n > 0) "Added $n workout${if (n == 1) "" else "s"}" else if (!ActivityImport.granted(ctx)) "Allow BeyondStride to read workouts in Health Connect first" else "Nothing new", Toast.LENGTH_LONG).show(); render() } }.start()
             }.apply { layoutParams = lp(10) })
         })
+    }
+
+    /** Health Connect workout permissions: Android 14+ asks like any app permission; older phones open the Health Connect app. */
+    private fun askHealthConnect() {
+        val perms = ActivityImport.PERMS.toTypedArray()
+        if (android.os.Build.VERSION.SDK_INT >= 34) { requestPermissions(perms, 83); return }
+        try { @Suppress("DEPRECATION") startActivityForResult(androidx.health.connect.client.PermissionController.createRequestPermissionResultContract().createIntent(this, ActivityImport.PERMS), 83) }
+        catch (e: Exception) { Toast.makeText(this, "Install or update Health Connect from the Play Store, then try again", Toast.LENGTH_LONG).show() }
+    }
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode != 83) return
+        val app = applicationContext
+        Thread { val g = ActivityImport.granted(app); val n = if (g) try { ActivityImport.fromHealthConnect(app) } catch (e: Exception) { 0 } else 0
+            runOnUiThread { Toast.makeText(this, if (!g) "Workout access wasn't allowed — turn it on in Settings → Apps → BeyondStride → Permissions → Health Connect" else if (n > 0) "Allowed · added $n workout${if (n == 1) "" else "s"}" else "Allowed · nothing new to add", Toast.LENGTH_LONG).show(); render() } }.start()
     }
 
     private fun newBackup() {
