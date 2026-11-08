@@ -140,7 +140,7 @@ object MorningReport {
         Insights.weekScore(ctx)?.let { ml += it }
         plan?.let { PlanEngine.race(it) }?.takeIf { it.isNotEmpty() && it >= today }?.let { r ->
             ml += "🏁 ${java.time.temporal.ChronoUnit.DAYS.between(LocalDate.now(), LocalDate.parse(r))} days to race day (" + LocalDate.parse(r).format(java.time.format.DateTimeFormatter.ofPattern("MMM d", Locale.US)) + ")" }
-        sec += Section("📅", "This week", "${f1(Math.round(mi.week * 10) / 10.0)} mi" + (if (wkPlan > 0) " of ${f1(wkPlan)} planned" else ""), ml)
+        sec += Section("📅", "This week", "${f1(Math.round((mi?.week ?: 0.0) * 10) / 10.0)} mi" + (if (wkPlan > 0) " of ${f1(wkPlan)} planned" else ""), ml)
         // Advice.
         val hard = try { NutritionEngine.hardWorkout(ctx, LocalDate.now()) } catch (e: Exception) { "" }
         val advice = when {
