@@ -187,7 +187,7 @@ object NutritionUi {
     }
 
     /** Which foods a macro came from (tap a Protein / Carbs / Fat tile): grams, calories and share, plus the target. */
-    fun macroSources(act: Activity, nd: Nutrition.Day, t: Nutrition.MacroTile) {
+    fun macroSources(act: Activity, nd: Nutrition.Day, t: Nutrition.Day.MacroTile) {
         val per = if (t.name == "Fat") 9 else 4
         val rows = nd.foods.map { it to it.total(when (t.name) { "Protein" -> it.prot; "Carbs" -> it.carbs; else -> it.fat }) }.filter { it.second > 0.05 }.sortedByDescending { it.second }
         val tot = rows.sumOf { it.second }
