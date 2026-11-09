@@ -21,7 +21,10 @@ object RunFields {
         "lapTime" to "Lap time", "lapDist" to "Lap distance", "lapPace" to "Lap pace", "lapHr" to "Lap HR",
         "lapPower" to "Lap power", "lapNum" to "Lap #", "lastLap" to "Last lap time",
         "stress" to "Stress", "intensity" to "Intensity",
+        "heatPace" to "Heat-adj pace", "heatAvgPace" to "Heat-adj avg", "heatLapPace" to "Heat-adj lap", "heatPct" to "Heat impact", "tempF" to "Temp · humidity",
     )
+    /** The heat screen: heat-adjusted pace on top, actual pace and heat impact, heat-adjusted average at the bottom. */
+    fun heatScreen(): JSONObject = screen("4", "heatPace", "pace", "heatPct", "heatAvgPace")
     fun name(key: String) = METRICS.firstOrNull { it.first == key }?.second ?: key
 
     /** Layouts: id → (name, number of fields, rows as counts per row). */
@@ -46,5 +49,6 @@ object RunFields {
         screen("4", "power", "power10", "lapPower", "pctCp"),
         screen("4", "lapTime", "lapDist", "lapPace", "lastLap"),
         screen("5", "stress", "np", "intensity", "cadence", "stride"),
+        heatScreen(),
     ))
 }

@@ -68,6 +68,7 @@ class RunService : Service(), SensorEventListener, LocationListener {
             Speaker.onTick()
             updateGps()
             grabStartLocation()
+            weatherTick()
             try { LiveTrack.onTick(this@RunService) } catch (e: Exception) { }
             Run.nav?.trail?.let { t -> try { TrailTiles.ensure(this@RunService, t) } catch (e: Exception) { } }
             if (Run.isActive && ++saveCounter % 30 == 0) {
@@ -214,6 +215,25 @@ class RunService : Service(), SensorEventListener, LocationListener {
     // ---------------------------------------------------------------- GPS
 
     private var startLocTriedFor = 0L
+
+    /** Current temperature and humidity where you are, at the start and every 20 minutes (heat-adjusted pace). */
+    @Volatile private var wxBusy = false
+    private fun weatherTick() {
+        if (Run.state != Run.State.RUNNING || wxBusy) return
+        val loc = (if (Run.gpsLat != 0.0) doubleArrayOf(Run.gpsLat, Run.gpsLon) else null) ?: Run.startLoc ?: return
+        if (Run.weatherAt > Run.startMillis && System.currentTimeMillis() - Run.weatherAt < 20 * 60_000L) return
+        wxBusy = true
+        Thread {
+            try {
+                val c = (java.net.URL("https://api.open-meteo.com/v1/forecast?latitude=${loc[0]}&longitude=${loc[1]}&current=temperature_2m,relative_humidity_2m&temperature_unit=fahrenheit").openConnection() as java.net.HttpURLConnection)
+                    .apply { connectTimeout = 10_000; readTimeout = 10_000 }
+                if (c.responseCode == 200) { val cur = org.json.JSONObject(c.inputStream.bufferedReader().readText()).getJSONObject("current")
+                    Run.tempF = cur.getDouble("temperature_2m"); Run.humidity = cur.optDouble("relative_humidity_2m", 30.0) }
+                Run.weatherAt = System.currentTimeMillis()
+            } catch (e: Exception) { Run.weatherAt = System.currentTimeMillis() - 15 * 60_000L }   // try again in ~5 min
+            finally { wxBusy = false }
+        }.start()
+    }
 
     /** One quick location reading at the start of each run (even with GPS off), for weather/AQI. */
     @SuppressLint("MissingPermission")

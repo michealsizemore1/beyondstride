@@ -244,6 +244,12 @@ object Run {
     @Volatile var gpsSpeed = 0.0            // m/s
     /** Where the run started (one quick reading even with GPS off) — for the weather lookup. */
     @Volatile var startLoc: DoubleArray? = null
+    /** Weather where you are (fetched at the start and every 20 minutes) — for the heat-adjusted pace fields. */
+    @Volatile var tempF = Double.NaN
+    @Volatile var humidity = Double.NaN
+    @Volatile var weatherAt = 0L
+    /** Percent slower because of heat & humidity right now (NaN until the weather is in). */
+    fun heatPct(): Double = if (tempF.isNaN()) Double.NaN else io.github.michealsizemore1.beyondstride.Heat.pct(tempF, if (humidity.isNaN()) 30.0 else humidity)
     @Volatile var gpsLat = 0.0
     @Volatile var gpsLon = 0.0
     @Volatile var gpsLastUpdate = 0L

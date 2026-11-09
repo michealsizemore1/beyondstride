@@ -26,6 +26,7 @@ open class RunsActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        try { RunSettings.addHeatScreenOnce(this) } catch (e: Exception) { }
         if (io.github.michealsizemore1.beyondstride.WrongDevice.check(this, isWatchApp = false)) { wrongDevice = true; return }
         // One-time cleanup: cancel any leftover background Stryd lookups from older versions.
         getSharedPreferences("runflags", 0).let { f -> if (!f.getBoolean("strydJobsCleared", false)) {

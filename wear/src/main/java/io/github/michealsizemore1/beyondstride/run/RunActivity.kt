@@ -2486,6 +2486,15 @@ class RunActivity : Activity() {
             "distance" -> Run.miles(Run.distance) to w
             "pace" -> Run.pace(Run.currentSpeed) to C.ACCENT
             "avgPace" -> Run.pace(Run.avgSpeed) to C.ACCENT
+            // Heat-adjusted: the pace you'd run at this effort if heat & humidity weren't a factor.
+            "heatPace", "heatAvgPace", "heatLapPace" -> {
+                val hp = Run.heatPct(); val sp = when (key) { "heatPace" -> Run.currentSpeed; "heatAvgPace" -> Run.avgSpeed
+                    else -> if (Run.lapMeters < 10 || Run.lapSeconds <= 0) 0.0 else Run.lapMeters / Run.lapSeconds }
+                Run.pace(if (hp.isNaN()) sp else io.github.michealsizemore1.beyondstride.Heat.adjustedSpeed(sp, hp)) to (if (hp.isNaN() || hp < 0.5) C.ACCENT else 0xFFFFA94D.toInt())
+            }
+            "heatPct" -> Run.heatPct().let { hp -> if (hp.isNaN()) "--" to w else if (hp < 0.5) "0%" to w
+                else (String.format(java.util.Locale.US, "+%.1f%%", hp) + (if (Run.avgSpeed > 0.5) " ${Math.round(io.github.michealsizemore1.beyondstride.RunMath.METERS_PER_MILE / Run.avgSpeed * hp / 100)}s" else "")) to 0xFFFFA94D.toInt() }
+            "tempF" -> (if (Run.tempF.isNaN()) "--" else "${Math.round(Run.tempF)}°" + (if (!Run.humidity.isNaN()) " ${Math.round(Run.humidity)}%" else "")) to w
             "hr" -> n(Run.heartRate) to hrColor(Run.heartRate)
             "avgHr" -> n(Run.avgHr) to hrColor(Run.avgHr)
             "maxHr" -> n(Run.maxHr) to hrColor(Run.maxHr)

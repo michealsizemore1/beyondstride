@@ -87,6 +87,14 @@ object RunSettings {
     fun screens(ctx: Context): org.json.JSONArray = try {
         org.json.JSONArray(p(ctx).getString("screens", null) ?: "").takeIf { it.length() > 0 }
     } catch (e: Exception) { null } ?: io.github.michealsizemore1.beyondstride.RunFields.defaults()
+    /** Once: the heat-adjusted pace screen is added to the end of your watch screens. */
+    fun addHeatScreenOnce(ctx: Context) {
+        if (p(ctx).getBoolean("heatScreenAdded", false)) return
+        p(ctx).edit().putBoolean("heatScreenAdded", true).apply()
+        val a = screens(ctx)
+        if ((0 until a.length()).any { a.optJSONObject(it)?.optJSONArray("fields")?.toString()?.contains("heatPace") == true }) return
+        a.put(io.github.michealsizemore1.beyondstride.RunFields.heatScreen()); saveScreens(ctx, a)
+    }
     fun saveScreens(ctx: Context, a: org.json.JSONArray) {
         p(ctx).edit().putString("screens", a.toString()).putLong("settingsAt", System.currentTimeMillis()).apply(); pushToWatch(ctx)
     }
