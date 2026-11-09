@@ -182,6 +182,18 @@ open class RunsActivity : Activity() {
             io.github.michealsizemore1.beyondstride.ReadinessSync.nights(this), runs.take(120), R.today(), fuelYesterday = io.github.michealsizemore1.beyondstride.NutritionStore.yesterday(this))
         val todayW = WorkoutStore.plan(this).optJSONObject(WorkoutStore.dayFmt.format(Date()))
         col.addView(RunUi.section(this, "TODAY"))
+        // 🌤 Weather.
+        col.addView(RunUi.card(this).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { bottomMargin = dp(8) }
+            val card = this
+            TodayWeather.fill(ctx, card)
+            fun refresh(force: Boolean) = Thread {
+                if (TodayWeather.fetch(ctx, force)) runOnUiThread { if (card.isAttachedToWindow || !isFinishing) TodayWeather.fill(ctx, card) }
+            }.start()
+            setOnClickListener { refresh(true) }
+            if (TodayWeather.stale(ctx)) refresh(false)
+        })
         // ☀️ Morning report (until noon).
         if (java.time.LocalTime.now().hour < 12 && MorningReport.enabled(this)) col.addView(RunUi.card(this).apply {
             background = RunUi.rounded(0xFF243B2E.toInt(), dp(14).toFloat())
