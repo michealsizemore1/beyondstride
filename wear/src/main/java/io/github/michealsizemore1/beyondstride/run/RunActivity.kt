@@ -1131,7 +1131,7 @@ class RunActivity : Activity() {
     private fun showScreensEditor() = overlay { col ->
         val RF = io.github.michealsizemore1.beyondstride.RunFields
         col.addView(label("Data screens", Color.WHITE, 18f, true))
-        col.addView(label("Swipe through these during a run. Also editable on the phone.", C.MUTED, 10f))
+        col.addView(label("Swipe through these during a run. Tap one to change it or move it up / down. Also editable on the phone.", C.MUTED, 10f))
         for (i in 0 until screens.length()) {
             val sc = screens.getJSONObject(i)
             val f = sc.optJSONArray("fields")
@@ -1172,6 +1172,10 @@ class RunActivity : Activity() {
                 col.addView(card(RF.name(fields.optString(idx)), where) { pickMetric(i, idx) })
             }
         }
+        // Order (same as Move up / Move down on the phone).
+        fun swap(a: Int, b: Int) { val x = screens.get(a); screens.put(a, screens.get(b)); screens.put(b, x); saveScreens() }
+        if (i > 0) col.addView(card("▲ Move up", "Becomes screen $i", C.ACCENT) { swap(i, i - 1); showScreenEditor(i - 1) })
+        if (i < screens.length() - 1) col.addView(card("▼ Move down", "Becomes screen ${i + 2}", C.ACCENT) { swap(i, i + 1); showScreenEditor(i + 1) })
         if (screens.length() > 1) col.addView(card("Remove this screen", "", C.STOP) {
             screens.remove(i); saveScreens(); showScreensEditor()
         })
