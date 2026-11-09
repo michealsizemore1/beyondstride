@@ -31,7 +31,7 @@ object DailySummary {
                 S.str(a, "duration").ifEmpty { null }, S.str(a, "pace").ifEmpty { null }?.let { "$it/mi" },
                 S.num(a, "heartRate").takeIf { it > 0 }?.let { "avg HR ${Math.round(it)}" }, S.num(a, "power").takeIf { it > 0 }?.let { "${Math.round(it)} W" },
                 S.str(a, "temp").ifEmpty { null }?.let { "${it}°F" })
-            lines += "Workout: " + parts.joinToString(" · ") + S.str(a, "notes").takeIf { it.isNotBlank() }?.let { " — notes: " + it.take(300) }.orEmpty()
+            lines += "Workout: " + parts.joinToString(" · ") + S.str(a, "notes").takeIf { it.isNotBlank() }?.let { " — notes: " + it.take(1500) }.orEmpty()
         }
         // Training plan.
         val plan = PlanStore.data(ctx).optJSONObject("current")
@@ -79,7 +79,7 @@ object DailySummary {
         pr.edit().putLong("at", now).apply()
         val base = Live.db(ctx) + "/nutrition/" + NutritionSync.key(ctx) + "/beyondstride/daily/"
         // The first time: the last 2 weeks, so this week's review has every day.
-        val back = if (pr.getBoolean("back14b", false)) 1L else 13L
+        val back = if (pr.getBoolean("back14c", false)) 1L else 13L
         (back downTo 0L).map { LocalDate.now().minusDays(it).toString() }.forEach { d ->
             try {
                 val o = build(ctx, d); val sig = (o.optString("text") + o.optJSONObject("wellness")).hashCode()
@@ -90,6 +90,6 @@ object DailySummary {
                 if (c.responseCode in 200..299) pr.edit().putInt("sig_$d", sig).apply()
             } catch (e: Exception) { }
         }
-        pr.edit().putBoolean("back14b", true).apply()
+        pr.edit().putBoolean("back14c", true).apply()
     }
 }
