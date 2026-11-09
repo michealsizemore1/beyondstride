@@ -155,6 +155,34 @@ object PlanAdjust {
                 if (carry >= 1 && em > 0) add("carry", y.toString(), "Yesterday was ${mi(yd)} of ${mi(yp)} mi — add ${mi(carry)} mi to ${nice(e.toString())}'s easy run.",
                     mapOf(e.toString() to "＋ ${mi(carry)} mi carried from ${nice(y.toString())}\n" + setMiles(text(e), em + carry))) }
         }
+        // ▲ Ran well over the plan (today or yesterday): protect the next hard day, and keep the week near what was planned.
+        for (back in 0..1) {
+            val x = today.minusDays(back.toLong()); val pm = Insights.plannedMiles(text(x)); val dm = done(x)
+            if (pm <= 0 || dm < pm * 1.25 || dm - pm < 2) continue
+            val extra = dm - pm
+            // The next hard workout within 2 days becomes easy.
+            for (k in 1..2) { val h = x.plusDays(k.toLong()); if (h.isBefore(today)) continue; val hk = k(h)
+                if (hard(hk)) { val m = Insights.plannedMiles(text(h)); val easy = Math.max(3.0, Math.round(m * 0.8).toDouble())
+                    add("overHard", "over-${x}", "You ran ${mi(dm)} mi on ${nice(x.toString())} (${mi(pm)} planned). Make ${nice(h.toString())}'s $hk workout an easy ${mi(easy)} mi so you recover.",
+                        mapOf(h.toString() to "↘ Easy instead (extra miles ${nice(x.toString())})\n${mi(easy)} mi easy\n\nOriginal: " + text(h))); break } }
+            // The week: if done + still planned is >10% over the week's plan, trim the remaining easy days (not long / hard ones).
+            var wkPlan = 0.0; var wkDone = 0.0; var d = wStart
+            while (!d.isAfter(wEnd)) { wkPlan += Insights.plannedMiles(text(d)); if (!d.isAfter(today)) wkDone += done(d); d = d.plusDays(1) }
+            var remaining = 0.0; d = today.plusDays(1); while (!d.isAfter(wEnd)) { remaining += Insights.plannedMiles(text(d)); d = d.plusDays(1) }
+            var over = wkDone + remaining - wkPlan * 1.10
+            if (over >= 1.5) {
+                val ch = LinkedHashMap<String, String>(); val parts = ArrayList<String>()
+                d = today.plusDays(1)
+                while (!d.isAfter(wEnd) && over >= 0.5) {
+                    val ds = d.toString()
+                    if (k(d) == "easy" && ds !in touched) { val m = Insights.plannedMiles(text(d)); val cut = Math.min(over, m - 2.0).let { Math.floor(it) }
+                        if (cut >= 1) { ch[ds] = "↘ ${mi(cut)} mi less (extra miles ${nice(x.toString())})\n" + setMiles(text(d), m - cut); parts += "${nice(ds)} ${mi(m)}→${mi(m - cut)}"; over -= cut } }
+                    d = d.plusDays(1)
+                }
+                if (ch.isNotEmpty()) add("overWeek", "overwk-${x}", "Your ${mi(extra)} extra miles put this week about ${mi(Math.round((wkDone + remaining - wkPlan) * 10) / 10.0)} mi over plan. Trim easy days to stay near ${mi(Math.round(wkPlan * 1.1 * 10) / 10.0)} mi: " + parts.joinToString(", ") + ".", ch)
+            }
+            break
+        }
         // ↘ 3+ planned run days missed in a row → ease back in.
         var missed = 0; var d0 = today.minusDays(1)
         while (missed < 14) { val pm = Insights.plannedMiles(text(d0)); if (text(d0).isEmpty()) break

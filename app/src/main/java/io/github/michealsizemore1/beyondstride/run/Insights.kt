@@ -43,6 +43,7 @@ object Insights {
         return when {
             p <= 0 && d <= 0 -> Adh(0.0, 0.0, "Rest / no miles planned", 0xFF9AA5A0.toInt())
             p <= 0 -> Adh(0.0, d, "${mi(d)} mi done (none planned)", 0xFF7DD3FC.toInt())
+            d >= p * 1.25 && d - p >= 2 -> Adh(p, d, "▲ ${mi(p)} mi planned · ${mi(d)} done (+${mi(Math.round((d - p) * 10) / 10.0)} mi)", 0xFFF2C94C.toInt())
             d >= p * 0.9 -> Adh(p, d, "✓ ${mi(p)} mi planned · ${mi(d)} done", 0xFF5FD38D.toInt())
             d > 0 -> Adh(p, d, "◐ ${mi(p)} mi planned · ${mi(d)} done (${Math.round(d / p * 100)}%)", 0xFFF2C94C.toInt())
             past -> Adh(p, 0.0, "✗ ${mi(p)} mi planned · missed", 0xFFFF8A80.toInt())
