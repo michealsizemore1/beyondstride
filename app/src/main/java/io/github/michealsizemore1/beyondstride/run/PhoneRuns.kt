@@ -89,6 +89,12 @@ object RunSettings {
     } catch (e: Exception) { null } ?: io.github.michealsizemore1.beyondstride.RunFields.defaults()
     /** Once: the heat-adjusted pace screen is added to the end of your watch screens. */
     fun addHeatScreenOnce(ctx: Context) {
+        // The 4-field heat screen added first becomes the 8-field one (wherever you moved it), once.
+        if (!p(ctx).getBoolean("heatScreen8", false)) {
+            p(ctx).edit().putBoolean("heatScreen8", true).apply()
+            val a = screens(ctx); val old = """["heatPace","pace","heatPct","heatAvgPace"]"""
+            for (i in 0 until a.length()) if (a.optJSONObject(i)?.optJSONArray("fields")?.toString() == old) { a.put(i, io.github.michealsizemore1.beyondstride.RunFields.heatScreen()); saveScreens(ctx, a); break }
+        }
         if (p(ctx).getBoolean("heatScreenAdded", false)) return
         p(ctx).edit().putBoolean("heatScreenAdded", true).apply()
         val a = screens(ctx)

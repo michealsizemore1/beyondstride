@@ -24,12 +24,13 @@ object RunFields {
         "heatPace" to "Heat-adj pace", "heatAvgPace" to "Heat-adj avg", "heatLapPace" to "Heat-adj lap", "heatPct" to "Heat impact", "tempF" to "Temp · humidity",
     )
     /** The heat screen: heat-adjusted pace on top, actual pace and heat impact, heat-adjusted average at the bottom. */
-    fun heatScreen(): JSONObject = screen("4", "heatPace", "pace", "heatPct", "heatAvgPace")
+    fun heatScreen(): JSONObject = screen("8", "heatPace", "pace", "heatPct", "heatAvgPace", "avgPace", "heatLapPace", "lapPace", "tempF")
     fun name(key: String) = METRICS.firstOrNull { it.first == key }?.second ?: key
 
     /** Layouts: id → (name, number of fields, rows as counts per row). */
     data class Layout(val id: String, val name: String, val rows: List<Int>)
     val LAYOUTS = listOf(
+        Layout("8", "Top · 3 rows of 2 · bottom (8)", listOf(1, 2, 2, 2, 1)),
         Layout("6", "Top · 2×2 grid · bottom (6)", listOf(1, 2, 2, 1)),
         Layout("4", "Top · 2 across · bottom (4)", listOf(1, 2, 1)),
         Layout("5", "Top · 2 across · 2 across (5)", listOf(1, 2, 2)),
