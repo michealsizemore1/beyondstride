@@ -167,6 +167,11 @@ class RunReceiverService : WearableListenerService() {
         events.filter { it.type == DataEvent.TYPE_CHANGED && (it.dataItem.uri.path == io.github.michealsizemore1.beyondstride.ReadinessSync.CHECKS ||
                 it.dataItem.uri.path == io.github.michealsizemore1.beyondstride.ReadinessSync.NIGHTS) }
             .forEach { io.github.michealsizemore1.beyondstride.ReadinessSync.apply(this, it.dataItem.uri.path ?: "", DataMapItem.fromDataItem(it.dataItem).dataMap) }
+        // A morning check just came in: the morning report goes out now if the weigh-in is in, else in 15 minutes.
+        if (events.any { it.type == DataEvent.TYPE_CHANGED && it.dataItem.uri.path == io.github.michealsizemore1.beyondstride.ReadinessSync.CHECKS }) {
+            try { WeightImport.takeIf { it.enabled(this) }?.sync(this) } catch (e: Exception) { }
+            Reminders.morning(this); Reminders.morningLater(this)
+        }
         // Settings changed on the watch.
         events.filter { it.type == DataEvent.TYPE_CHANGED && it.dataItem.uri.path == io.github.michealsizemore1.beyondstride.SettingsSync.PATH }
             .forEach { io.github.michealsizemore1.beyondstride.SettingsSync.apply(this, "runsettings", "phone", DataMapItem.fromDataItem(it.dataItem).dataMap) }

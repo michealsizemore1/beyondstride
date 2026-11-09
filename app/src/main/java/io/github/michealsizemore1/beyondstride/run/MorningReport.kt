@@ -23,9 +23,9 @@ object MorningReport {
     private fun p(ctx: Context) = ctx.getSharedPreferences("morning", 0)
     fun enabled(ctx: Context) = p(ctx).getBoolean("on", true)
     fun setEnabled(ctx: Context, v: Boolean) = p(ctx).edit().putBoolean("on", v).apply()
-    /** Latest time the notification waits for your sleep to come in (minutes after midnight). */
-    fun time(ctx: Context) = p(ctx).getInt("time", 7 * 60)
-    fun setTime(ctx: Context, m: Int) = p(ctx).edit().putInt("time", m).apply()
+    /** Latest time the notification waits for the morning check (minutes after midnight). Default 9:30 AM (you wake around 8). */
+    fun time(ctx: Context) = p(ctx).getInt("time2", 9 * 60 + 30)
+    fun setTime(ctx: Context, m: Int) = p(ctx).edit().putInt("time2", m).apply()
 
     data class Section(val icon: String, val title: String, val main: String, val lines: List<String>, val color: Int = 0xFFFFFFFF.toInt())
     data class Report(val date: String, val headline: String, val sections: List<Section>, val advice: String)
@@ -157,14 +157,23 @@ object MorningReport {
     fun json(r: Report): JSONObject = JSONObject().put("date", r.date).put("headline", r.headline).put("advice", r.advice).put("sections", JSONArray().apply {
         r.sections.forEach { s -> put(JSONObject().put("icon", s.icon).put("title", s.title).put("main", s.main).put("color", s.color).put("lines", JSONArray(s.lines))) } })
 
-    /** Sends the notification once a day: as soon as last night's sleep is in (after 4 AM), or at the set time at the latest. */
+    /**
+     * Sends the notification once a day, complete: right after the morning check (HRV) and the weigh-in are both in —
+     * or 15 minutes after the check if the scale is slow — and at the set time at the latest on a morning you skip the check.
+     */
     fun maybeNotify(ctx: Context, notify: (String, String) -> Unit) {
         if (!enabled(ctx)) return
         val pr = p(ctx); val today = Readiness.today(); if (pr.getString("sent", "") == today) return
         val now = java.time.LocalTime.now(); val mins = now.hour * 60 + now.minute
-        if (mins < 4 * 60 || mins > 12 * 60) return
-        val sleepIn = ReadinessSync.nights(ctx).any { it.day == today && it.minutes > 0 }
-        if (!sleepIn && mins < time(ctx)) return
+        if (mins < 4 * 60 || mins > 13 * 60) return
+        val chk = ReadinessSync.checks(ctx).lastOrNull { it.day == today }
+        val weighed = (NutriDay.day(ctx, today)?.weight ?: 0.0) > 0
+        val ready = when {
+            chk != null && weighed -> true
+            chk != null -> System.currentTimeMillis() - (if (chk.at > 0) chk.at else pr.getLong("chkSeen_$today", System.currentTimeMillis().also { pr.edit().putLong("chkSeen_$today", it).apply() })) >= 15 * 60_000L
+            else -> mins >= time(ctx)
+        }
+        if (!ready) return
         fetchWeather(ctx)
         val r = build(ctx)
         pr.edit().putString("sent", today).apply()

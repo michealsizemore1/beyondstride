@@ -49,6 +49,16 @@ object Reminders {
         p(ctx).edit().putBoolean("sent_$key", true).apply(); return true
     }
 
+    /** Checks again for the morning report 16 minutes after the morning check (the scale may still be syncing). */
+    fun morningLater(ctx: Context) {
+        try { WorkManager.getInstance(ctx).enqueueUniqueWork("morningReport", androidx.work.ExistingWorkPolicy.REPLACE,
+            androidx.work.OneTimeWorkRequestBuilder<MorningWork>().setInitialDelay(16, TimeUnit.MINUTES).build()) } catch (e: Exception) { }
+    }
+    class MorningWork(c: Context, w: WorkerParameters) : Worker(c, w) {
+        override fun doWork(): Result { try { WeightImport.takeIf { it.enabled(applicationContext) }?.sync(applicationContext) } catch (e: Exception) { }
+            morning(applicationContext); return Result.success() }
+    }
+
     /** ☀️ Morning report notification (once a day; mirrors to the watch like any notification). */
     fun morning(ctx: Context) { try { MorningReport.maybeNotify(ctx) { t, x -> notify(ctx, 960, t, x, MorningReportActivity::class.java) } } catch (e: Exception) { } }
 
