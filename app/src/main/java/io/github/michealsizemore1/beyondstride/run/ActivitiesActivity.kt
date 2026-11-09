@@ -1089,8 +1089,8 @@ class ActivitiesActivity : Activity() {
             (S.str(a, "airPower").takeIf { S.num(a, "airPower") > 0 } ?: S.str(a, "wind").takeIf { S.num(a, "wind") > 0 })?.let { c += "$it% air power" }
             if (S.num(a, "aqi") > 0) c += "AQI " + S.str(a, "aqi")
             val t = S.str(a, "temp").toDoubleOrNull(); val ps = S.paceSec(S.str(a, "pace"))
-            if (t != null && ps > 0) { val h = S.str(a, "humidity").toDoubleOrNull() ?: 30.0; val over = heatIndex(t, h) - 60
-                if (over > 0) { val pct = over * 0.4; if (pct >= 0.5) c += "est. heat/humidity impact +" + String.format(Locale.US, "%.1f", pct) + "% (" + Math.round(ps * pct / 100) + "s/mi)" } }
+            if (t != null && ps > 0) { val h = S.str(a, "humidity").toDoubleOrNull() ?: 30.0; val pct = io.github.michealsizemore1.beyondstride.Heat.pct(t, h)
+                run { if (pct >= 0.5) c += "est. heat/humidity impact +" + String.format(Locale.US, "%.1f", pct) + "% (" + Math.round(ps * pct / 100) + "s/mi)" } }
             return c }
         val miles = list.sumOf { S.num(it, "distance") }
         val first = S.str(list.first(), "date"); val last = S.str(list.last(), "date")

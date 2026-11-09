@@ -89,7 +89,7 @@ object ActivityEngine {
             val p = S.num(a, "power"); if (cp > 0 && p > 0) { val r = p / cp; x.put("pz", if (r < 0.55) "Z1" else if (r < 0.75) "Z2" else if (r < 0.90) "Z3" else if (r < 1.05) "Z4" else "Z5") }
             val hr = S.num(a, "heartRate"); if (hr > 0 && hr >= b[0]) x.put("hz", if (hr < b[1]) "Z1" else if (hr < b[2]) "Z2" else if (hr < b[3]) "Z3" else if (hr < b[4]) "Z4" else "Z5")
             val t = S.str(a, "temp").toDoubleOrNull(); val ps = S.paceSec(S.str(a, "pace"))
-            if (t != null && ps > 0) { val h = S.str(a, "humidity").toDoubleOrNull() ?: 30.0; val fl = heatIndex(t, h); val pct = Math.max(0.0, (fl - 60) * 0.4)
+            if (t != null && ps > 0) { val h = S.str(a, "humidity").toDoubleOrNull() ?: 30.0; val fl = heatIndex(t, h); val pct = io.github.michealsizemore1.beyondstride.Heat.pct(t, h)
                 if (pct >= 0.5) x.put("hhPct", Math.round(pct * 10) / 10.0).put("hhSec", Math.round(ps * pct / 100)).put("feels", Math.round(fl)) }
             val d = S.str(a, "date")
             ha[d]?.let { v -> val (l, c) = haLabel(v); x.put("ha", v).put("haLabel", l).put("haColor", c) }

@@ -72,9 +72,9 @@ object MorningReport {
         val window = if (best >= 0) "Best window ${hr(best)}–${hr(best + 2)}: ${at(best)}" else ""
         val hot = (0 until t.length()).maxOfOrNull { fl.optDouble(it) } ?: 0.0; val cold = (Math.max(6, nowH) until Math.min(20, t.length())).minOfOrNull { fl.optDouble(it) } ?: 99.0
         val note = when {
-            hot >= 80 -> "Hot later — run early, add electrolytes, expect ~${Math.round(Math.max(0.0, (hot - 60) * 0.4))}% slower at the same effort"
+            (0 until t.length()).maxOfOrNull { io.github.michealsizemore1.beyondstride.Heat.pct(t.optDouble(it), rh?.optDouble(it) ?: 30.0) }?.takeIf { it >= 2 }?.let { true } == true ->
+                "Warm / muggy later — run early, add electrolytes; up to ~" + String.format(Locale.US, "%.1f", (0 until t.length()).maxOf { io.github.michealsizemore1.beyondstride.Heat.pct(t.optDouble(it), rh?.optDouble(it) ?: 30.0) }) + "% slower at the same effort"
             cold <= 25 -> "Cold — layer up, cover hands and ears; the first mile will feel stiff"
-            (rh?.let { a -> (0 until a.length()).maxOfOrNull { a.optInt(it) } } ?: 0) >= 85 && hot >= 65 -> "Humid — heart rate runs higher; go by effort"
             else -> ""
         }
         return Wx("Now ${at(Math.min(nowH, t.length() - 1))}", window, note)
