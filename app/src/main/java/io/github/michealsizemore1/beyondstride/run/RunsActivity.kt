@@ -103,6 +103,34 @@ open class RunsActivity : Activity() {
         handlePlanImport(data)
     }
 
+    /** 📝 Notes card: shows what's written; tap to edit. */
+    private fun notesCard(): android.view.View {
+        val ctx = this; val dp = { v: Int -> RunUi.dp(ctx, v) }
+        val p = getSharedPreferences("mynotes", 0); val t = p.getString("text", "").orEmpty()
+        return RunUi.card(this).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(12) }
+            background = RunUi.rounded(RunUi.CARD, dp(14).toFloat()).apply { setStroke(dp(1), RunUi.ACCENT) }
+            addView(RunUi.text(ctx, "📝 My notes ${if (t.isBlank()) "▸" else "✎"}", RunUi.ACCENT, 15f, true))
+            addView(RunUi.text(ctx, t.ifBlank { "Tap to jot down ideas — things to add or change later." }, if (t.isBlank()) RunUi.MUTED else Color.WHITE, 14f).apply {
+                setPadding(0, dp(4), 0, 0) })
+            setOnClickListener { editNotes() }
+        }
+    }
+
+    private fun editNotes() {
+        val p = getSharedPreferences("mynotes", 0)
+        val e = android.widget.EditText(this).apply {
+            setText(p.getString("text", "")); hint = "Ideas, things to add…"; minLines = 6; gravity = Gravity.TOP
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE or android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+            setSelection(text.length)
+        }
+        val box = android.widget.FrameLayout(this).apply { setPadding(RunUi.dp(context, 20), RunUi.dp(context, 8), RunUi.dp(context, 20), 0); addView(e) }
+        android.app.AlertDialog.Builder(this).setTitle("📝 My notes").setView(box)
+            .setPositiveButton("Save") { _, _ -> p.edit().putString("text", e.text.toString().trimEnd()).putLong("at", System.currentTimeMillis()).apply(); CloudCopy.dirty(this); render() }
+            .setNegativeButton("Cancel", null).show()
+    }
+
     private fun render() {
         PhoneStatus.push(this)
         // Opened from the watch's Command Center button notification.
@@ -134,6 +162,9 @@ open class RunsActivity : Activity() {
         val hrMax = RunSettings.hrMax(this); val hrRest = RunSettings.hrRest(this)
         fun divider() = android.view.View(ctx).apply { setBackgroundColor(0x22FFFFFF) }
             .also { it.layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, dp(1)).apply { topMargin = dp(10); bottomMargin = dp(10) } }
+
+        // 📝 My notes — ideas to add later (top of Today).
+        col.addView(notesCard())
 
         // 0. Update available.
         io.github.michealsizemore1.beyondstride.Updater.available(this)?.let { up ->
