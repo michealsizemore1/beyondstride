@@ -71,6 +71,13 @@ class RunActivity : Activity() {
             ?.takeIf { it.length() > 0 } ?: io.github.michealsizemore1.beyondstride.RunFields.defaults()
         builtScreen = -1
     }
+    /** Screens changed on the phone → shown here right away. */
+    private val screensListener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+        if (key == "screens" && !savingScreens) runOnUiThread { loadScreens()
+            if (overlayOpen && editingScreens >= -1 && editorCol?.isAttachedToWindow == true) { if (editingScreens >= 0 && editingScreens < screens.length()) showScreenEditor(editingScreens) else showScreensEditor() } } }
+    @Volatile private var savingScreens = false
+    private var editingScreens = -2
+    private var editorCol: View? = null
     private var lastRotary = 0L
     private val handler = android.os.Handler(android.os.Looper.getMainLooper())
     private val prefs by lazy { getSharedPreferences("run", 0) }
@@ -94,6 +101,7 @@ class RunActivity : Activity() {
         // Changes made here go to the phone; changes made on the phone come back (RunSettingsListener).
         io.github.michealsizemore1.beyondstride.SettingsSync.watch(this, "run", "watch")
         loadScreens()
+        prefs.registerOnSharedPreferenceChangeListener(screensListener)
         // Keep the screen awake so the app keeps focus — otherwise, once the watch dims, the bottom
         // button goes to the system instead of the app (and closes it).
         if (prefs.getBoolean("keepOn", true)) window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -1064,13 +1072,15 @@ class RunActivity : Activity() {
         col.addView(card("Test the voice", "", C.ACCENT) {
             Speaker.say("Lap 1. 8 minutes 32 seconds. Pace 8 32. Heart rate 142", force = true)
         })
-        col.addView(card("Done", "", C.ACCENT) { overlayOpen = false; startBuilt = false; renderStart() })
+        col.addView(card("Done", "", C.ACCENT) { editingScreens = -2; overlayOpen = false; startBuilt = false; renderStart() })
     }
 
     // ---------------------------------------------------------------- data screens editor (watch)
 
     private fun saveScreens() {
-        prefs.edit().putString("screens", screens.toString()).apply()
+        savingScreens = true
+        prefs.edit().putString("screens", screens.toString()).commit()
+        savingScreens = false
         builtScreen = -1
         // (sent to the phone by SettingsSync, like every other setting)
     }
@@ -1129,6 +1139,7 @@ class RunActivity : Activity() {
 
     /** List of screens: tap one to change it. */
     private fun showScreensEditor() = overlay { col ->
+        loadScreens(); editingScreens = -1; editorCol = col
         val RF = io.github.michealsizemore1.beyondstride.RunFields
         col.addView(label("Data screens", Color.WHITE, 18f, true))
         col.addView(label("Swipe through these during a run. Tap one to change it or move it up / down. Also editable on the phone.", C.MUTED, 10f))
@@ -1147,12 +1158,18 @@ class RunActivity : Activity() {
 
     /** One screen: its layout and each spot, top to bottom. */
     private fun showScreenEditor(i: Int): Unit = overlay { col ->
+        loadScreens(); editingScreens = i; editorCol = col
         val RF = io.github.michealsizemore1.beyondstride.RunFields
+        if (i >= screens.length()) { showScreensEditor(); return@overlay }
         val sc = screens.getJSONObject(i)
         val layout = RF.layout(sc.optString("layout", "6"))
         val fields = sc.optJSONArray("fields") ?: org.json.JSONArray().also { sc.put("fields", it) }
         while (fields.length() < layout.rows.sum()) fields.put("time")
         col.addView(label("Screen ${i + 1}", Color.WHITE, 18f, true))
+        // Order (same as Move up / Move down on the phone).
+        fun swap(a: Int, b: Int) { val x = screens.get(a); screens.put(a, screens.get(b)); screens.put(b, x); saveScreens() }
+        if (i > 0) col.addView(card("▲ Move up", "Becomes screen $i", C.ACCENT) { swap(i, i - 1); showScreenEditor(i - 1) })
+        if (i < screens.length() - 1) col.addView(card("▼ Move down", "Becomes screen ${i + 2}", C.ACCENT) { swap(i, i + 1); showScreenEditor(i + 1) })
         col.addView(card("Layout", layout.name, C.ACCENT) {
             // Tap to step through the layouts.
             val next = RF.LAYOUTS[(RF.LAYOUTS.indexOf(layout) + 1) % RF.LAYOUTS.size]
@@ -1172,10 +1189,6 @@ class RunActivity : Activity() {
                 col.addView(card(RF.name(fields.optString(idx)), where) { pickMetric(i, idx) })
             }
         }
-        // Order (same as Move up / Move down on the phone).
-        fun swap(a: Int, b: Int) { val x = screens.get(a); screens.put(a, screens.get(b)); screens.put(b, x); saveScreens() }
-        if (i > 0) col.addView(card("▲ Move up", "Becomes screen $i", C.ACCENT) { swap(i, i - 1); showScreenEditor(i - 1) })
-        if (i < screens.length() - 1) col.addView(card("▼ Move down", "Becomes screen ${i + 2}", C.ACCENT) { swap(i, i + 1); showScreenEditor(i + 1) })
         if (screens.length() > 1) col.addView(card("Remove this screen", "", C.STOP) {
             screens.remove(i); saveScreens(); showScreensEditor()
         })

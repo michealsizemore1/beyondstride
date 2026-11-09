@@ -26,10 +26,31 @@ class ScreensActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         screens = JSONArray(RunSettings.screens(this).toString())
+        rendered = screens.toString()
         render()
+        getSharedPreferences("runsettings", 0).registerOnSharedPreferenceChangeListener(listener)
+    }
+    override fun onDestroy() { getSharedPreferences("runsettings", 0).unregisterOnSharedPreferenceChangeListener(listener); super.onDestroy() }
+    /** Changed on the watch → shown here right away. */
+    private val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+        if (key == "screens" && !saving) runOnUiThread { screens = JSONArray(RunSettings.screens(this).toString()); rendered = screens.toString(); render() } }
+    private var saving = false
+    private var rendered = ""
+
+    /** Every change is saved and sent to the watch right away (no Save button needed). */
+    private fun autoSave() {
+        for (i in 0 until screens.length()) {
+            val sc = screens.getJSONObject(i); val n = RunFields.size(sc.optString("layout", "6"))
+            val f = sc.optJSONArray("fields") ?: JSONArray()
+            sc.put("fields", JSONArray((0 until n).map { f.optString(it).ifBlank { "time" } }))
+        }
+        val now = screens.toString(); if (now == rendered) return
+        rendered = now; saving = true
+        try { RunSettings.saveScreens(this, screens) } finally { saving = false }
     }
 
     private fun render() {
+        autoSave()
         val ctx = this
         fun dp(v: Int) = RunUi.dp(ctx, v)
         val col = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(16), dp(40), dp(16), dp(40)) }
@@ -96,18 +117,9 @@ class ScreensActivity : Activity() {
         col.addView(RunUi.button(this, "+ Add a screen", RunUi.CARD, Color.WHITE) {
             screens.put(JSONObject().put("layout", "4").put("fields", JSONArray(listOf("time", "pace", "hr", "distance")))); render()
         }.apply { layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(14) } })
-        col.addView(RunUi.button(this, "Save — send to watch", RunUi.ACCENT) {
-            // Trim extra fields if a layout got smaller.
-            for (i in 0 until screens.length()) {
-                val sc = screens.getJSONObject(i)
-                val n = RunFields.size(sc.optString("layout", "6"))
-                val f = sc.optJSONArray("fields") ?: JSONArray()
-                sc.put("fields", JSONArray((0 until n).map { f.optString(it).ifBlank { "time" } }))
-            }
-            RunSettings.saveScreens(ctx, screens)
-            Toast.makeText(ctx, "Sent to your watch", Toast.LENGTH_SHORT).show()
-            finish()
-        }.apply { layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(10) } })
+        col.addView(RunUi.text(this, "Changes are saved and sent to the watch as you make them — and changes made on the watch show up here.", RunUi.MUTED, 12f).apply {
+            setPadding(dp(4), dp(10), dp(4), 0) })
+        col.addView(RunUi.button(this, "Done", RunUi.ACCENT) { autoSave(); finish() }.apply { layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(10) } })
         col.addView(RunUi.text(this, "Reset to the starting screens", RunUi.MUTED, 13f, true).apply {
             gravity = Gravity.CENTER; setPadding(0, dp(16), 0, 0)
             setOnClickListener { screens = RunFields.defaults(); render() }
