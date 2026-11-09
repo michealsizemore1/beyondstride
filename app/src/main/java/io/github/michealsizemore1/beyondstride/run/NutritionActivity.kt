@@ -320,7 +320,9 @@ class NutritionActivity : Activity() {
             }
             addView(android.widget.EditText(ctx).apply {
                 hint = "🔍 Search saved foods…"; setText(dbQuery); setSingleLine(); setTextColor(Color.WHITE); setHintTextColor(RunUi.MUTED); textSize = 15f
-                background = RunUi.rounded(0xFF26302C.toInt(), dp(10).toFloat()); setPadding(dp(12), dp(9), dp(12), dp(9))
+                // Lime outline so the search box is easy to spot.
+                background = android.graphics.drawable.GradientDrawable().apply { setColor(0xFF26302C.toInt()); cornerRadius = dp(10).toFloat(); setStroke(dp(2), RunUi.ACCENT) }
+                setPadding(dp(12), dp(9), dp(12), dp(9))
                 addTextChangedListener(object : android.text.TextWatcher {
                     override fun afterTextChanged(e: android.text.Editable?) { dbQuery = e?.toString() ?: ""; fill() }
                     override fun beforeTextChanged(s: CharSequence?, st: Int, c: Int, af: Int) {}
