@@ -75,11 +75,12 @@ object DailySummary {
     fun publish(ctx: Context, force: Boolean = false) {
         if (!Standalone.on(ctx) || !NutritionSync.ready(ctx)) return
         val pr = p(ctx); val now = System.currentTimeMillis()
-        if (!force && now - pr.getLong("at", 0L) < 10 * 60_000L) return
-        pr.edit().putLong("at", now).apply()
+        // Day summaries every 10 minutes; activities and plan days whenever they change.
+        val days = force || now - pr.getLong("at", 0L) >= 10 * 60_000L
+        if (days) pr.edit().putLong("at", now).apply()
         val base = Live.db(ctx) + "/nutrition/" + NutritionSync.key(ctx) + "/beyondstride/daily/"
         // The first time: the last 2 weeks, so this week's review has every day.
-        val back = if (pr.getBoolean("back14c", false)) 1L else 13L
+        val back = if (!days) -1L else if (pr.getBoolean("back14c", false)) 1L else 13L
         (back downTo 0L).map { LocalDate.now().minusDays(it).toString() }.forEach { d ->
             try {
                 val o = build(ctx, d); val sig = (o.optString("text") + o.optJSONObject("wellness")).hashCode()
@@ -90,7 +91,7 @@ object DailySummary {
                 if (c.responseCode in 200..299) pr.edit().putInt("sig_$d", sig).apply()
             } catch (e: Exception) { }
         }
-        pr.edit().putBoolean("back14c", true).apply()
+        if (days) pr.edit().putBoolean("back14c", true).apply()
         // Activities (the last 400 days) for the Command Center's Weekly / Monthly / Yearly fitness and goals.
         try {
             val from = LocalDate.now().minusDays(400).toString()
