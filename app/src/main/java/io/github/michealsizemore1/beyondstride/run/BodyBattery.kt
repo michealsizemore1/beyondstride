@@ -16,7 +16,9 @@ import java.time.LocalTime
 object BodyBattery {
     private val S = ActivityStore
     data class Result(val now: Int, val wake: Int, val charged: Int, val activity: Int, val daily: Int, val bedtime: Int,
-                      val label: String, val color: Int, val notes: List<String>)
+                      val label: String, val color: Int, val notes: List<String>,
+                      /** Hour-by-hour level from wake-up to now (hour of day to level). */ val curve: List<Pair<Int, Int>> = emptyList(),
+                      val fromWatch: Boolean = false, val stress: Int = 0, val recharge: Int = 0, val steps: Int = 0)
 
     private const val GREEN = 0xFF2ECC71.toInt(); private const val TEAL = 0xFF1ABC9C.toInt()
     private const val YELLOW = 0xFFF1C40F.toInt(); private const val ORANGE = 0xFFE67E22.toInt(); private const val RED = 0xFFE74C3C.toInt()
@@ -89,23 +91,56 @@ object BodyBattery {
         val (wake, charged) = wakeValue(ctx, date, carry)
         val (act, actNotes) = activityDrain(ctx, date)
         val now = LocalTime.now(); val nowMin = now.hour * 60 + now.minute
-        val awakeH = Math.max(0, nowMin - wakeMin(ctx, date)) / 60.0
-        val daily = Math.round(awakeH * 3.0).toInt()
-        val v = Math.round(clamp((wake - act - daily).toDouble(), 5.0, 100.0)).toInt()
+        val wm = wakeMin(ctx, date)
+        val st = ActivityStore.settings(ctx)
+        val max = st.optDouble("maxHr", 0.0).takeIf { it > 0 } ?: 174.0
+        val rest = ReadinessSync.checks(ctx).lastOrNull { it.day == date }?.hr?.takeIf { it > 0 }?.toDouble()
+            ?: st.optDouble("restHr", 0.0).takeIf { it > 0 } ?: 55.0
+        val hrvBase = ReadinessSync.checks(ctx).filter { it.day <= date }.takeLast(14).map { it.rmssd }.takeIf { it.size >= 3 }?.average()
+        val hours = DayStress.hours(ctx)
+
+        // Hour by hour from wake-up: watch data when there is some, otherwise ~3 an hour.
+        var level = wake.toDouble(); var stressD = 0.0; var rechargeU = 0.0; var dailyD = 0.0; var stepsT = 0
+        val curve = ArrayList<Pair<Int, Int>>(); curve += (wm / 60) to wake
+        val exHours = ArrayList<Int>()
+        val drains = DoubleArray(24)
+        for (h in wm / 60..now.hour) {
+            val frac = when { h == wm / 60 && h == now.hour -> (nowMin - wm) / 60.0; h == wm / 60 -> 1 - (wm % 60) / 60.0; h == now.hour -> now.minute / 60.0; else -> 1.0 }.coerceIn(0.0, 1.0)
+            val x = hours?.getOrNull(h)
+            if (x == null || x.n == 0) { drains[h] = 3.0 * frac; continue }
+            stepsT += x.steps
+            val elev = x.hr - rest
+            if (x.hr >= rest + 0.45 * (max - rest)) { exHours += h; continue }   // a workout hour: its drain comes from the workout below
+            var d = when { elev <= 4 -> -2.0; elev <= 10 -> 1.0; elev <= 18 -> 3.0; elev <= 28 -> 5.0; else -> 7.0 }
+            if (x.hrv > 0 && hrvBase != null && hrvBase > 0) d += when { x.hrv < hrvBase * 0.7 -> 1.5; x.hrv > hrvBase * 1.1 -> -1.0; else -> 0.0 }
+            d += x.steps / 1000.0 * 0.7
+            d *= frac
+            if (d < 0) rechargeU += -d else stressD += d
+            drains[h] = d
+        }
+        // Workout drain into its hours (or the latest hour if the watch didn't show one).
+        if (act > 0) { if (exHours.isEmpty()) drains[now.hour] += act.toDouble() else exHours.forEach { drains[it] += act.toDouble() / exHours.size } }
+        for (h in wm / 60..now.hour) { level = clamp(level - drains[h], 5.0, 100.0); curve += (h + 1).coerceAtMost(24) to Math.round(level).toInt() }
+        dailyD = (0 until 24).sumOf { if (it in exHours) 0.0 else drains[it] } - (if (exHours.isEmpty()) act.toDouble() else 0.0)
+        val v = Math.round(level).toInt()
         val toBed = Math.max(0.0, (23 * 60 + 59 - nowMin) / 60.0)
-        val bed = Math.round(clamp(v - toBed * 3.0, 5.0, 100.0)).toInt()
+        val bed = Math.round(clamp(v - toBed * (if (hours != null) 2.5 else 3.0), 5.0, 100.0)).toInt()
         val (label, color) = when { v >= 76 -> "High" to GREEN; v >= 51 -> "Good" to TEAL; v >= 26 -> "Medium" to YELLOW; v >= 11 -> "Low" to ORANGE; else -> "Very low" to RED }
         val notes = ArrayList<String>()
         notes += "+$charged overnight → woke at $wake"
         notes += actNotes
-        if (daily > 0) notes += "−$daily daily activity & stress"
+        if (hours != null) {
+            if (stressD >= 1) notes += "−${Math.round(stressD)} stress & daily activity (heart rate above resting, ${String.format(java.util.Locale.US, "%,d", stepsT)} steps)"
+            if (rechargeU >= 1) notes += "+${Math.round(rechargeU)} calm / resting time"
+        } else if (dailyD >= 1) notes += "−${Math.round(dailyD)} daily activity & stress (estimated)"
         notes += when {
             v >= 76 -> "Plenty in the tank — a good day for a hard or long session."
             v >= 51 -> "Solid energy — train as planned."
             v >= 26 -> "Getting used up — keep it easy and get to bed on time."
             else -> "Running low — rest, eat, hydrate and go to bed early."
         }
-        return Result(v, wake, charged, act, daily, bed, label, color, notes)
+        return Result(v, wake, charged, act, Math.round(Math.max(0.0, dailyD)).toInt(), bed, label, color, notes, curve, hours != null,
+            Math.round(stressD).toInt(), Math.round(rechargeU).toInt(), stepsT)
     }
 
     /** Wake-up values for the last [n] days (oldest first) for the little chart. */

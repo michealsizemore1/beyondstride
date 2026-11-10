@@ -131,6 +131,24 @@ open class RunsActivity : Activity() {
             .setNegativeButton("Cancel", null).show()
     }
 
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == 86) dayPermsDone()
+    }
+    @Deprecated("") override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        @Suppress("DEPRECATION") super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == 86) dayPermsDone()
+    }
+    private fun dayPermsDone() { val app = applicationContext
+        Thread { try { DayStress.sync(app, force = true) } catch (e: Exception) { }; runOnUiThread { if (!isFinishing) render() } }.start() }
+
+    private fun askDayPerms() {
+        val perms = (DayStress.PERMS + "android.permission.health.READ_HEALTH_DATA_IN_BACKGROUND").toTypedArray()
+        if (android.os.Build.VERSION.SDK_INT >= 34) { requestPermissions(perms, 86); return }
+        try { @Suppress("DEPRECATION") startActivityForResult(androidx.health.connect.client.PermissionController.createRequestPermissionResultContract().createIntent(this, DayStress.PERMS), 86) }
+        catch (e: Exception) { android.widget.Toast.makeText(this, "Open Health Connect → BeyondStride and allow Heart rate and Steps.", android.widget.Toast.LENGTH_LONG).show() }
+    }
+
     /** 🔋 Body Battery card: the number, a bar, what charged / drained it, and the last 7 mornings. */
     private fun bodyBatteryCard(): android.view.View {
         val ctx = this; val dp = { v: Int -> RunUi.dp(ctx, v) }
@@ -152,6 +170,21 @@ open class RunsActivity : Activity() {
             }, LinearLayout.LayoutParams(MATCH_PARENT, dp(12)).apply { topMargin = dp(6) })
             addView(RunUi.text(ctx, "Woke at ${b.wake} · drained ${b.activity + b.daily} so far · ~${b.bedtime} by bedtime", RunUi.MUTED, 12f).apply { setPadding(0, dp(6), 0, 0) })
             addView(RunUi.text(ctx, b.notes.last(), Color.WHITE, 13f).apply { setPadding(0, dp(4), 0, 0) })
+            // Today, hour by hour.
+            if (b.curve.size >= 2) {
+                addView(RunUi.text(ctx, "Today" + if (b.fromWatch) " · from your watch's heart rate & steps" else " · estimated", RunUi.DIM, 10f).apply { setPadding(0, dp(10), 0, dp(2)) })
+                addView(LinearLayout(ctx).apply {
+                    orientation = LinearLayout.HORIZONTAL; gravity = Gravity.BOTTOM
+                    b.curve.forEach { (h, v) ->
+                        val c = when { v >= 76 -> 0xFF2ECC71.toInt(); v >= 51 -> 0xFF1ABC9C.toInt(); v >= 26 -> 0xFFF1C40F.toInt(); else -> 0xFFE67E22.toInt() }
+                        addView(LinearLayout(ctx).apply {
+                            orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_HORIZONTAL or Gravity.BOTTOM
+                            addView(android.view.View(ctx).apply { background = RunUi.rounded(c, dp(2).toFloat()) }, LinearLayout.LayoutParams(MATCH_PARENT, Math.max(dp(2), dp(36) * v / 100)).apply { leftMargin = dp(1); rightMargin = dp(1) })
+                            addView(RunUi.text(ctx, if (h % 3 == 0) (if (h % 12 == 0) "12" else "${h % 12}") + (if (h < 12 || h == 24) "a" else "p") else " ", RunUi.DIM, 8f))
+                        }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
+                    }
+                })
+            }
             // Last 7 mornings.
             val hist = try { BodyBattery.history(ctx) } catch (e: Exception) { emptyList() }
             if (hist.isNotEmpty()) addView(LinearLayout(ctx).apply {
@@ -172,7 +205,9 @@ open class RunsActivity : Activity() {
                     .setMessage(b.notes.joinToString("\n") + "\n\nHow it works: it charges overnight from how long you slept, your sleeping heart rate and this morning's HRV and resting HR vs your normal. " +
                         "It drains a little every waking hour and with each workout by how long and how hard it was. It's an estimate (BeyondStride doesn't track all-day stress like Garmin), so use it as a guide.\n\n" +
                         "76–100 High · 51–75 Good · 26–50 Medium · 11–25 Low · 0–10 Very low")
-                    .setPositiveButton("OK", null).show()
+                    .setPositiveButton("OK", null)
+                    .apply { if (!b.fromWatch) setNeutralButton("Use my watch's heart rate") { _, _ -> askDayPerms() } }
+                    .show()
             }
         }
     }
@@ -242,6 +277,8 @@ open class RunsActivity : Activity() {
         })
         // 🔋 Body Battery.
         try { col.addView(bodyBatteryCard()) } catch (e: Exception) { }
+        if (System.currentTimeMillis() - DayStress.lastRead(this) > 15 * 60_000L) { val app = applicationContext
+            Thread { try { DayStress.sync(app) } catch (e: Exception) { }; runOnUiThread { if (!isFinishing && System.currentTimeMillis() - DayStress.lastRead(app) < 60_000L) render() } }.start() }
         // 🌙 Evening report (from 8 pm).
         if (java.time.LocalTime.now().hour >= 20 && EveningReport.enabled(this)) col.addView(RunUi.card(this).apply {
             background = RunUi.rounded(0xFF26264A.toInt(), dp(14).toFloat())
