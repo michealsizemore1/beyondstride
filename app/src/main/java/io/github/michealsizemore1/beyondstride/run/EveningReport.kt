@@ -11,6 +11,7 @@ import java.util.Locale
 
 /** 🌙 Evening report (about 11:30 PM): how today went and what tomorrow looks like. */
 object EveningReport {
+    private val S = ActivityStore
     private fun p(ctx: Context) = ctx.getSharedPreferences("evening", 0)
     fun enabled(ctx: Context) = p(ctx).getBoolean("on", true)
     fun setEnabled(ctx: Context, v: Boolean) = p(ctx).edit().putBoolean("on", v).apply()

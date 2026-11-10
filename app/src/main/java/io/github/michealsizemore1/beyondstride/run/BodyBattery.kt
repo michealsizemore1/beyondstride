@@ -14,6 +14,7 @@ import java.time.LocalTime
  * It's an estimate from the data BeyondStride has (no all-day stress tracking), so treat it as a guide.
  */
 object BodyBattery {
+    private val S = ActivityStore
     data class Result(val now: Int, val wake: Int, val charged: Int, val activity: Int, val daily: Int, val bedtime: Int,
                       val label: String, val color: Int, val notes: List<String>)
 
