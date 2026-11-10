@@ -265,6 +265,12 @@ class RunSettingsActivity : Activity() {
             " if you skip them): readiness, today's workout, weather, fuel, weight, week so far", MorningReport.enabled(this)) { MorningReport.setEnabled(ctx, it) }
         col.addView(RunUi.text(this, "Morning report time: change ›", RunUi.ACCENT, 13f, true).apply { setPadding(dp(4), dp(2), 0, dp(6))
             setOnClickListener { val m = MorningReport.time(ctx); android.app.TimePickerDialog(ctx, { _, h, mi -> MorningReport.setTime(ctx, h * 60 + mi); render() }, m / 60, m % 60, false).show() } })
+        switch("🌙 Evening report", "At " + java.time.LocalTime.of(EveningReport.time(this) / 60, EveningReport.time(this) % 60).format(java.time.format.DateTimeFormatter.ofPattern("h:mm a", java.util.Locale.US)) +
+            ": today's training, food and fluids vs target, Body Battery, bedtime and tomorrow's workout", EveningReport.enabled(this)) { EveningReport.setEnabled(ctx, it); Reminders.scheduleEvening(ctx, replace = true) }
+        col.addView(RunUi.text(this, "Evening report time: change ›", RunUi.ACCENT, 13f, true).apply { setPadding(dp(4), dp(2), 0, dp(6))
+            setOnClickListener { val m = EveningReport.time(ctx); android.app.TimePickerDialog(ctx, { _, h, mi -> EveningReport.setTime(ctx, h * 60 + mi); Reminders.scheduleEvening(ctx, replace = true); render() }, m / 60, m % 60, false).show() } })
+        col.addView(RunUi.text(this, "Open the evening report ›", RunUi.ACCENT, 13f, true).apply { setPadding(dp(4), 0, 0, dp(6))
+            setOnClickListener { startActivity(android.content.Intent(ctx, EveningReportActivity::class.java)) } })
         col.addView(RunUi.text(this, "Open the morning report ›", RunUi.ACCENT, 13f, true).apply { setPadding(dp(4), 0, 0, dp(6))
             setOnClickListener { startActivity(Intent(ctx, MorningReportActivity::class.java)) } })
         Reminders.KINDS.forEach { (k, label) -> switch(label, when (k) {

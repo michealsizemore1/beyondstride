@@ -131,6 +131,52 @@ open class RunsActivity : Activity() {
             .setNegativeButton("Cancel", null).show()
     }
 
+    /** 🔋 Body Battery card: the number, a bar, what charged / drained it, and the last 7 mornings. */
+    private fun bodyBatteryCard(): android.view.View {
+        val ctx = this; val dp = { v: Int -> RunUi.dp(ctx, v) }
+        val b = BodyBattery.today(this)
+        return RunUi.card(this).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { bottomMargin = dp(8) }
+            addView(LinearLayout(ctx).apply {
+                orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+                addView(RunUi.text(ctx, "🔋 Body Battery", Color.WHITE, 15f, true), LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
+                addView(RunUi.text(ctx, "${b.now}", b.color, 30f, true))
+                addView(RunUi.text(ctx, "  ${b.label}", b.color, 13f, true))
+            })
+            // Bar.
+            addView(LinearLayout(ctx).apply {
+                orientation = LinearLayout.HORIZONTAL; background = RunUi.rounded(0xFF2A3330.toInt(), dp(6).toFloat())
+                addView(android.view.View(ctx).apply { background = RunUi.rounded(b.color, dp(6).toFloat()) }, LinearLayout.LayoutParams(0, MATCH_PARENT, b.now.toFloat()))
+                addView(android.view.View(ctx), LinearLayout.LayoutParams(0, MATCH_PARENT, (100 - b.now).toFloat()))
+            }, LinearLayout.LayoutParams(MATCH_PARENT, dp(12)).apply { topMargin = dp(6) })
+            addView(RunUi.text(ctx, "Woke at ${b.wake} · drained ${b.activity + b.daily} so far · ~${b.bedtime} by bedtime", RunUi.MUTED, 12f).apply { setPadding(0, dp(6), 0, 0) })
+            addView(RunUi.text(ctx, b.notes.last(), Color.WHITE, 13f).apply { setPadding(0, dp(4), 0, 0) })
+            // Last 7 mornings.
+            val hist = try { BodyBattery.history(ctx) } catch (e: Exception) { emptyList() }
+            if (hist.isNotEmpty()) addView(LinearLayout(ctx).apply {
+                orientation = LinearLayout.HORIZONTAL; gravity = Gravity.BOTTOM; setPadding(0, dp(10), 0, 0)
+                hist.forEach { (d, v) ->
+                    addView(LinearLayout(ctx).apply {
+                        orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_HORIZONTAL or Gravity.BOTTOM
+                        addView(RunUi.text(ctx, "$v", RunUi.MUTED, 10f))
+                        val c = when { v >= 76 -> 0xFF2ECC71.toInt(); v >= 51 -> 0xFF1ABC9C.toInt(); v >= 26 -> 0xFFF1C40F.toInt(); else -> 0xFFE67E22.toInt() }
+                        addView(android.view.View(ctx).apply { background = RunUi.rounded(c, dp(3).toFloat()) }, LinearLayout.LayoutParams(dp(14), Math.max(dp(3), dp(40) * v / 100)))
+                        addView(RunUi.text(ctx, java.time.LocalDate.parse(d).dayOfWeek.getDisplayName(java.time.format.TextStyle.NARROW, Locale.US), RunUi.DIM, 10f))
+                    }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
+                }
+            })
+            addView(RunUi.text(ctx, "Wake-up level, last 7 days · tap for details", RunUi.DIM, 10f).apply { gravity = Gravity.CENTER; setPadding(0, dp(2), 0, 0) })
+            setOnClickListener {
+                android.app.AlertDialog.Builder(ctx).setTitle("🔋 Body Battery ${b.now} · ${b.label}")
+                    .setMessage(b.notes.joinToString("\n") + "\n\nHow it works: it charges overnight from how long you slept, your sleeping heart rate and this morning's HRV and resting HR vs your normal. " +
+                        "It drains a little every waking hour and with each workout by how long and how hard it was. It's an estimate (BeyondStride doesn't track all-day stress like Garmin), so use it as a guide.\n\n" +
+                        "76–100 High · 51–75 Good · 26–50 Medium · 11–25 Low · 0–10 Very low")
+                    .setPositiveButton("OK", null).show()
+            }
+        }
+    }
+
     private fun render() {
         PhoneStatus.push(this)
         // Opened from the watch's Command Center button notification.
@@ -193,6 +239,16 @@ open class RunsActivity : Activity() {
             }.start()
             setOnClickListener { refresh(true) }
             if (TodayWeather.stale(ctx)) refresh(false)
+        })
+        // 🔋 Body Battery.
+        try { col.addView(bodyBatteryCard()) } catch (e: Exception) { }
+        // 🌙 Evening report (from 8 pm).
+        if (java.time.LocalTime.now().hour >= 20 && EveningReport.enabled(this)) col.addView(RunUi.card(this).apply {
+            background = RunUi.rounded(0xFF26264A.toInt(), dp(14).toFloat())
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dp(8) }
+            addView(RunUi.text(ctx, "🌙 Evening report ▸", Color.WHITE, 16f, true))
+            addView(RunUi.text(ctx, "How today went, what's left to eat and drink, and tomorrow's plan", RunUi.MUTED, 12f))
+            setOnClickListener { startActivity(Intent(ctx, EveningReportActivity::class.java)) }
         })
         // ☀️ Morning report (until noon).
         if (java.time.LocalTime.now().hour < 12 && MorningReport.enabled(this)) col.addView(RunUi.card(this).apply {

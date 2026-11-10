@@ -989,6 +989,7 @@ class ActivitiesActivity : Activity() {
                     setOnClickListener { wrnOff += d; render() } })
                 arrow("‹", -1); addView(txt(wrnLabel(), 0xFFFCD34D.toInt(), 14f, true).apply { gravity = Gravity.CENTER }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f)); arrow("›", 1)
             })
+            wrnNote = note
             addView(note, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(8) })
             addView(FlowLayout(ctx, dp(6), dp(6)).apply {
                 setPadding(0, dp(8), 0, 0)
@@ -999,18 +1000,33 @@ class ActivitiesActivity : Activity() {
         })
     }
 
+    private var wrnNote: EditText? = null
+    private fun runsInWeek(week: String): List<JSONObject> {
+        val start = java.time.LocalDate.parse(week); val end = start.plusDays(6)
+        val seen = HashSet<String>()
+        return S.list(this).filter { a ->
+            val d = S.str(a, "date").take(10); val rt = listOf("type", "title", "name", "workout").joinToString(" ") { S.str(a, it) }
+            val isRun = Regex("run|jog|tempo|interval|fartlek|long|recovery|race|marathon|stride", RegexOption.IGNORE_CASE).containsMatchIn(rt) && !Regex("rest day|walk|bike|cycl|strength|swim", RegexOption.IGNORE_CASE).containsMatchIn(S.str(a, "type"))
+            if (d < start.toString() || d > end.toString() || !isRun || S.num(a, "distance") <= 0 && S.durSec(S.str(a, "duration")) <= 0) false
+            else seen.add(d + "|" + String.format(Locale.US, "%.3f", S.num(a, "distance")) + "|" + S.str(a, "duration").trim())
+        }
+    }
+
     /** Same prompt and facts as the Command Center's "AI Weekly Run Wrap-Up". */
     private fun wrapUp(week: String, note: EditText) {
         val ctx = this
         if (!AiFood.hasKey(this)) { android.widget.Toast.makeText(this, "Add your Anthropic key in Settings → AI food search first.", android.widget.Toast.LENGTH_LONG).show(); return }
-        val start = java.time.LocalDate.parse(week); val end = start.plusDays(6)
-        val seen = HashSet<String>()
-        val runs = S.list(this).filter { a ->
-            val d = S.str(a, "date").take(10); val rt = listOf("type", "title", "name", "workout").joinToString(" ") { S.str(a, it) }
-            if (d < start.toString() || d > end.toString() || !Regex("run", RegexOption.IGNORE_CASE).containsMatchIn(rt)) false
-            else seen.add(d + "|" + String.format(Locale.US, "%.3f", S.num(a, "distance")) + "|" + S.str(a, "duration").trim())
+        val runs = runsInWeek(week)
+        if (runs.isEmpty()) {
+            // Early in a week with nothing run yet: wrap up the week that just ended instead.
+            val prev = java.time.LocalDate.parse(week).minusWeeks(1).toString()
+            if (wrnOff == 0 && runsInWeek(prev).isNotEmpty()) {
+                wrnOff = -1; render()
+                android.widget.Toast.makeText(this, "No runs yet this week — wrapping up last week (${wrnLabel()}).", android.widget.Toast.LENGTH_LONG).show()
+                wrnNote?.let { wrapUp(prev, it) }; return
+            }
+            android.widget.Toast.makeText(this, "No running activities were found for ${wrnLabel()}.", android.widget.Toast.LENGTH_LONG).show(); return
         }
-        if (runs.isEmpty()) { android.widget.Toast.makeText(this, "No running activities were found for ${wrnLabel()}.", android.widget.Toast.LENGTH_LONG).show(); return }
         var mi = 0.0; var mins = 0.0; var elev = 0.0; var cal = 0.0; var pS = 0.0; var pN = 0; var longest: JSONObject? = null
         runs.forEach { a -> val m = S.num(a, "distance"); mi += m; mins += S.durSec(S.str(a, "duration")) / 60.0; elev += S.num(a, "elevGain"); cal += S.num(a, "calories")
             if (S.num(a, "power") > 0) { pS += S.num(a, "power"); pN++ }; if (longest == null || m > S.num(longest!!, "distance")) longest = a }

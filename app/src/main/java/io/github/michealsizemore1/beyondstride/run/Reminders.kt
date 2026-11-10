@@ -38,7 +38,24 @@ object Reminders {
             WorkManager.getInstance(ctx).enqueueUniquePeriodicWork("reminders", ExistingPeriodicWorkPolicy.KEEP,
                 PeriodicWorkRequestBuilder<Work>(1, TimeUnit.HOURS).build())
         } catch (e: Exception) { }
+        scheduleEvening(ctx)
     }
+
+    /** 🌙 Evening report: one job timed for the set time (11:30 PM); the hourly check keeps it booked. */
+    fun scheduleEvening(ctx: Context, replace: Boolean = false) {
+        if (!EveningReport.enabled(ctx)) { try { WorkManager.getInstance(ctx).cancelUniqueWork("evening") } catch (e: Exception) { }; return }
+        val m = EveningReport.time(ctx); val now = java.time.LocalDateTime.now()
+        var at = now.toLocalDate().atTime(m / 60, m % 60)
+        val sent = ctx.getSharedPreferences("evening", 0).getString("sent", "") == java.time.LocalDate.now().toString()
+        if (!at.isAfter(now)) at = if (sent) at.plusDays(1) else now.plusMinutes(1)
+        val delay = java.time.Duration.between(now, at).toMillis()
+        try { WorkManager.getInstance(ctx).enqueueUniqueWork("evening", if (replace) androidx.work.ExistingWorkPolicy.REPLACE else androidx.work.ExistingWorkPolicy.KEEP,
+            androidx.work.OneTimeWorkRequestBuilder<EveningWork>().setInitialDelay(delay, TimeUnit.MILLISECONDS).build()) } catch (e: Exception) { }
+    }
+    class EveningWork(c: Context, w: WorkerParameters) : Worker(c, w) {
+        override fun doWork(): Result { evening(applicationContext); return Result.success() }
+    }
+    fun evening(ctx: Context) { try { EveningReport.maybeNotify(ctx) { t, x -> notify(ctx, 961, t, x, EveningReportActivity::class.java) } } catch (e: Exception) { } }
 
     class Work(c: Context, w: WorkerParameters) : Worker(c, w) {
         override fun doWork(): Result { try { check(applicationContext) } catch (e: Exception) { }; return Result.success() }
@@ -77,6 +94,7 @@ object Reminders {
         try { NutritionSync.refreshIfStale(ctx, 30 * 60_000L) } catch (e: Exception) { }
         try { Local.upkeep(ctx, hourly = true) } catch (e: Exception) { }
         morning(ctx)
+        evening(ctx); scheduleEvening(ctx)
         val d = Nutrition.today(NutritionStore.days(ctx))
 
         // Pre-fueling: 5–9 pm on the day before a hard workout (the Command Center's "Pre-fueling day").

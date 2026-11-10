@@ -64,6 +64,19 @@ object TodayWeather {
     private fun r(d: Double) = Math.round(d).toString()
     private fun clock(iso: String) = try { java.time.LocalDateTime.parse(iso).format(java.time.format.DateTimeFormatter.ofPattern("h:mm a", Locale.US)) } catch (e: Exception) { "" }
 
+    /** "Tomorrow 7–10 AM: 34–41°, ☀️ Clear, 10% rain" from the cached forecast. */
+    fun tomorrowMorning(ctx: Context): String? = try {
+        val o = JSONObject(p(ctx).getString("wx", "") ?: ""); val h = o.getJSONObject("hourly")
+        val t = h.getJSONArray("time"); val tomorrow = java.time.LocalDate.now().plusDays(1).toString()
+        val idx = (0 until t.length()).filter { t.optString(it).startsWith(tomorrow) && t.optString(it).substring(11, 13).toInt() in 7..10 }
+        if (idx.isEmpty()) null else {
+            val temps = idx.map { h.getJSONArray("temperature_2m").optDouble(it) }
+            val rain = idx.maxOf { h.optJSONArray("precipitation_probability")?.optInt(it) ?: 0 }
+            val code = h.getJSONArray("weather_code").optInt(idx[idx.size / 2])
+            "Tomorrow 7–10 AM: ${r(temps.min())}–${r(temps.max())}°, ${icon(code)} ${word(code)}" + if (rain >= 20) ", $rain% rain" else ""
+        }
+    } catch (e: Exception) { null }
+
     /** Fills [card] with the cached weather. */
     fun fill(ctx: Context, card: LinearLayout) {
         card.removeAllViews()
