@@ -91,5 +91,18 @@ object DailySummary {
             } catch (e: Exception) { }
         }
         pr.edit().putBoolean("back14c", true).apply()
+        // Training plan days (a week back, three weeks ahead) for the Command Center's My Schedule.
+        try {
+            val days = PlanStore.data(ctx).optJSONObject("current")?.optJSONObject("days")
+            val o = JSONObject()
+            if (days != null) for (i in -7L..21L) { val d = LocalDate.now().plusDays(i).toString(); days.optString(d).takeIf { it.isNotBlank() }?.let { o.put(d, it.take(1500)) } }
+            val sig = o.toString().hashCode()
+            if (force || pr.getInt("plansig", 0) != sig) {
+                val c = (URL(Live.db(ctx) + "/nutrition/" + NutritionSync.key(ctx) + "/beyondstride/plan.json").openConnection() as HttpURLConnection).apply {
+                    requestMethod = "PUT"; doOutput = true; connectTimeout = 15_000; readTimeout = 20_000; setRequestProperty("Content-Type", "application/json") }
+                c.outputStream.use { it.write(JSONObject().put("days", o).put("at", System.currentTimeMillis()).toString().toByteArray()) }
+                if (c.responseCode in 200..299) pr.edit().putInt("plansig", sig).apply()
+            }
+        } catch (e: Exception) { }
     }
 }
