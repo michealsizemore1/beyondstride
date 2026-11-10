@@ -29,8 +29,11 @@ object NutritionStore {
         val app = ctx.applicationContext
         Thread {
             try {
-                val req = PutDataMapRequest.create(PATH).apply {
-                    dataMap.putString("json", json); dataMap.putString("quick", p(ctx).getString("quick", "[]") ?: "[]"); dataMap.putString("calc", p(ctx).getString("calc", "{}") ?: "{}"); dataMap.putString("mileage", p(ctx).getString("mileage", "") ?: ""); dataMap.putString("acts", p(ctx).getString("acts", "") ?: ""); dataMap.putLong("at", System.currentTimeMillis()) }
+                // Compressed into one blob: a watch data item can only hold about 100 KB.
+                val all = org.json.JSONObject().put("json", json).put("quick", p(ctx).getString("quick", "[]") ?: "[]").put("calc", p(ctx).getString("calc", "{}") ?: "{}")
+                    .put("mileage", p(ctx).getString("mileage", "") ?: "").put("acts", p(ctx).getString("acts", "") ?: "")
+                val bos = java.io.ByteArrayOutputStream(); java.util.zip.GZIPOutputStream(bos).use { it.write(all.toString().toByteArray()) }
+                val req = PutDataMapRequest.create(PATH).apply { dataMap.putByteArray("z", bos.toByteArray()); dataMap.putLong("at", System.currentTimeMillis()) }
                     .asPutDataRequest().setUrgent()
                 Tasks.await(Wearable.getDataClient(app).putDataItem(req))
             } catch (e: Exception) { }
@@ -43,6 +46,12 @@ object NutritionStore {
 
     /** Watch: data from the phone. */
     fun apply(ctx: Context, m: DataMap) {
+        m.getByteArray("z")?.let { z ->
+            val o = try { org.json.JSONObject(java.util.zip.GZIPInputStream(z.inputStream()).bufferedReader().readText()) } catch (e: Exception) { return }
+            p(ctx).edit().putString("days", o.optString("json", "[]")).putString("quick", o.optString("quick", "[]")).putString("calc", o.optString("calc", "{}"))
+                .putString("mileage", o.optString("mileage")).putString("acts", o.optString("acts")).putLong("at", System.currentTimeMillis()).apply()
+            return
+        }
         val s = m.getString("json") ?: return
         p(ctx).edit().putString("days", s).putString("quick", m.getString("quick") ?: "[]").putString("calc", m.getString("calc") ?: "{}").putString("mileage", m.getString("mileage") ?: "").putString("acts", m.getString("acts") ?: "").putLong("at", System.currentTimeMillis()).apply()
     }
