@@ -90,7 +90,8 @@ object NutritionStore {
     /** Phone: the watch's Activities screen (a small summary). Sent only when it changes (ignoring its time stamp). */
     fun setActs(ctx: Context, o: org.json.JSONObject) {
         val cmp = org.json.JSONObject(o.toString()).apply { remove("at") }.toString()
-        if (cmp == p(ctx).getString("actsCmp", "")) return
+        if (cmp == p(ctx).getString("actsCmp", "") && p(ctx).getInt("sendVer", 0) >= 2) return
+        p(ctx).edit().putInt("sendVer", 2).apply()
         p(ctx).edit().putString("acts", o.toString()).putString("actsCmp", cmp).apply()
         save(ctx, days(ctx))
     }
