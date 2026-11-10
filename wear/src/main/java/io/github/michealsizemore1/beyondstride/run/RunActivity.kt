@@ -427,6 +427,8 @@ class RunActivity : Activity() {
                 addView(label("☀️ Morning report ▸", Color.WHITE, 12f, true)); addView(label(m.optString("headline"), C.MUTED, 9f))
                 setOnClickListener { showMorning() } })
         }
+        // Same as the phone's Today: 📝 My notes, 🔋 Body Battery, 🌤 weather, 🌙 evening report.
+        todayCards(col)
         // 2. Command Center + LiveTrack (same buttons as the phone).
         val ps = getSharedPreferences("phonestatus", 0)
         col.addView(LinearLayout(this).apply {
@@ -1085,12 +1087,68 @@ class RunActivity : Activity() {
         // (sent to the phone by SettingsSync, like every other setting)
     }
 
+    private fun todayCards(col: LinearLayout) {
+        val acts = io.github.michealsizemore1.beyondstride.NutritionStore.acts(this) ?: return
+        val today = java.time.LocalDate.now().toString()
+        fun card(bg: Int, build: LinearLayout.() -> Unit) = col.addView(LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; background = rounded(bg, 16); setPadding(dp(12), dp(8), dp(12), dp(8))
+            layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(8) }; build() })
+        acts.optString("mynotes").takeIf { it.isNotBlank() }?.let { t ->
+            card(0xFF1E2A1E.toInt()) { addView(label("📝 My notes ▸", C.ACCENT, 12f, true)); addView(label(t.lines().first().take(60), C.MUTED, 9f))
+                setOnClickListener { overlay { c -> c.addView(label("📝 My notes", Color.WHITE, 16f, true)); c.addView(label(t, Color.WHITE, 10f).apply { gravity = Gravity.START; setPadding(0, dp(6), 0, 0) })
+                    c.addView(label("Edit on the phone (Today → My notes)", C.MUTED, 8f).apply { setPadding(0, dp(6), 0, 0) }); backLink(c) } } }
+        }
+        acts.optJSONObject("battery")?.takeIf { it.optString("date") == today }?.let { b ->
+            card(C.CARD) {
+                addView(LinearLayout(context).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER
+                    addView(label("🔋 ", Color.WHITE, 13f, true)); addView(label("${b.optInt("now")}", b.optInt("color", Color.WHITE), 20f, true)); addView(label("  " + b.optString("label"), b.optInt("color", Color.WHITE), 10f, true)) })
+                addView(curveBars(b, 22))
+                setOnClickListener { overlay { c -> c.addView(label("🔋 Body Battery", Color.WHITE, 16f, true))
+                    c.addView(label("${b.optInt("now")} · ${b.optString("label")}", b.optInt("color", Color.WHITE), 18f, true))
+                    c.addView(curveBars(b, 40))
+                    c.addView(label("Woke at ${b.optInt("wake")} · drained ${b.optInt("drained")} · ~${b.optInt("bed")} by bedtime", C.MUTED, 9f).apply { setPadding(0, dp(4), 0, dp(4)) })
+                    val n = b.optJSONArray("notes"); for (i in 0 until (n?.length() ?: 0)) c.addView(label(n!!.optString(i), Color.WHITE, 9f).apply { gravity = Gravity.START; setPadding(0, dp(2), 0, 0) })
+                    c.addView(label(if (b.optBoolean("watch")) "From your heart rate & steps" else "Estimated — allow heart rate & steps on the phone", C.MUTED, 8f).apply { setPadding(0, dp(6), 0, 0) })
+                    backLink(c) } }
+            }
+        }
+        acts.optJSONObject("weather")?.takeIf { System.currentTimeMillis() - it.optLong("at") < 6 * 3600_000L }?.let { w ->
+            card(C.CARD) {
+                addView(label("${w.optString("icon")} ${w.optString("temp")}°  ${w.optString("place")}", Color.WHITE, 13f, true))
+                addView(label(listOf(w.optString("cond"), "H ${w.optString("hi")}° L ${w.optString("lo")}°", "☔ ${w.optInt("rain")}%").filter { it.isNotBlank() }.joinToString(" · "), C.MUTED, 9f))
+                setOnClickListener { overlay { c -> c.addView(label("${w.optString("icon")} ${w.optString("temp")}°", Color.WHITE, 22f, true))
+                    c.addView(label(w.optString("place") + " · " + w.optString("cond"), C.MUTED, 10f))
+                    c.addView(label("Feels ${w.optString("feels")}° · H ${w.optString("hi")}° L ${w.optString("lo")}° · ☔ ${w.optInt("rain")}%", Color.WHITE, 9f).apply { setPadding(0, dp(4), 0, 0) })
+                    c.addView(label("Wind ${w.optString("wind")} mph · Dew pt ${w.optString("dew")}°", Color.WHITE, 9f))
+                    val nx = w.optJSONArray("next")
+                    if (nx != null) c.addView(LinearLayout(context).apply { orientation = LinearLayout.HORIZONTAL; setPadding(0, dp(8), 0, 0)
+                        for (i in 0 until nx.length()) { val h = nx.optJSONObject(i)
+                            addView(LinearLayout(context).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_HORIZONTAL
+                                addView(label(h.optString("h"), C.MUTED, 8f)); addView(label(h.optString("icon"), Color.WHITE, 11f)); addView(label(h.optString("t") + "°", Color.WHITE, 9f, true))
+                                addView(label(if (h.optInt("p") >= 20) "${h.optInt("p")}%" else " ", 0xFF7FB8FF.toInt(), 7f)) }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f)) } })
+                    backLink(c) } }
+            }
+        }
+        acts.optJSONObject("evening")?.takeIf { it.optString("date") == today && java.time.LocalTime.now().hour >= 20 }?.let { m ->
+            card(0xFF26264A.toInt()) { addView(label("🌙 Evening report ▸", Color.WHITE, 12f, true)); addView(label(m.optString("headline"), C.MUTED, 9f))
+                setOnClickListener { showReport("evening", "🌙 Evening", 0xFF26264A.toInt()) } }
+        }
+    }
+    private fun curveBars(b: org.json.JSONObject, hDp: Int): LinearLayout = LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL; gravity = Gravity.BOTTOM; setPadding(0, dp(4), 0, 0)
+        val cv = b.optJSONArray("curve")
+        for (i in 0 until (cv?.length() ?: 0)) { val v = cv!!.optJSONArray(i)?.optInt(1) ?: continue
+            val c = when { v >= 76 -> 0xFF2ECC71.toInt(); v >= 51 -> 0xFF1ABC9C.toInt(); v >= 26 -> 0xFFF1C40F.toInt(); else -> 0xFFE67E22.toInt() }
+            addView(View(context).apply { background = rounded(c, 3) }, LinearLayout.LayoutParams(0, Math.max(dp(2), dp(hDp) * v / 100), 1f).apply { leftMargin = dp(1); rightMargin = dp(1) }) }
+    }
+    private fun backLink(c: LinearLayout) = c.addView(label("‹ Back", C.ACCENT, 12f, true).apply { setPadding(0, dp(10), 0, 0); setOnClickListener { overlayOpen = false; startBuilt = false; renderStart() } })
+
     /** ☀️ Morning report (same as the phone's). */
-    private fun showMorning(): Unit = overlay { col ->
-        val m = io.github.michealsizemore1.beyondstride.NutritionStore.acts(this)?.optJSONObject("morning")
-        col.addView(label("☀️ Morning", Color.WHITE, 18f, true))
+    private fun showMorning() = showReport("morning", "☀️ Morning", 0xFF243B2E.toInt())
+    private fun showReport(key: String, title: String, bg: Int): Unit = overlay { col ->
+        val m = io.github.michealsizemore1.beyondstride.NutritionStore.acts(this)?.optJSONObject(key)
+        col.addView(label(title, Color.WHITE, 18f, true))
         if (m == null) { col.addView(label("Open BeyondStride on the phone once to send it here.", C.MUTED, 10f)); return@overlay }
-        col.addView(LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; background = rounded(0xFF243B2E.toInt(), 16); setPadding(dp(10), dp(8), dp(10), dp(8))
+        col.addView(LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; background = rounded(bg, 16); setPadding(dp(10), dp(8), dp(10), dp(8))
             layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(6) }
             addView(label(m.optString("advice"), Color.WHITE, 10f, true)) })
         val secs = m.optJSONArray("sections")

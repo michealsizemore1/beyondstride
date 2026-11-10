@@ -64,6 +64,27 @@ object TodayWeather {
     private fun r(d: Double) = Math.round(d).toString()
     private fun clock(iso: String) = try { java.time.LocalDateTime.parse(iso).format(java.time.format.DateTimeFormatter.ofPattern("h:mm a", Locale.US)) } catch (e: Exception) { "" }
 
+    /** A small copy for the watch: now, today's high / low / rain and the next 6 hours. */
+    fun watchJson(ctx: Context): JSONObject? {
+        val o = try { JSONObject(p(ctx).getString("wx", "") ?: "") } catch (e: Exception) { return null }
+        val cur = o.optJSONObject("current") ?: return null; val d = o.optJSONObject("daily")
+        val code = cur.optInt("weather_code"); val t = cur.optDouble("temperature_2m"); val fl = cur.optDouble("apparent_temperature")
+        val out = JSONObject().put("at", p(ctx).getLong("at", 0L)).put("place", p(ctx).getString("place", "Meridian")).put("icon", icon(code, cur.optInt("is_day", 1) == 1))
+            .put("cond", word(code)).put("temp", r(t)).put("feels", r(fl)).put("dew", r(cur.optDouble("dew_point_2m"))).put("wind", r(cur.optDouble("wind_speed_10m")))
+            .put("hi", d?.optJSONArray("temperature_2m_max")?.optDouble(0)?.let(::r) ?: "").put("lo", d?.optJSONArray("temperature_2m_min")?.optDouble(0)?.let(::r) ?: "")
+            .put("rain", d?.optJSONArray("precipitation_probability_max")?.optInt(0) ?: 0)
+        val h = o.optJSONObject("hourly"); val times = h?.optJSONArray("time")
+        if (h != null && times != null) {
+            val nowKey = java.time.LocalDateTime.now().toString().take(13)
+            val start = (0 until times.length()).indexOfFirst { times.optString(it).take(13) >= nowKey }.coerceAtLeast(0)
+            out.put("next", org.json.JSONArray().apply { for (i in start + 1 until Math.min(times.length(), start + 7)) put(JSONObject()
+                .put("h", try { java.time.LocalDateTime.parse(times.optString(i)).format(java.time.format.DateTimeFormatter.ofPattern("ha", Locale.US)).lowercase().dropLast(1) } catch (e: Exception) { "" })
+                .put("icon", icon(h.optJSONArray("weather_code")?.optInt(i) ?: 0, (h.optJSONArray("is_day")?.optInt(i) ?: 1) == 1))
+                .put("t", r(h.optJSONArray("temperature_2m")?.optDouble(i) ?: 0.0)).put("p", h.optJSONArray("precipitation_probability")?.optInt(i) ?: 0)) })
+        }
+        return out
+    }
+
     /** "Tomorrow 7–10 AM: 34–41°, ☀️ Clear, 10% rain" from the cached forecast. */
     fun tomorrowMorning(ctx: Context): String? = try {
         val o = JSONObject(p(ctx).getString("wx", "") ?: ""); val h = o.getJSONObject("hourly")
