@@ -203,7 +203,8 @@ open class RunsActivity : Activity() {
             setOnClickListener {
                 android.app.AlertDialog.Builder(ctx).setTitle("🔋 Body Battery ${b.now} · ${b.label}")
                     .setMessage(b.notes.joinToString("\n") + "\n\nHow it works: it charges overnight from how long you slept, your sleeping heart rate and this morning's HRV and resting HR vs your normal. " +
-                        "It drains a little every waking hour and with each workout by how long and how hard it was. It's an estimate (BeyondStride doesn't track all-day stress like Garmin), so use it as a guide.\n\n" +
+                        (if (b.fromWatch) "Through the day it follows your watch: heart rate near resting recharges it, heart rate above resting (stress) and steps drain it, and each workout drains it by how long and how hard it was. Samsung doesn't share its own stress score, so it's still an estimate.\n\n"
+                        else "Right now it assumes a steady drain every waking hour plus each workout. Tap \"Use my watch's heart rate\" so it follows your real day (heart rate, steps and HRV from the watch).\n\n") +
                         "76–100 High · 51–75 Good · 26–50 Medium · 11–25 Low · 0–10 Very low")
                     .setPositiveButton("OK", null)
                     .apply { if (!b.fromWatch) setNeutralButton("Use my watch's heart rate") { _, _ -> askDayPerms() } }
