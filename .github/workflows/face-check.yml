@@ -1,0 +1,28 @@
+name: Watch face check
+
+on:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: "17" }
+      - uses: gradle/actions/setup-gradle@v4
+        with: { gradle-version: "8.11.1" }
+      - name: Build face
+        run: gradle :face:assembleRelease --no-daemon
+      - name: Google watch face tools
+        run: git clone --depth 1 https://github.com/google/watchface.git /tmp/wff
+      - name: WFF spec validator
+        continue-on-error: true
+        run: |
+          cd /tmp/wff/third_party/wff && ./gradlew -q :specification:validator:executable-jar
+          java -jar specification/validator/build/libs/wff-validator.jar 1 $GITHUB_WORKSPACE/face/src/main/res/raw/watchface.xml
+      - name: Play memory/format evaluator
+        continue-on-error: true
+        run: |
+          cd /tmp/wff/play-validations && ./gradlew -q :memory-footprint:executable-jar
+          java -jar memory-footprint/build/libs/memory-footprint.jar --watch-face $GITHUB_WORKSPACE/face/build/outputs/apk/release/face-release.apk --schema-version 1 --ambient-limit-mb 10 --active-limit-mb 100 --apply-v1-offload-limitations
