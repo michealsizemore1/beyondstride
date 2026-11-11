@@ -247,6 +247,14 @@ open class RunsActivity : Activity() {
 
         // 📝 My notes — ideas to add later (top of Today).
         col.addView(notesCard())
+        // 🧠 Coach AI.
+        col.addView(RunUi.card(this).apply {
+            background = RunUi.rounded(0xFF2A2140.toInt(), dp(14).toFloat())
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(8) }
+            addView(RunUi.text(ctx, "🧠 Coach AI ▸", Color.WHITE, 16f, true))
+            addView(RunUi.text(ctx, "Analyze and compare runs — plus sleep, HRV, Body Battery, food, weight, the plan… whatever you pick", RunUi.MUTED, 12f))
+            setOnClickListener { startActivity(Intent(ctx, CoachActivity::class.java)) }
+        })
 
         // 0. Update available.
         io.github.michealsizemore1.beyondstride.Updater.available(this)?.let { up ->
@@ -280,14 +288,6 @@ open class RunsActivity : Activity() {
         try { col.addView(bodyBatteryCard()) } catch (e: Exception) { }
         if (System.currentTimeMillis() - DayStress.lastRead(this) > 15 * 60_000L) { val app = applicationContext
             Thread { try { DayStress.sync(app) } catch (e: Exception) { }; runOnUiThread { if (!isFinishing && System.currentTimeMillis() - DayStress.lastRead(app) < 60_000L) render() } }.start() }
-        // 🧠 Coach AI.
-        col.addView(RunUi.card(this).apply {
-            background = RunUi.rounded(0xFF2A2140.toInt(), dp(14).toFloat())
-            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dp(8) }
-            addView(RunUi.text(ctx, "🧠 Coach AI ▸", Color.WHITE, 16f, true))
-            addView(RunUi.text(ctx, "Analyze and compare runs — plus sleep, HRV, Body Battery, food, weight, the plan… whatever you pick", RunUi.MUTED, 12f))
-            setOnClickListener { startActivity(Intent(ctx, CoachActivity::class.java)) }
-        })
         // 🌙 Evening report (from 8 pm).
         if (java.time.LocalTime.now().hour >= 20 && EveningReport.enabled(this)) col.addView(RunUi.card(this).apply {
             background = RunUi.rounded(0xFF26264A.toInt(), dp(14).toFloat())
