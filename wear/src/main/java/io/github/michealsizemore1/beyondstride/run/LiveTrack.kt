@@ -1,5 +1,7 @@
 package io.github.michealsizemore1.beyondstride.run
 
+import io.github.michealsizemore1.beyondstride.Workout as WorkoutDef
+import io.github.michealsizemore1.beyondstride.NutritionStore as NutritionStoreRef
 import android.content.Context
 import org.json.JSONArray
 import org.json.JSONObject
@@ -180,11 +182,11 @@ object LiveTrack {
         // Planned distance, so followers see miles / time left and an estimated finish: the guided workout,
         // else the trail being followed, else today's plan.
         try {
-            val wm = if (Run.hasWorkout) io.github.michealsizemore1.beyondstride.Workout.plannedMeters(Run.workout!!).toDouble() else 0.0
+            val wm = if (Run.hasWorkout) WorkoutDef.plannedMeters(Run.workout!!).toDouble() else 0.0
             val goal = when {
                 wm > 0 -> wm to "workout"
                 Run.nav != null -> (Run.distance + Run.nav!!.remaining) to "trail"
-                else -> (io.github.michealsizemore1.beyondstride.NutritionStore.acts(ctx)?.optJSONObject("face")
+                else -> (NutritionStoreRef.acts(ctx)?.optJSONObject("face")
                     ?.takeIf { it.optString("date") == java.time.LocalDate.now().toString() }?.optDouble("planMi", 0.0) ?: 0.0).let { it * 1609.344 } to "plan"
             }
             if (goal.first > 400) { put("goal", Math.round(goal.first)); put("goalSrc", goal.second) }
