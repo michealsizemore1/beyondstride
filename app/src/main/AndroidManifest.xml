@@ -103,6 +103,12 @@
             android:label="All runs"
             android:taskAffinity="io.github.michealsizemore1.beyondstride.running" />
         <activity
+            android:name=".run.CoachActivity"
+            android:exported="false"
+            android:label="Coach AI"
+            android:windowSoftInputMode="adjustResize"
+            android:taskAffinity="io.github.michealsizemore1.beyondstride.running" />
+        <activity
             android:name=".run.EveningReportActivity"
             android:exported="false"
             android:label="Evening report"

@@ -53,6 +53,24 @@ object AiFood {
         return (o.optJSONArray("content")?.optJSONObject(0)?.optString("text")?.trim() ?: "") to o.optString("stop_reason")
     }
 
+    /** A conversation (Coach AI): [messages] are {role, content} pairs; returns the reply. Tries Sonnet, falls back to Haiku. Call off the main thread. */
+    fun askChat(ctx: Context, system: String, messages: JSONArray, maxTokens: Int = 4000): String {
+        var last: Exception? = null
+        for (model in listOf("claude-sonnet-4-5", "claude-haiku-4-5-20251001")) try {
+            val c = (URL("https://api.anthropic.com/v1/messages").openConnection() as HttpURLConnection).apply {
+                requestMethod = "POST"; doOutput = true; connectTimeout = 20_000; readTimeout = 180_000
+                setRequestProperty("x-api-key", key(ctx)); setRequestProperty("anthropic-version", "2023-06-01"); setRequestProperty("content-type", "application/json")
+            }
+            c.outputStream.use { it.write(JSONObject().put("model", model).put("max_tokens", maxTokens).put("system", system).put("messages", messages).toString().toByteArray()) }
+            val ok = c.responseCode in 200..299
+            val o = JSONObject((if (ok) c.inputStream else c.errorStream).bufferedReader().readText())
+            if (!ok) { val msg = o.optJSONObject("error")?.optString("message") ?: "HTTP ${c.responseCode}"
+                if (c.responseCode == 401) throw Exception(msg); last = Exception(msg); continue }
+            return o.optJSONArray("content")?.let { a -> (0 until a.length()).mapNotNull { a.optJSONObject(it)?.optString("text") }.joinToString("") }?.trim() ?: ""
+        } catch (e: Exception) { last = e; if (e.message?.contains("api key", true) == true || e.message?.contains("authentication", true) == true) break }
+        throw last ?: Exception("No answer")
+    }
+
     /** A plain question → the answer text (Fuel AI). Call off the main thread. */
     fun askText(ctx: Context, prompt: String, maxTokens: Int = 3000) =
         ask(ctx, "claude-haiku-4-5-20251001", maxTokens, JSONArray().put(JSONObject().put("type", "text").put("text", prompt)))

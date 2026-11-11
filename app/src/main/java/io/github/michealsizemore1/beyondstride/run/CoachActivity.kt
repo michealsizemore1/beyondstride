@@ -1,0 +1,171 @@
+package io.github.michealsizemore1.beyondstride.run
+
+import android.app.Activity
+import android.app.AlertDialog
+import android.graphics.Color
+import android.graphics.Typeface
+import android.os.Bundle
+import android.text.Html
+import android.view.Gravity
+import android.view.View
+import android.view.ViewGroup.LayoutParams.MATCH_PARENT
+import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
+import android.view.inputmethod.EditorInfo
+import android.widget.EditText
+import android.widget.LinearLayout
+import android.widget.ScrollView
+import android.widget.TextView
+import android.widget.Toast
+import org.json.JSONObject
+
+/** 🧠 Coach AI — pick what it looks at, then ask it anything (a conversation). */
+class CoachActivity : Activity() {
+    private lateinit var col: LinearLayout
+    private lateinit var scroll: ScrollView
+    private lateinit var input: EditText
+    private var busy = false
+    private var pending: String? = null
+    private fun dp(v: Int) = RunUi.dp(this, v)
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(RunUi.BG) }
+        col = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(16), dp(36), dp(16), dp(16)) }
+        scroll = ScrollView(this).apply { addView(col) }
+        root.addView(scroll, LinearLayout.LayoutParams(MATCH_PARENT, 0, 1f))
+        // Ask box.
+        input = EditText(this).apply {
+            hint = "Ask about your runs, recovery, food…"; setTextColor(Color.WHITE); setHintTextColor(RunUi.MUTED); textSize = 15f
+            background = RunUi.rounded(0xFF22302B.toInt(), dp(20).toFloat()); setPadding(dp(14), dp(10), dp(14), dp(10)); maxLines = 5
+            imeOptions = EditorInfo.IME_ACTION_SEND; inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE
+        }
+        root.addView(LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(dp(12), dp(8), dp(12), dp(12)); setBackgroundColor(0xFF0F1513.toInt())
+            addView(input, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
+            addView(RunUi.text(this@CoachActivity, "➤", Color.BLACK, 18f, true).apply {
+                gravity = Gravity.CENTER; background = RunUi.rounded(RunUi.ACCENT, dp(22).toFloat()); setOnClickListener { send(input.text.toString()) }
+            }, LinearLayout.LayoutParams(dp(44), dp(44)).apply { marginStart = dp(8) })
+        })
+        setContentView(root)
+        render()
+    }
+
+    private fun render() {
+        val ctx = this; col.removeAllViews()
+        col.addView(LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+            addView(RunUi.text(ctx, "🧠 Coach AI", Color.WHITE, 26f, true), LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
+            if (CoachAi.chat(ctx).length() > 0) addView(chip("New chat", false) { AlertDialog.Builder(ctx).setMessage("Start a new conversation?").setPositiveButton("New chat") { _, _ -> CoachAi.saveChat(ctx, org.json.JSONArray()); render() }.setNegativeButton("Cancel", null).show() })
+        })
+        col.addView(RunUi.text(this, "Analyzes and compares your runs — and anything else you pick below. Ask follow-up questions like a conversation.", RunUi.MUTED, 12f).apply { setPadding(0, dp(2), 0, dp(10)) })
+        if (!AiFood.hasKey(this)) col.addView(RunUi.text(this, "Add your Anthropic key in Settings → AI food search to use Coach AI.", 0xFFFF8A80.toInt(), 13f, true).apply { setPadding(0, 0, 0, dp(8)) })
+
+        // What it looks at.
+        col.addView(RunUi.text(this, "WHAT TO LOOK AT", RunUi.MUTED, 11f, true))
+        val sel = CoachAi.scopes(this)
+        col.addView(flow(CoachAi.SCOPES.map { s -> chip(s.label, s.key in sel) {
+            if (s.key in sel) sel.remove(s.key) else sel.add(s.key); CoachAi.setScopes(ctx, sel)
+            if (s.key == "runs" && s.key in sel && CoachAi.runIds(ctx).isEmpty()) pickRuns() else render()
+        } }))
+        if ("runs" in sel) {
+            val ids = CoachAi.runIds(this); val all = CoachAi.runs(this)
+            val chosen = if (ids.isEmpty()) all.take(2) else all.filter { CoachAi.id(it) in ids }
+            col.addView(LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL; background = RunUi.rounded(RunUi.CARD, dp(12).toFloat()); setPadding(dp(12), dp(8), dp(12), dp(8))
+                layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(6) }
+                addView(RunUi.text(ctx, "Runs to analyze (${chosen.size})" + if (ids.isEmpty()) " · your last 2" else "", Color.WHITE, 13f, true))
+                chosen.take(8).forEach { addView(RunUi.text(ctx, "• " + CoachAi.runLabel(it), RunUi.MUTED, 12f)) }
+                if (chosen.size > 8) addView(RunUi.text(ctx, "…and ${chosen.size - 8} more", RunUi.MUTED, 12f))
+                addView(RunUi.text(ctx, "Pick runs ›", RunUi.ACCENT, 13f, true).apply { setPadding(0, dp(4), 0, 0) })
+                setOnClickListener { pickRuns() }
+            })
+        }
+
+        // Conversation (or ideas to start).
+        val chat = CoachAi.chat(this)
+        if (chat.length() == 0 && pending == null) {
+            col.addView(RunUi.text(this, "TRY ASKING", RunUi.MUTED, 11f, true).apply { setPadding(0, dp(14), 0, dp(2)) })
+            CoachAi.QUICK.forEach { q -> col.addView(RunUi.text(this, q, Color.WHITE, 13f).apply {
+                background = RunUi.rounded(0xFF1E2A26.toInt(), dp(12).toFloat()); setPadding(dp(12), dp(9), dp(12), dp(9))
+                layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(6) }
+                setOnClickListener { send(q) } }) }
+        } else {
+            col.addView(View(this), LinearLayout.LayoutParams(1, dp(8)))
+            for (i in 0 until chat.length()) bubble(chat.getJSONObject(i))
+        }
+        pending?.let { bubble(JSONObject().put("role", "user").put("content", it)) }
+        if (busy) col.addView(RunUi.text(this, "🧠 Thinking… (a minute for a big comparison)", RunUi.ACCENT, 13f, true).apply { setPadding(dp(4), dp(10), 0, dp(10)) })
+        scroll.post { if (chat.length() > 0 || busy) scroll.fullScroll(View.FOCUS_DOWN) }
+    }
+
+    private fun bubble(m: JSONObject) {
+        val me = m.optString("role") == "user"
+        col.addView(TextView(this).apply {
+            setTextColor(if (me) Color.BLACK else Color.WHITE); textSize = 14f; setLineSpacing(0f, 1.15f); setTextIsSelectable(true)
+            text = if (me) m.optString("content") else md(m.optString("content"))
+            background = RunUi.rounded(if (me) RunUi.ACCENT else RunUi.CARD, dp(14).toFloat()); setPadding(dp(12), dp(10), dp(12), dp(10))
+            layoutParams = LinearLayout.LayoutParams(if (me) WRAP_CONTENT else MATCH_PARENT, WRAP_CONTENT).apply {
+                topMargin = dp(8); gravity = if (me) Gravity.END else Gravity.START; if (me) marginStart = dp(40) }
+        })
+    }
+
+    /** Light markdown: headings, **bold**, bullets. */
+    private fun md(t: String): CharSequence {
+        val html = t.lines().joinToString("<br>") { line ->
+            var l = Html.escapeHtml(line)
+            l = Regex("\\*\\*(.+?)\\*\\*").replace(l) { "<b>${it.groupValues[1]}</b>" }
+            when {
+                l.startsWith("### ") || l.startsWith("## ") || l.startsWith("# ") -> "<b><font color='#C6F432'>" + l.trimStart('#', ' ') + "</font></b>"
+                l.trimStart().startsWith("- ") || l.trimStart().startsWith("* ") -> "&nbsp;&nbsp;• " + l.trimStart().drop(2)
+                else -> l
+            }
+        }
+        return Html.fromHtml(html, Html.FROM_HTML_MODE_LEGACY)
+    }
+
+    private fun send(q0: String) {
+        val q = q0.trim(); if (q.isEmpty() || busy) return
+        if (!AiFood.hasKey(this)) { Toast.makeText(this, "Add your Anthropic key in Settings → AI food search first.", Toast.LENGTH_LONG).show(); return }
+        busy = true; pending = q; input.setText("")
+        render()
+        val app = applicationContext
+        Thread {
+            val err = try { CoachAi.ask(app, q); null } catch (e: Exception) { e.message ?: "Something went wrong" }
+            runOnUiThread {
+                busy = false; pending = null; if (isFinishing) return@runOnUiThread
+                render()
+                if (err != null) { Toast.makeText(this, "Coach AI: $err", Toast.LENGTH_LONG).show(); input.setText(q) }
+            }
+        }.start()
+    }
+
+    private fun pickRuns() {
+        val all = CoachAi.runs(this).take(80)
+        if (all.isEmpty()) { Toast.makeText(this, "No runs yet.", Toast.LENGTH_SHORT).show(); render(); return }
+        val ids = CoachAi.runIds(this).toMutableSet()
+        val checked = BooleanArray(all.size) { CoachAi.id(all[it]) in ids }
+        AlertDialog.Builder(this).setTitle("Pick runs to analyze")
+            .setMultiChoiceItems(all.map { CoachAi.runLabel(it) }.toTypedArray(), checked) { _, i, on -> checked[i] = on }
+            .setPositiveButton("Use these") { _, _ -> CoachAi.setRunIds(this, all.filterIndexed { i, _ -> checked[i] }.map { CoachAi.id(it) }.take(12)); render() }
+            .setNeutralButton("Last 2") { _, _ -> CoachAi.setRunIds(this, emptyList()); render() }
+            .setNegativeButton("Cancel") { _, _ -> render() }.show()
+    }
+
+    private fun chip(t: String, on: Boolean, click: () -> Unit) = TextView(this).apply {
+        text = t; textSize = 12.5f; typeface = Typeface.DEFAULT_BOLD; setTextColor(if (on) Color.BLACK else Color.WHITE)
+        background = RunUi.rounded(if (on) RunUi.ACCENT else 0xFF26332E.toInt(), dp(16).toFloat()); setPadding(dp(11), dp(6), dp(11), dp(6))
+        setOnClickListener { click() }
+    }
+
+    /** Chips that wrap onto new lines. */
+    private fun flow(views: List<View>): LinearLayout {
+        val out = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(0, dp(4), 0, 0) }
+        val w = resources.displayMetrics.widthPixels - dp(32); var row: LinearLayout? = null; var used = 0
+        views.forEach { v ->
+            v.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED); val vw = v.measuredWidth + dp(6)
+            if (row == null || used + vw > w) { row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }; out.addView(row, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(6) }); used = 0 }
+            row!!.addView(v, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { marginEnd = dp(6) }); used += vw
+        }
+        return out
+    }
+}
