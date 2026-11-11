@@ -71,6 +71,8 @@ open class RunsActivity : Activity() {
         Thread {
             if (System.currentTimeMillis() - io.github.michealsizemore1.beyondstride.ReadinessSync.nightsAt(this) > 30 * 60_000L && SleepData.granted(this)) {
                 SleepData.refresh(this); runOnUiThread { if (!isFinishing) render() }
+                // Send it on to the Command Center right away (its Wellness sleep box fills from this).
+                try { DailySummary.publish(applicationContext, force = true) } catch (e: Exception) { }
             }
         }.start()
     }

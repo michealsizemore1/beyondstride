@@ -166,6 +166,7 @@ class ReadinessActivity : Activity() {
         if (SleepData.available(this)) Thread {
             if (SleepData.granted(this) && System.currentTimeMillis() - ReadinessSync.nightsAt(this) > 10 * 60_000L) {
                 SleepData.refresh(this); runOnUiThread { if (!isFinishing) render() }
+                try { DailySummary.publish(applicationContext, force = true) } catch (e: Exception) { }
             }
         }.start()
     }
