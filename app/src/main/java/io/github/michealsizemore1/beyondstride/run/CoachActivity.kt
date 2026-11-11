@@ -30,7 +30,7 @@ class CoachActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(RunUi.BG) }
-        col = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(16), dp(36), dp(16), dp(16)) }
+        col = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(16), dp(12), dp(16), dp(16)) }
         scroll = ScrollView(this).apply { addView(col) }
         root.addView(scroll, LinearLayout.LayoutParams(MATCH_PARENT, 0, 1f))
         // Ask box.
@@ -46,6 +46,14 @@ class CoachActivity : Activity() {
                 gravity = Gravity.CENTER; background = RunUi.rounded(RunUi.ACCENT, dp(22).toFloat()); setOnClickListener { send(input.text.toString()) }
             }, LinearLayout.LayoutParams(dp(44), dp(44)).apply { marginStart = dp(8) })
         })
+        // Keep the ask box above Android's navigation bar and the keyboard (the app draws edge to edge).
+        root.setOnApplyWindowInsetsListener { v, ins ->
+            val bottom = if (android.os.Build.VERSION.SDK_INT >= 30)
+                ins.getInsets(android.view.WindowInsets.Type.systemBars() or android.view.WindowInsets.Type.ime()).bottom
+            else @Suppress("DEPRECATION") ins.systemWindowInsetBottom
+            val top = if (android.os.Build.VERSION.SDK_INT >= 30) ins.getInsets(android.view.WindowInsets.Type.statusBars()).top else 0
+            v.setPadding(0, top, 0, bottom); ins
+        }
         setContentView(root)
         render()
         if (intent.getBooleanExtra("fuel", false)) fuelDialog()
