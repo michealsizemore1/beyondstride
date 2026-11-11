@@ -46,7 +46,7 @@ object FaceData {
     }
 
     fun battery(ctx: Context): V? = acts(ctx)?.optJSONObject("battery")?.takeIf { it.optString("date") == todayKey() }?.let {
-        V("${it.optInt("now")}", "Battery", it.optInt("now").toFloat(), desc = "Body Battery ${it.optInt("now")} ${it.optString("label")}") }
+        V("${it.optInt("now")}", "body", it.optInt("now").toFloat(), desc = "Body Battery ${it.optInt("now")} ${it.optString("label")}") }
     fun weather(ctx: Context): V? = acts(ctx)?.optJSONObject("weather")?.takeIf { System.currentTimeMillis() - it.optLong("at") < 6 * 3600_000L }?.let {
         V("${it.optString("temp")}°", it.optString("icon"), long = "${it.optString("icon")} ${it.optString("temp")}° ${it.optString("cond")} · H ${it.optString("hi")}° L ${it.optString("lo")}°",
             desc = "${it.optString("temp")} degrees ${it.optString("cond")}") }
@@ -71,7 +71,7 @@ object FaceData {
         val mi = f?.optDouble("planMi", 0.0) ?: 0.0
         val wk = acts(ctx)?.optJSONArray("mileage")?.optJSONObject(0)
         val week = wk?.let { " · wk ${it.optDouble("mi")}" + (if (it.optDouble("goal") > 0) "/${it.optDouble("goal").toInt()}" else "") + " mi" }.orEmpty()
-        return V(if (mi > 0) "${trim(mi)}mi" else "Rest", "today", long = w + week, desc = "Today: $w")
+        return V(if (mi > 0) "${trim(mi)}mi" else "Rest", "today", long = w, desc = "Today: $w$week")
     }
     fun weekMiles(ctx: Context): V? = acts(ctx)?.optJSONArray("mileage")?.optJSONObject(0)?.let {
         val mi = it.optDouble("mi"); val g = it.optDouble("goal")
@@ -92,11 +92,11 @@ abstract class FaceComplication : ComplicationDataSourceService() {
     }
     override fun getPreviewData(type: ComplicationType): ComplicationData = FaceData.build(this, type, sample)
 }
-class BatteryComplication : FaceComplication() { override fun value(ctx: Context) = FaceData.battery(ctx); override val sample = FaceData.V("72", "Battery", 72f) }
+class BatteryComplication : FaceComplication() { override fun value(ctx: Context) = FaceData.battery(ctx); override val sample = FaceData.V("72", "body", 72f) }
 class WeatherComplication : FaceComplication() { override fun value(ctx: Context) = FaceData.weather(ctx); override val sample = FaceData.V("54°", "☀️", long = "☀️ 54° Clear · H 61° L 38°") }
 class CaloriesComplication : FaceComplication() { override fun value(ctx: Context) = FaceData.calories(ctx); override val sample = FaceData.V("1,240", "left", 1800f, 3000f) }
 class ProteinComplication : FaceComplication() { override fun value(ctx: Context) = FaceData.protein(ctx); override val sample = FaceData.V("92g", "prot", 92f, 150f) }
 class FluidsComplication : FaceComplication() { override fun value(ctx: Context) = FaceData.fluids(ctx); override val sample = FaceData.V("64oz", "fluid", 64f, 110f) }
 class ReadinessComplication : FaceComplication() { override fun value(ctx: Context) = FaceData.readiness(ctx); override val sample = FaceData.V("80", "ready", 80f) }
-class WorkoutComplication : FaceComplication() { override fun value(ctx: Context) = FaceData.workout(ctx); override val sample = FaceData.V("5mi", "today", long = "Easy Run 5 mi · wk 12/40 mi") }
+class WorkoutComplication : FaceComplication() { override fun value(ctx: Context) = FaceData.workout(ctx); override val sample = FaceData.V("5mi", "today", long = "Easy Run 5 mi") }
 class WeekMilesComplication : FaceComplication() { override fun value(ctx: Context) = FaceData.weekMiles(ctx); override val sample = FaceData.V("12", "wk mi", 12f, 40f) }
