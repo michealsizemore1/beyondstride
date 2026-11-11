@@ -80,7 +80,7 @@ object Updater {
         status("Downloading build ${r.build}…")
         Thread {
             var last = -1
-            val err = install(act, r) { pct -> if (pct / 5 != last) { last = pct / 5; act.runOnUiThread { status("Downloading build ${r.build}… $pct%") } } }
+            val err = install(act, r, progress = { pct -> if (pct / 5 != last) { last = pct / 5; act.runOnUiThread { status("Downloading build ${r.build}… $pct%") } } })
             act.runOnUiThread { status(err ?: "Installing build ${r.build}… BeyondStride will close and reopen updated") }
         }.start()
     }
