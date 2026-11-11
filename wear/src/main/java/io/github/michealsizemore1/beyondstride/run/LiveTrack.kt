@@ -1,6 +1,6 @@
 package io.github.michealsizemore1.beyondstride.run
 
-import io.github.michealsizemore1.beyondstride.Workout as WorkoutDef
+import io.github.michealsizemore1.beyondstride.Workouts as WorkoutDef
 import io.github.michealsizemore1.beyondstride.NutritionStore as NutritionStoreRef
 import android.content.Context
 import org.json.JSONArray
