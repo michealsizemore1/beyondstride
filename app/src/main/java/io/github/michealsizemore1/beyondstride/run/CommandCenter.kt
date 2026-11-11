@@ -133,6 +133,7 @@ object CommandCenter {
             put("cadence", run.optInt("avgCadence"))
             put("notes", Summary.notes(ctx, run))
             put("source", "watch")
+            ExecScores.compute(ctx, run)?.let { put("execScore", it.score) }
             // Weather at the run's place and time; Stryd's reading is used if the lookup failed.
             run.optJSONObject("weather")?.let { w ->
                 if (w.has("tempF")) put("temp", w.optLong("tempF").toString())

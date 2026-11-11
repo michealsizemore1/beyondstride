@@ -204,6 +204,15 @@ object RunViews {
             if (json.has("hrSource")) addView(stat("Heart rate", if (json.optString("hrSource") == "strap") "Chest strap" else "Wrist"))
         })
 
+        // 🎯 Execution score (same as the phone's): time inside each workout step's target.
+        try { io.github.michealsizemore1.beyondstride.ExecScore.compute(json, null, Run.hrMax, Run.hrRest, Run.criticalPower) } catch (e: Exception) { null }?.let { r ->
+            col.addView(label(ctx, "EXECUTION SCORE", MUTED, 12f, true).apply { setPadding(0, dp(ctx, 10), 0, 0) })
+            col.addView(card(ctx).apply {
+                addView(label(ctx, "🎯 ${r.score}/100", r.color, 26f, true))
+                addView(label(ctx, r.label, Color.WHITE, 12f, true))
+                r.steps.forEach { st -> addView(stat(st.name, st.pct?.let { "$it%" } ?: if (!st.done) "skipped" else "—")) }
+            })
+        }
         zoneCard(ctx, col, "HEART-RATE ZONES", json.optJSONArray("hrZoneSeconds"), Run.HR_ZONE_NAMES)
         json.optJSONObject("newBests")?.takeIf { it.length() > 0 }?.let { nb ->
             col.addView(card(ctx).apply {

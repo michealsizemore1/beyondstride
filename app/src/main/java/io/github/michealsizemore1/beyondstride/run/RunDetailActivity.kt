@@ -205,6 +205,17 @@ class RunDetailActivity : Activity() {
             col.addView(RunUi.text(this, "Charts run left to right over moving time.", RunUi.DIM, 11f).apply { setPadding(dp(4), dp(4), 0, 0) })
         }
 
+        // 🎯 Execution score.
+        ExecScores.compute(ctx, run)?.let { r ->
+            col.addView(RunUi.section(this, "EXECUTION SCORE"))
+            col.addView(RunUi.card(this).apply {
+                addView(RunUi.text(ctx, "🎯 ${r.score}/100 · ${r.label}", r.color, 20f, true))
+                addView(RunUi.text(ctx, r.basis, RunUi.MUTED, 12f))
+                ExecScores.lines(r).forEach { addView(RunUi.text(ctx, it, Color.WHITE, 13f).apply { setPadding(0, dp(4), 0, 0) }) }
+                setOnClickListener { ExecScores.explain(ctx, r) }
+            })
+        }
+
         // Zones.
         run.optJSONArray("hrZoneSeconds")?.takeIf { a -> (0 until a.length()).any { a.optInt(it) > 0 } }?.let { zs ->
             val b = RunMath.hrBounds(run.optDouble("hrMax", RunSettings.hrMax(ctx)), run.optDouble("hrRest", RunSettings.hrRest(ctx)))

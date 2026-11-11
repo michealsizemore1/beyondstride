@@ -346,7 +346,9 @@ class ActivitiesActivity : Activity() {
         if (x.has("fuel")) { val f = x.optDouble("fuel"); cond.addView(chip(stat("🏅 ", String.format(Locale.US, "%.1f", f), "/10 fuel impact",
             color = if (f >= 7) 0xFF16A34A.toInt() else if (f >= 5) 0xFF65A30D.toInt() else if (f >= 3) 0xFFF97316.toInt() else 0xFFDC2626.toInt())).apply {
             setOnClickListener { android.widget.Toast.makeText(ctx, "Previous day food quality + fueling vs target (${x.optString("fuelLabel")})" + x.optString("fuelNote").let { n -> if (n.isNotEmpty()) " · $n" else "" }, android.widget.Toast.LENGTH_LONG).show() } }) }
-        S.num(a, "execScore").takeIf { it > 0 }?.let { cond.addView(chip(stat("🎯 ", fmtNum(it), "/100"))) }
+        val ex = S.idOf(a).toLongOrNull()?.let { ExecScores.forRun(ctx, it) }
+        if (ex != null) cond.addView(chip(stat("🎯 Execution ", "${ex.score}", "/100 · ${ex.label}", color = ex.color)).apply { setOnClickListener { ExecScores.explain(ctx, ex) } })
+        else S.num(a, "execScore").takeIf { it > 0 }?.let { cond.addView(chip(stat("🎯 Execution ", fmtNum(it), "/100", color = io.github.michealsizemore1.beyondstride.ExecScore.color(it.toInt())))) }
         if (cond.childCount > 0) body.addView(View(this).apply { setBackgroundColor(0x22FFFFFF) }, LinearLayout.LayoutParams(MATCH_PARENT, 1).apply { topMargin = dp(8) })
         if (cond.childCount > 0) body.addView(cond)
 
@@ -440,7 +442,7 @@ class ActivitiesActivity : Activity() {
             Row("Cadence (spm)", { S.num(it, "cadence") }, { _, v -> if (v > 0) "${fmtNum(v)} spm" else "—" }, "max"),
             Row("Calories", { S.num(it, "calories") }, { _, v -> if (v > 0) fmtNum(v) else "—" }, "max"),
             Row("Elev Gain (ft)", { S.num(it, "elevGain") }, { _, v -> if (v > 0) "${fmtNum(v)} ft" else "—" }, "max"),
-            Row("Execution Score", { S.num(it, "execScore") }, { _, v -> if (v > 0) "${fmtNum(v)}/100" else "—" }, "max"),
+            Row("Execution Score", { ExecScores.of(this, it) }, { _, v -> if (v > 0) "${fmtNum(v)}/100" else "—" }, "max"),
             Row("Source", { 0.0 }, { a, _ -> S.sourceLabel(S.str(a, "source")) }, null),
         )
         val table = android.widget.TableLayout(this).apply { setPadding(dp(12), dp(8), dp(12), dp(8)) }
