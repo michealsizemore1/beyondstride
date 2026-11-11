@@ -26,6 +26,8 @@ class CoachActivity : Activity() {
     private var busy = false
     private var pending: String? = null
     private var askedPick = false
+    private var attached: ByteArray? = null
+    private lateinit var preview: LinearLayout
     private fun dp(v: Int) = RunUi.dp(this, v)
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -36,12 +38,19 @@ class CoachActivity : Activity() {
         root.addView(scroll, LinearLayout.LayoutParams(MATCH_PARENT, 0, 1f))
         // Ask box.
         input = EditText(this).apply {
-            hint = "Ask about your runs, recovery, food…"; setTextColor(Color.WHITE); setHintTextColor(RunUi.MUTED); textSize = 15f
+            hint = "Ask about runs, recovery, food… 📎 adds a photo"; setTextColor(Color.WHITE); setHintTextColor(RunUi.MUTED); textSize = 15f
             background = RunUi.rounded(0xFF22302B.toInt(), dp(20).toFloat()); setPadding(dp(14), dp(10), dp(14), dp(10)); maxLines = 5
             imeOptions = EditorInfo.IME_ACTION_SEND; inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE
         }
+        // Attached photo (shown above the ask box until sent).
+        preview = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(dp(14), dp(8), dp(14), 0); setBackgroundColor(0xFF0F1513.toInt()); visibility = View.GONE }
+        root.addView(preview, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
         root.addView(LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(dp(12), dp(8), dp(12), dp(12)); setBackgroundColor(0xFF0F1513.toInt())
+            addView(RunUi.text(this@CoachActivity, "📎", Color.WHITE, 20f, true).apply {
+                gravity = Gravity.CENTER; background = RunUi.rounded(0xFF22302B.toInt(), dp(22).toFloat())
+                setOnClickListener { try { startActivityForResult(android.content.Intent(android.content.Intent.ACTION_GET_CONTENT).setType("image/*"), 8801) } catch (e: Exception) { Toast.makeText(this@CoachActivity, "No photo app found", Toast.LENGTH_SHORT).show() } }
+            }, LinearLayout.LayoutParams(dp(44), dp(44)).apply { marginEnd = dp(8) })
             addView(input, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
             addView(RunUi.text(this@CoachActivity, "➤", Color.BLACK, 18f, true).apply {
                 gravity = Gravity.CENTER; background = RunUi.rounded(RunUi.ACCENT, dp(22).toFloat()); setOnClickListener { send(input.text.toString()) }
@@ -65,7 +74,7 @@ class CoachActivity : Activity() {
         col.addView(LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
             addView(RunUi.text(ctx, "🧠 Coach AI", Color.WHITE, 26f, true), LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
-            if (CoachAi.chat(ctx).length() > 0) addView(chip("New chat", false) { AlertDialog.Builder(ctx).setMessage("Start a new conversation?").setPositiveButton("New chat") { _, _ -> CoachAi.saveChat(ctx, org.json.JSONArray()); render() }.setNegativeButton("Cancel", null).show() })
+            if (CoachAi.chat(ctx).length() > 0) addView(chip("New chat", false) { AlertDialog.Builder(ctx).setMessage("Start a new conversation?").setPositiveButton("New chat") { _, _ -> CoachAi.saveChat(ctx, org.json.JSONArray()); CoachAi.clearImages(ctx); render() }.setNegativeButton("Cancel", null).show() })
         })
         col.addView(RunUi.text(this, "Analyzes and compares your runs — and anything else you pick below. Ask follow-up questions like a conversation.", RunUi.MUTED, 12f).apply { setPadding(0, dp(2), 0, dp(10)) })
         if (!AiFood.hasKey(this)) col.addView(RunUi.text(this, "Add your Anthropic key in Settings → AI food search to use Coach AI.", 0xFFFF8A80.toInt(), 13f, true).apply { setPadding(0, 0, 0, dp(8)) })
@@ -117,8 +126,31 @@ class CoachActivity : Activity() {
         scroll.post { if (chat.length() > 0 || busy) scroll.fullScroll(View.FOCUS_DOWN) }
     }
 
+    @Deprecated("") override fun onActivityResult(requestCode: Int, resultCode: Int, data: android.content.Intent?) {
+        @Suppress("DEPRECATION") super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode != 8801 || resultCode != RESULT_OK) return
+        val uri = data?.data ?: return
+        val app = applicationContext
+        Thread { val b = AiFood.jpeg(app, uri); runOnUiThread { if (b == null) Toast.makeText(this, "Couldn't read that photo", Toast.LENGTH_SHORT).show() else { attached = b; showPreview() } } }.start()
+    }
+    private fun showPreview() {
+        preview.removeAllViews(); val b = attached
+        if (b == null) { preview.visibility = View.GONE; return }
+        preview.visibility = View.VISIBLE
+        preview.addView(android.widget.ImageView(this).apply { setImageBitmap(android.graphics.BitmapFactory.decodeByteArray(b, 0, b.size)); scaleType = android.widget.ImageView.ScaleType.CENTER_CROP; clipToOutline = true
+            background = RunUi.rounded(RunUi.CARD, dp(8).toFloat()) }, LinearLayout.LayoutParams(dp(56), dp(56)))
+        preview.addView(RunUi.text(this, "Photo attached — ask about it (or just send)", RunUi.MUTED, 12f).apply { setPadding(dp(10), 0, dp(10), 0) }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
+        preview.addView(RunUi.text(this, "✕", Color.WHITE, 18f, true).apply { setPadding(dp(10), dp(6), dp(4), dp(6)); setOnClickListener { attached = null; showPreview() } })
+    }
+
     private fun bubble(m: JSONObject) {
         val me = m.optString("role") == "user"
+        if (me && m.optString("img").isNotBlank()) {
+            val f = java.io.File(m.optString("img"))
+            if (f.exists()) col.addView(android.widget.ImageView(this).apply {
+                setImageBitmap(android.graphics.BitmapFactory.decodeFile(f.absolutePath, android.graphics.BitmapFactory.Options().apply { inSampleSize = 2 })); adjustViewBounds = true; clipToOutline = true; background = RunUi.rounded(RunUi.CARD, dp(12).toFloat())
+            }, LinearLayout.LayoutParams(dp(200), WRAP_CONTENT).apply { topMargin = dp(8); gravity = Gravity.END })
+        }
         col.addView(TextView(this).apply {
             setTextColor(if (me) Color.BLACK else Color.WHITE); textSize = 14f; setLineSpacing(0f, 1.15f); setTextIsSelectable(true)
             text = if (me) m.optString("show", m.optString("content")) else md(m.optString("content"))
@@ -169,21 +201,23 @@ class CoachActivity : Activity() {
     }
 
     private fun send(q0: String, hidden: String? = null) {
-        val q = q0.trim(); if (q.isEmpty() || busy) return
+        val photo = attached
+        val q = q0.trim().ifEmpty { if (photo != null) "What does this show? Analyze it alongside my data." else "" }; if (q.isEmpty() || busy) return
         if (!AiFood.hasKey(this)) { Toast.makeText(this, "Add your Anthropic key in Settings → AI food search first.", Toast.LENGTH_LONG).show(); return }
         if (hidden == null && Regex("\\bcompar", RegexOption.IGNORE_CASE).containsMatchIn(q) && Regex("\\bruns?\\b", RegexOption.IGNORE_CASE).containsMatchIn(q) && !askedPick) {
             askedPick = true; input.setText(""); pickRuns { send(q, null) }; return
         }
         askedPick = false
-        busy = true; pending = q; input.setText("")
+        busy = true; pending = q; input.setText(""); attached = null; showPreview()
         render()
         val app = applicationContext
         Thread {
-            val err = try { CoachAi.ask(app, q, hidden); null } catch (e: Exception) { e.message ?: "Something went wrong" }
+            val img = photo?.let { b -> try { java.io.File(CoachAi.imageDir(app), "${System.currentTimeMillis()}.jpg").apply { writeBytes(b) }.absolutePath } catch (e: Exception) { null } }
+            val err = try { CoachAi.ask(app, q, hidden, img); null } catch (e: Exception) { e.message ?: "Something went wrong" }
             runOnUiThread {
                 busy = false; pending = null; if (isFinishing) return@runOnUiThread
                 render()
-                if (err != null) { Toast.makeText(this, "Coach AI: $err", Toast.LENGTH_LONG).show(); input.setText(q) }
+                if (err != null) { Toast.makeText(this, "Coach AI: $err", Toast.LENGTH_LONG).show(); input.setText(q); if (photo != null) { attached = photo; showPreview() } }
             }
         }.start()
     }

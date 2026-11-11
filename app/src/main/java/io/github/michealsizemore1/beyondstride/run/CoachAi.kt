@@ -213,14 +213,28 @@ ${context(ctx, question)}"""
     }
 
     /** Sends the conversation plus the new question; returns the answer. [hidden] = extra facts sent with it but not shown. Call off the main thread. */
-    fun ask(ctx: Context, question: String, hidden: String? = null): String {
+    /** A photo you attached, as an image block for the AI (null if the file is gone). */
+    private fun imageBlock(path: String): JSONObject? = try {
+        val f = java.io.File(path); if (!f.exists()) null
+        else JSONObject().put("type", "image").put("source", JSONObject().put("type", "base64").put("media_type", "image/jpeg").put("data", android.util.Base64.encodeToString(f.readBytes(), android.util.Base64.NO_WRAP)))
+    } catch (e: Exception) { null }
+    private fun content(text: String, img: String?): Any = if (img.isNullOrBlank()) text else imageBlock(img)?.let { JSONArray().put(it).put(JSONObject().put("type", "text").put("text", text)) } ?: "$text\n[a photo was attached here earlier]"
+    fun imageDir(ctx: Context) = java.io.File(ctx.filesDir, "coach").apply { mkdirs() }
+    fun clearImages(ctx: Context) = try { imageDir(ctx).listFiles()?.forEach { it.delete() } } catch (e: Exception) { }
+
+    fun ask(ctx: Context, question: String, hidden: String? = null, image: String? = null): String {
         val chat = chat(ctx)
         val msgs = JSONArray(); val from = Math.max(0, chat.length() - 12)
-        for (i in from until chat.length()) chat.getJSONObject(i).let { msgs.put(JSONObject().put("role", it.optString("role")).put("content", it.optString("content"))) }
+        // Photos are re-sent for the last two questions (so follow-ups can still see them); older ones become a note.
+        val userIdx = (from until chat.length()).filter { chat.getJSONObject(it).optString("role") == "user" }
+        val keepImg = userIdx.takeLast(2).toSet()
+        for (i in from until chat.length()) chat.getJSONObject(i).let {
+            msgs.put(JSONObject().put("role", it.optString("role")).put("content", if (it.has("img")) content(it.optString("content"), if (i in keepImg) it.optString("img") else null).let { c -> if (c is String && i !in keepImg) it.optString("content") + "\n[a photo was attached here]" else c } else it.optString("content")))
+        }
         val full = if (hidden.isNullOrBlank()) question else hidden + "\n\n" + question
-        msgs.put(JSONObject().put("role", "user").put("content", full))
+        msgs.put(JSONObject().put("role", "user").put("content", content(full, image)))
         val answer = AiFood.askChat(ctx, system(ctx, question + " " + (0 until chat.length()).filter { chat.getJSONObject(it).optString("role") == "user" }.takeLast(2).joinToString(" ") { chat.getJSONObject(it).optString("show", chat.getJSONObject(it).optString("content")) }), msgs)
-        chat.put(JSONObject().put("role", "user").put("content", full).put("show", question)); chat.put(JSONObject().put("role", "assistant").put("content", answer))
+        chat.put(JSONObject().put("role", "user").put("content", full).put("show", question).apply { if (!image.isNullOrBlank()) put("img", image) }); chat.put(JSONObject().put("role", "assistant").put("content", answer))
         saveChat(ctx, chat)
         return answer
     }
