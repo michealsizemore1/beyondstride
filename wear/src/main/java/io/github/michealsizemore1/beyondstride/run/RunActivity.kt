@@ -1308,7 +1308,7 @@ class RunActivity : Activity() {
 
     /** Nutrition (from the Command Center via the phone): today's calories vs target, macros, meals, last few days. */
     /** Fluids (± a cup) and wake-up / post-run weight for today, like the phone. Sent to the phone, then the Command Center. */
-    private var wakeEdit = 0.0; private var postEdit = 0.0
+    private var wakeEdit = 0.0; private var postEdit = 0.0; private var preEdit = 0.0
     private fun showFluids(fresh: Boolean = true): Unit = overlay { col ->
         val N = io.github.michealsizemore1.beyondstride.Nutrition
         val H = io.github.michealsizemore1.beyondstride.Hydration
@@ -1319,6 +1319,7 @@ class RunActivity : Activity() {
             val lastW = days.lastOrNull { it.weight > 0 }?.weight ?: 170.0
             wakeEdit = t?.weight?.takeIf { it > 0 } ?: 0.0
             postEdit = t?.postWeight?.takeIf { it > 0 } ?: 0.0
+            preEdit = t?.preWeight?.takeIf { it > 0 } ?: 0.0
             if (lastW > 0) prefs.edit().putFloat("lastWeight", lastW.toFloat()).apply()
         }
         col.addView(label("⚖ Weight", Color.WHITE, 17f, true))
@@ -1335,14 +1336,16 @@ class RunActivity : Activity() {
         val start = prefs.getFloat("lastWeight", 170f).toDouble()
         fun step(cur: Double, d: Double) = Math.round(((if (cur > 0) cur else start) + d) * 10) / 10.0
         stepper("Wake-up weight", if (wakeEdit > 0) "${H.lb(wakeEdit)} lb" else "— tap + / −", { wakeEdit = step(wakeEdit, -0.2); showFluids(false) }, { wakeEdit = step(wakeEdit, 0.2); showFluids(false) })
+        stepper("Pre-run weight", if (preEdit > 0) "${H.lb(preEdit)} lb" else "— tap + / −", { preEdit = step(preEdit, -0.2); showFluids(false) }, { preEdit = step(preEdit, 0.2); showFluids(false) })
         stepper("Post-run weight", if (postEdit > 0) "${H.lb(postEdit)} lb" else "— tap + / −", { postEdit = step(postEdit, -0.2); showFluids(false) }, { postEdit = step(postEdit, 0.2); showFluids(false) })
-        val changed = wakeEdit != (t?.weight ?: 0.0) || postEdit != (t?.postWeight ?: 0.0)
+        val changed = wakeEdit != (t?.weight ?: 0.0) || postEdit != (t?.postWeight ?: 0.0) || preEdit != (t?.preWeight ?: 0.0)
         if (changed) col.addView(label("Save weights", Color.BLACK, 14f, true).apply {
             background = rounded(C.ACCENT, 24); setPadding(0, dp(8), 0, dp(8))
             layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(8) }
             setOnClickListener {
                 if (wakeEdit != (t?.weight ?: 0.0)) watchFluid("weight", value = wakeEdit, redraw = false)
                 if (postEdit != (t?.postWeight ?: 0.0)) watchFluid("postWeight", value = postEdit, redraw = false)
+                if (preEdit != (t?.preWeight ?: 0.0)) watchFluid("preWeight", value = preEdit, redraw = false)
                 flash("Weights saved"); showNutrition()
             }
         })
@@ -1364,6 +1367,7 @@ class RunActivity : Activity() {
             "sports" -> { val n = (cur.sportsOz + delta).coerceAtLeast(0); d = n - cur.sportsOz; cur.copy(sportsOz = n) }
             "other" -> { val n = (cur.otherOz + delta).coerceAtLeast(0); d = n - cur.otherOz; cur.copy(otherOz = n) }
             "weight" -> cur.copy(weight = value)
+            "preWeight" -> cur.copy(preWeight = value)
             else -> cur.copy(postWeight = value)
         }.let { it.copy(waterOz = it.water + it.sportsOz + it.otherOz) }
         if (f in H.FLUIDS && d == 0) return
@@ -1644,7 +1648,7 @@ class RunActivity : Activity() {
             // Fluids and post-run rehydration, part of Today. Tap to add a cup or enter weights.
             // Weigh-ins and fluids — same lines as the phone's Today card (drinks are in LIQUIDS below).
             val H0 = io.github.michealsizemore1.beyondstride.Hydration
-            addView(label("⚖ Weight: wake-up ${H0.lb(t?.weight ?: 0.0)} · post-run ${H0.lb(t?.postWeight ?: 0.0)} lb ▸", Color.WHITE, 11f, true).apply {
+            addView(label("⚖ Weight: wake-up ${H0.lb(t?.weight ?: 0.0)}" + (if ((t?.preWeight ?: 0.0) > 0) " · pre ${H0.lb(t!!.preWeight)}" else "") + " · post-run ${H0.lb(t?.postWeight ?: 0.0)} lb ▸", Color.WHITE, 11f, true).apply {
                 setPadding(0, dp(5), 0, 0); setOnClickListener { showFluids() } })
             addView(label("Fluids ${t?.waterOz ?: 0} oz" + (if (t != null && t.water + t.sportsOz + t.otherOz > 0) "  (water ${t.water} · sports ${t.sportsOz} · other ${t.otherOz})" else ""), C.MUTED, 10f).apply { setPadding(0, dp(3), 0, 0) })
             N.rehydrate(t)?.let { h ->

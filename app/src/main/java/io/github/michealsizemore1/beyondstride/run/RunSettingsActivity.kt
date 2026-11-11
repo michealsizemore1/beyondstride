@@ -269,6 +269,10 @@ class RunSettingsActivity : Activity() {
             ": today's training, food and fluids vs target, Body Battery, bedtime and tomorrow's workout", EveningReport.enabled(this)) { EveningReport.setEnabled(ctx, it); Reminders.scheduleEvening(ctx, replace = true) }
         col.addView(RunUi.text(this, "Evening report time: change ›", RunUi.ACCENT, 13f, true).apply { setPadding(dp(4), dp(2), 0, dp(6))
             setOnClickListener { val m = EveningReport.time(ctx); android.app.TimePickerDialog(ctx, { _, h, mi -> EveningReport.setTime(ctx, h * 60 + mi); Reminders.scheduleEvening(ctx, replace = true); render() }, m / 60, m % 60, false).show() } })
+        switch("⚖️ Weigh-in before a run", "15 minutes before your usual run time (" + java.time.LocalTime.of(Reminders.preTime(this) / 60, Reminders.preTime(this) % 60).format(java.time.format.DateTimeFormatter.ofPattern("h:mm a", java.util.Locale.US)) +
+            "), on days with a planned run you haven't done yet — skipped if a pre-run weight is in", Reminders.preOn(this)) { Reminders.setPre(ctx, it) }
+        col.addView(RunUi.text(this, "Usual run time: change ›", RunUi.ACCENT, 13f, true).apply { setPadding(dp(4), dp(2), 0, dp(6))
+            setOnClickListener { val m = Reminders.preTime(ctx); android.app.TimePickerDialog(ctx, { _, h, mi -> Reminders.setPre(ctx, Reminders.preOn(ctx), h * 60 + mi); render() }, m / 60, m % 60, false).show() } })
         switch("⚖️ Weigh-in after a run", "5 minutes after a run is logged, a reminder to step on the scale (skipped if your Withings weight already came in)", Reminders.weighOn(this)) { Reminders.setWeighOn(ctx, it) }
         col.addView(RunUi.text(this, "Send everything to the watch now ›", RunUi.ACCENT, 13f, true).apply { setPadding(dp(4), 0, 0, dp(6))
             setOnClickListener { val app = applicationContext; Thread { try { TodayWeather.fetch(app); ActivityStore.watchSummary(app)?.let { io.github.michealsizemore1.beyondstride.NutritionStore.setActs(app, it) }

@@ -53,7 +53,7 @@ object Local {
             }
             // Days: foods, fluids, weights, meal notes and macro ratios.
             val touched = LinkedHashSet<String>(dates)
-            ch.forEach { c -> if (c.f in Hydration.FLUIDS || c.f == "weight" || c.f == "postWeight" || c.f.startsWith("food") || c.f == "mealNote" || c.f == "macroRatio") touched += c.date }
+            ch.forEach { c -> if (c.f in Hydration.FLUIDS || c.f == "weight" || c.f == "postWeight" || c.f == "preWeight" || c.f.startsWith("food") || c.f == "mealNote" || c.f == "macroRatio") touched += c.date }
             ch.filter { it.f == "macroRatio" }.forEach { c -> try { NutritionEngine.setRatio(ctx, c.date, JSONObject(c.x ?: "{}")) } catch (e: Exception) { } }
             val days = ArrayList<Nutrition.Day>()
             touched.forEach { date ->

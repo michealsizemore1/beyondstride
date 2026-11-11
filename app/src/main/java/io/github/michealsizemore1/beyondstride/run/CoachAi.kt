@@ -164,7 +164,7 @@ object CoachAi {
         if ("weight" in sc) {
             sb.append("\n## Weight (30 days, lb)\n")
             for (i in 29L downTo 0L) { val d = today.minusDays(i).toString(); val n = NutriDay.day(ctx, d) ?: continue
-                if (n.weight > 0 || n.postWeight > 0) sb.append("$d: " + listOfNotNull(n.weight.takeIf { it > 0 }?.let { "wake-up $it" }, n.postWeight.takeIf { it > 0 }?.let { "post-run $it" }).joinToString(" · ") + "\n") }
+                if (n.weight > 0 || n.postWeight > 0 || n.preWeight > 0) sb.append("$d: " + listOfNotNull(n.weight.takeIf { it > 0 }?.let { "wake-up $it" }, n.preWeight.takeIf { it > 0 }?.let { "pre-run $it" }, n.postWeight.takeIf { it > 0 }?.let { "post-run $it" }).joinToString(" · ") + "\n") }
         }
         if ("weather" in sc) TodayWeather.watchJson(ctx)?.let { w ->
             sb.append("\n## Weather now (${w.optString("place")})\n${w.optString("temp")}°F, feels ${w.optString("feels")}°, dew point ${w.optString("dew")}°, ${w.optString("cond")}, wind ${w.optString("wind")} mph, high ${w.optString("hi")}° low ${w.optString("lo")}°, rain ${w.optInt("rain")}%\n")

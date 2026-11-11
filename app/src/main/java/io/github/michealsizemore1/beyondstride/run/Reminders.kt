@@ -70,6 +70,33 @@ object Reminders {
     class WeighWork(c: Context, w: WorkerParameters) : Worker(c, w) {
         override fun doWork(): Result { weighCheck(applicationContext); return Result.success() }
     }
+    // ── ⚖️ Weigh in before a run (at your usual run time, on days with a planned run) ──
+    private fun ep(ctx: Context) = ctx.getSharedPreferences("evening", 0)
+    fun preOn(ctx: Context) = ep(ctx).getBoolean("preOn", false)
+    fun preTime(ctx: Context) = ep(ctx).getInt("preTime", 17 * 60 + 30)
+    fun setPre(ctx: Context, on: Boolean, time: Int = preTime(ctx)) { ep(ctx).edit().putBoolean("preOn", on).putInt("preTime", time).apply(); schedulePre(ctx, true) }
+    fun schedulePre(ctx: Context, replace: Boolean = false) {
+        val wm = try { WorkManager.getInstance(ctx) } catch (e: Exception) { return }
+        if (!preOn(ctx)) { wm.cancelUniqueWork("preweigh"); return }
+        val m = preTime(ctx) - 15; val now = java.time.LocalDateTime.now()
+        var at = now.toLocalDate().atTime((m / 60).coerceIn(0, 23), m % 60)
+        if (!at.isAfter(now)) at = at.plusDays(1)
+        wm.enqueueUniqueWork("preweigh", if (replace) androidx.work.ExistingWorkPolicy.REPLACE else androidx.work.ExistingWorkPolicy.KEEP,
+            androidx.work.OneTimeWorkRequestBuilder<PreWork>().setInitialDelay(java.time.Duration.between(now, at).toMillis(), TimeUnit.MILLISECONDS).build())
+    }
+    class PreWork(c: Context, w: WorkerParameters) : Worker(c, w) {
+        override fun doWork(): Result { preCheck(applicationContext); return Result.success() }
+    }
+    fun preCheck(ctx: Context) {
+        val today = io.github.michealsizemore1.beyondstride.Readiness.today()
+        if (!preOn(ctx) || ep(ctx).getString("preSent", "") == today) return
+        ep(ctx).edit().putString("preSent", today).apply()
+        if (Insights.plannedMiles(Insights.planText(ctx, today)) <= 0) return                       // no run planned
+        if (ActivityStore.list(ctx).any { ActivityStore.str(it, "date").take(10) == today && ActivityStore.isRun(ActivityStore.str(it, "type").ifEmpty { "run" }) }) return   // already ran
+        if ((NutriDay.day(ctx, today)?.preWeight ?: 0.0) > 0) return
+        notify(ctx, 963, "⚖️ Weigh in before your run", "Step on the scale right before you head out (after the bathroom). With your post-run weight it gives a true sweat rate, even after a day of eating.", io.github.michealsizemore1.beyondstride.run.NutritionActivity::class.java)
+    }
+
     fun weighCheck(ctx: Context) {
         val today = io.github.michealsizemore1.beyondstride.Readiness.today()
         fun has() = (NutriDay.day(ctx, today)?.postWeight ?: 0.0) > 0
@@ -121,6 +148,7 @@ object Reminders {
         try { Local.upkeep(ctx, hourly = true) } catch (e: Exception) { }
         morning(ctx)
         evening(ctx); scheduleEvening(ctx)
+        try { schedulePre(ctx) } catch (e: Exception) { }
         val d = Nutrition.today(NutritionStore.days(ctx))
 
         // Pre-fueling: 5–9 pm on the day before a hard workout (the Command Center's "Pre-fueling day").

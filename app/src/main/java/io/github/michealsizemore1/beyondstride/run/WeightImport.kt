@@ -41,18 +41,21 @@ object WeightImport {
         val apps = raw.map { it.metadata.dataOrigin.packageName.substringAfterLast('.') }.distinct().joinToString(", ")
         val weights = raw.map { it.time to it.weight.inPounds }.filter { it.second in 70.0..500.0 }.sortedBy { it.first }
         // When runs ended: BeyondStride's own runs (id = start time) and running sessions in Health Connect.
-        val ends = ArrayList<Instant>()
+        val ends = ArrayList<Instant>(); val starts = ArrayList<Instant>()
         ActivityStore.list(ctx).forEach { a -> val start = ActivityStore.idStr(a.opt("id")).toLongOrNull() ?: return@forEach
             if (start < 1_500_000_000_000L || !ActivityStore.isRun(ActivityStore.str(a, "type").ifEmpty { "run" })) return@forEach
-            ends += Instant.ofEpochMilli(start + ActivityStore.durSec(ActivityStore.str(a, "duration")) * 1000L) }
+            starts += Instant.ofEpochMilli(start); ends += Instant.ofEpochMilli(start + ActivityStore.durSec(ActivityStore.str(a, "duration")) * 1000L) }
         try { if (runBlocking { client.permissionController.getGrantedPermissions() }.contains(EXERCISE))
             runBlocking { client.readRecords(ReadRecordsRequest(ExerciseSessionRecord::class, TimeRangeFilter.between(from, Instant.now()))).records }
-                .filter { it.exerciseType in setOf(ExerciseSessionRecord.EXERCISE_TYPE_RUNNING, ExerciseSessionRecord.EXERCISE_TYPE_RUNNING_TREADMILL) }.forEach { ends += it.endTime } } catch (e: Exception) { }
+                .filter { it.exerciseType in setOf(ExerciseSessionRecord.EXERCISE_TYPE_RUNNING, ExerciseSessionRecord.EXERCISE_TYPE_RUNNING_TREADMILL) }.forEach { ends += it.endTime; starts += it.startTime } } catch (e: Exception) { }
         var filled = 0
         weights.groupBy { it.first.atZone(zone).toLocalDate().toString() }.forEach { (date, list) ->
             val day = NutriDay.day(ctx, date)
             val wake = list.firstOrNull { it.first.atZone(zone).hour < 12 }?.second?.let { r1(it) }
             val post = list.firstOrNull { w -> ends.any { e -> !w.first.isBefore(e) && w.first.isBefore(e.plusSeconds(2 * 3600)) } }?.second?.let { r1(it) }
+            // Pre-run: the last weigh-in in the 2 hours before a run starts (and not after it ended).
+            val wakeAt = list.firstOrNull { it.first.atZone(zone).hour < 12 }?.first
+            val pre = list.lastOrNull { w -> w.first != wakeAt && starts.any { st -> w.first.isBefore(st) && !w.first.isBefore(st.minusSeconds(2 * 3600)) } }?.second?.let { r1(it) }
             fun put(field: String, v: Double?, cur: Double) {
                 if (v == null) return
                 val mine = pr.getFloat("${field}_$date", -1f).toDouble()
@@ -63,6 +66,7 @@ object WeightImport {
             }
             put("weight", wake, day?.weight ?: 0.0)
             if (post != null && post != wake) put("postWeight", post, day?.postWeight ?: 0.0)
+            if (pre != null) put("preWeight", pre, day?.preWeight ?: 0.0)
         }
         pr.edit().putString("info", "Last checked " + java.text.SimpleDateFormat("MMM d, h:mm a", java.util.Locale.US).format(java.util.Date()) +
             " · " + (weights.lastOrNull()?.let { "latest ${r1(it.second)} lb (from $apps)" } ?: if (err.isNotEmpty()) "couldn't read Health Connect — ${err.take(120)}" else "no weigh-ins in Health Connect in the last $days days")).apply()

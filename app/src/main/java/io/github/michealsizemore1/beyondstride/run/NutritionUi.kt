@@ -55,7 +55,7 @@ object NutritionUi {
             })
         } catch (e: Exception) { }
         // Weigh-ins (Nutrition tab): tap to enter wake-up and post-run weight.
-        if (big) col.addView(RunUi.text(ctx, "⚖ Weight: wake-up ${io.github.michealsizemore1.beyondstride.Hydration.lb(nd?.weight ?: 0.0)} · post-run ${io.github.michealsizemore1.beyondstride.Hydration.lb(nd?.postWeight ?: 0.0)} lb  ▸",
+        if (big) col.addView(RunUi.text(ctx, "⚖ Weight: wake-up ${io.github.michealsizemore1.beyondstride.Hydration.lb(nd?.weight ?: 0.0)}" + (if ((nd?.preWeight ?: 0.0) > 0) " · pre-run ${io.github.michealsizemore1.beyondstride.Hydration.lb(nd!!.preWeight)}" else "") + " · post-run ${io.github.michealsizemore1.beyondstride.Hydration.lb(nd?.postWeight ?: 0.0)} lb  ▸",
             Color.WHITE, 13f, true).apply { setPadding(0, dp(6), 0, dp(2)); setOnClickListener { fluidDialog(act, refresh) } })
         fluids(act, col, nd, refresh, chips)
         if (withMicros && nd != null && nd.micros.isNotEmpty()) micros(act, col, nd)
@@ -314,15 +314,18 @@ object NutritionUi {
         }
         box.addView(android.widget.TextView(ctx).apply { text = "Wake-up weight (lb)"; setPadding(0, dp(4), 0, 0) })
         val wake = field("e.g. 172.4", today?.weight ?: 0.0); box.addView(wake)
+        box.addView(android.widget.TextView(ctx).apply { text = "Pre-run weight (lb) — right before you head out"; setPadding(0, dp(8), 0, 0) })
+        val pre = field("e.g. 173.0", today?.preWeight ?: 0.0); box.addView(pre)
         box.addView(android.widget.TextView(ctx).apply { text = "Post-run weight (lb)"; setPadding(0, dp(8), 0, 0) })
         val post = field("e.g. 171.2", today?.postWeight ?: 0.0); box.addView(post)
         box.addView(android.widget.TextView(ctx).apply {
-            text = (if (Standalone.on(ctx)) "" else "Also goes to the Command Center (its Wellness weight fields). ") + "Drinks are in Liquids on the Nutrition tab."; textSize = 12f; setPadding(0, dp(8), 0, 0)
+            text = (if (Standalone.on(ctx)) "" else "Also goes to the Command Center (its Wellness weight fields). ") + "Sweat rate uses pre-run → post-run (or wake-up → post-run when there's no pre-run weight), plus sports drinks logged. Drinks are in Liquids on the Nutrition tab."; textSize = 12f; setPadding(0, dp(8), 0, 0)
         })
         android.app.AlertDialog.Builder(ctx).setTitle("Weight · " + if (NutriDay.isToday()) "today" else java.time.LocalDate.parse(NutriDay.date()).format(java.time.format.DateTimeFormatter.ofPattern("EEE, MMM d", Locale.US))).setView(ScrollView(ctx).apply { addView(box) })
             .setPositiveButton("Save") { _, _ ->
                 fun num(e: android.widget.EditText) = e.text.toString().trim().toDoubleOrNull()?.takeIf { it in 70.0..600.0 } ?: 0.0
-                val w = num(wake); val p = num(post)
+                val w = num(wake); val p = num(post); val pr = num(pre)
+                if (pr != (today?.preWeight ?: 0.0)) HydrationSync.change(ctx, "preWeight", value = pr)
                 if (w != (today?.weight ?: 0.0)) HydrationSync.change(ctx, "weight", value = w)
                 if (p != (today?.postWeight ?: 0.0)) HydrationSync.change(ctx, "postWeight", value = p)
             }

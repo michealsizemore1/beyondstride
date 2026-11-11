@@ -38,7 +38,11 @@ object Nutrition {
         val mtProt: Int = 0, val mtCarbs: Int = 0, val mtFat: Int = 0, val mtLabel: String = "", val mtCal: Int = 0,
         /** Meal notes, the fueling note (hard-workout days) and pre-run meal ideas (JSON) — from the Command Center. */
         val notes: Map<String, String> = emptyMap(), val perfNote: String = "", val prerun: String = "",
+        /** Weight right before the run (lb), for sweat rate on later-in-the-day runs. 0 when not entered. */
+        val preWeight: Double = 0.0,
     ) {
+        /** The weight to compare the post-run weight with: pre-run if entered, otherwise wake-up. */
+        val beforeRun get() = if (preWeight > 0) preWeight else weight
         fun microLabel() = when { microScore >= 9 -> "Excellent"; microScore >= 7 -> "Good"; microScore >= 5 -> "Fair"; microScore >= 3 -> "Low"; else -> "Poor" }
         /** Lowest first (Low, then High, Close, Met), like the Command Center's breakdown. */
         fun microsByNeed() = micros.sortedWith(compareBy({ mapOf("Low" to 0, "High" to 1, "Close" to 2, "Met" to 3)[it.status] }, { it.pct }))
@@ -96,7 +100,7 @@ object Nutrition {
             o.optInt("water"), o.optInt("sportsOz"), o.optInt("otherOz"), o.optDouble("weight", 0.0), o.optDouble("postWeight", 0.0), foods, o.optBoolean("qrun"), o.optString("qhard"),
             o.optJSONObject("mt")?.optInt("prot") ?: 0, o.optJSONObject("mt")?.optInt("carbs") ?: 0, o.optJSONObject("mt")?.optInt("fat") ?: 0,
             o.optJSONObject("mt")?.optString("label") ?: "", o.optJSONObject("mt")?.optInt("cal") ?: 0,
-            o.optJSONObject("notes")?.let { n -> n.keys().asSequence().associateWith { n.optString(it) } } ?: emptyMap(), o.optString("perfNote"), o.optJSONObject("prerun")?.toString() ?: "")
+            o.optJSONObject("notes")?.let { n -> n.keys().asSequence().associateWith { n.optString(it) } } ?: emptyMap(), o.optString("perfNote"), o.optJSONObject("prerun")?.toString() ?: "", o.optDouble("preWeight", 0.0))
     }
 
     /** Firebase's {"2026-11-06": {...}, ...} (or null) → days, oldest first. */
@@ -114,7 +118,7 @@ object Nutrition {
                 .put("items", JSONArray().apply { d.items.forEach { put(JSONObject().put("meal", it.meal).put("name", it.name).put("cal", it.cal).put("prot", it.prot).put("carbs", it.carbs).put("fat", it.fat)) } })
                 .put("microScore", d.microScore)
                 .put("foods", Food.listJson(d.foods))
-                .put("water", d.water).put("sportsOz", d.sportsOz).put("otherOz", d.otherOz).put("weight", d.weight).put("postWeight", d.postWeight).put("qrun", d.qRun).put("qhard", d.qHard)
+                .put("water", d.water).put("sportsOz", d.sportsOz).put("otherOz", d.otherOz).put("weight", d.weight).put("postWeight", d.postWeight).put("preWeight", d.preWeight).put("qrun", d.qRun).put("qhard", d.qHard)
                 .put("notes", JSONObject().apply { d.notes.forEach { (k, v) -> put(k, v) } }).put("perfNote", d.perfNote).apply { if (d.prerun.isNotEmpty()) put("prerun", JSONObject(d.prerun)) }
                 .put("mt", JSONObject().put("prot", d.mtProt).put("carbs", d.mtCarbs).put("fat", d.mtFat).put("label", d.mtLabel).put("cal", d.mtCal))
                 .put("micros", JSONArray().apply { d.micros.forEach { put(JSONObject().put("n", it.name).put("f", it.field).put("v", it.value).put("t", it.target).put("mx", it.max).put("u", it.unit)) } }))
@@ -134,8 +138,8 @@ object Nutrition {
      */
     data class Rehydrate(val lostLb: Double, val targetOz: Int, val hadOz: Int, val needOz: Int)
     fun rehydrate(d: Day?): Rehydrate? {
-        if (d == null || d.weight <= 0 || d.postWeight <= 0 || d.postWeight >= d.weight) return null
-        val lost = d.weight - d.postWeight
+        if (d == null || d.beforeRun <= 0 || d.postWeight <= 0 || d.postWeight >= d.beforeRun) return null
+        val lost = d.beforeRun - d.postWeight
         val target = (lost * 20).roundToInt()
         return Rehydrate(lost, target, d.waterOz, (target - d.waterOz).coerceAtLeast(0))
     }

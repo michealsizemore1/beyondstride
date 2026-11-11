@@ -64,7 +64,7 @@ object Hydration {
             val base = if (i >= 0) out[i] else blank(date)
             val w = o.optInt("water", base.water); val s = o.optInt("sports", base.sportsOz); val ot = o.optInt("other", base.otherOz)
             var d = base.copy(water = w, sportsOz = s, otherOz = ot, waterOz = w + s + ot,
-                weight = o.optDouble("weight", base.weight), postWeight = o.optDouble("postWeight", base.postWeight))
+                weight = o.optDouble("weight", base.weight), postWeight = o.optDouble("postWeight", base.postWeight), preWeight = o.optDouble("preWeight", base.preWeight))
             o.optJSONArray("foods")?.let { d = Food.summarize(d, Food.parseList(it)) }
             if (i >= 0) out[i] = d else out += d
         }
@@ -81,7 +81,7 @@ object Hydration {
         val base = shown ?: blank(date)
         val l = local(ctx)
         val o = l.optJSONObject(date) ?: JSONObject().put("water", base.water).put("sports", base.sportsOz).put("other", base.otherOz)
-            .put("weight", base.weight).put("postWeight", base.postWeight)
+            .put("weight", base.weight).put("postWeight", base.postWeight).put("preWeight", base.preWeight)
         var d = delta
         if (f in FLUIDS) {
             val cur = o.optInt(f); val next = (cur + delta).coerceAtLeast(0); d = next - cur
@@ -102,7 +102,7 @@ object Hydration {
         val base = shown ?: blank(date)
         val l = local(ctx)
         val o = l.optJSONObject(date) ?: JSONObject().put("water", base.water).put("sports", base.sportsOz).put("other", base.otherOz)
-            .put("weight", base.weight).put("postWeight", base.postWeight)
+            .put("weight", base.weight).put("postWeight", base.postWeight).put("preWeight", base.preWeight)
         val foods = (o.optJSONArray("foods")?.let { Food.parseList(it) } ?: base.foods).toMutableList()
         val i = foods.indexOfFirst { it.id == item.id }
         val x = when (op) {
@@ -126,7 +126,7 @@ object Hydration {
 
     private fun overlayOne(base: Nutrition.Day, o: JSONObject): Nutrition.Day {
         val w = o.optInt("water"); val s = o.optInt("sports"); val ot = o.optInt("other")
-        return base.copy(water = w, sportsOz = s, otherOz = ot, waterOz = w + s + ot, weight = o.optDouble("weight", 0.0), postWeight = o.optDouble("postWeight", 0.0))
+        return base.copy(water = w, sportsOz = s, otherOz = ot, waterOz = w + s + ot, weight = o.optDouble("weight", 0.0), postWeight = o.optDouble("postWeight", 0.0), preWeight = o.optDouble("preWeight", 0.0))
     }
 
     /** "date|f|delta|value" — how the watch sends a change to the phone. */

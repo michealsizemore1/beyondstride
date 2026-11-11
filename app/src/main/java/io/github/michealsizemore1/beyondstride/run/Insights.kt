@@ -33,7 +33,7 @@ object Insights {
         if (nums.isNotEmpty()) return nums.sum()
         return 0.0
     }
-    private fun planText(ctx: Context, date: String) = PlanStore.data(ctx).optJSONObject("current")?.optJSONObject("days")?.optString(date) ?: ""
+    fun planText(ctx: Context, date: String) = PlanStore.data(ctx).optJSONObject("current")?.optJSONObject("days")?.optString(date) ?: ""
     fun doneMiles(ctx: Context, date: String) = S.list(ctx).filter { S.str(it, "date").take(10) == date && S.isRun(S.str(it, "type").ifEmpty { "run" }) }.sumOf { S.num(it, "distance") }
 
     data class Adh(val planned: Double, val done: Double, val status: String, val color: Int)
@@ -101,9 +101,21 @@ object Insights {
     }
     private fun sweatCalc(ctx: Context): Sweat? {
         val days = (Nutrition.parse(NutriDay.allJson(ctx).toString()).associateBy { it.date } + NutritionStore.days(ctx).associateBy { it.date }).values
-        val rates = days.filter { it.weight > 70 && it.postWeight > 70 && it.weight > it.postWeight }.sortedByDescending { it.date }.mapNotNull { d ->
-            val hrs = S.list(ctx).filter { S.str(it, "date").take(10) == d.date && S.isRun(S.str(it, "type").ifEmpty { "run" }) }.sumOf { S.durSec(S.str(it, "duration")) } / 3600.0
-            if (hrs < 0.25) null else ((d.weight - d.postWeight) * 16 / hrs).takeIf { it in 4.0..80.0 }
+        val zone = java.time.ZoneId.systemDefault()
+        val rates = days.filter { it.postWeight > 70 && (it.preWeight > 70 || it.weight > 70) }.sortedByDescending { it.date }.mapNotNull { d ->
+            val runs = S.list(ctx).filter { S.str(it, "date").take(10) == d.date && S.isRun(S.str(it, "type").ifEmpty { "run" }) }
+            val hrs = runs.sumOf { S.durSec(S.str(it, "duration")) } / 3600.0
+            if (hrs < 0.25) return@mapNotNull null
+            // Before the run: the pre-run weight; the wake-up weight only counts for a morning run (food and drinks later in the day would hide sweat).
+            val before = if (d.preWeight > 70) d.preWeight else {
+                val startHour = runs.mapNotNull { S.idStr(it.opt("id")).toLongOrNull()?.takeIf { v -> v > 1_500_000_000_000L } }.minOrNull()
+                    ?.let { java.time.Instant.ofEpochMilli(it).atZone(zone).hour }
+                if (startHour != null && startHour < 11) d.weight else return@mapNotNull null
+            }
+            // Drinks taken during the run (logged under Sports / race nutrition) were sweat too.
+            val duringOz = io.github.michealsizemore1.beyondstride.Food.liquidOz(d.foods, "sports")
+            val lostLb = before - d.postWeight + duringOz / 16.0
+            if (lostLb <= 0) null else (lostLb * 16 / hrs).takeIf { it in 4.0..80.0 }
         }.take(10)
         if (rates.isEmpty()) return null
         return Sweat(Math.round(rates.average()).toInt(), rates.size)
