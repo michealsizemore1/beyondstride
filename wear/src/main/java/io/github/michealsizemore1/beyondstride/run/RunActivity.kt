@@ -2569,6 +2569,9 @@ class RunActivity : Activity() {
             }
             "heatPct" -> Run.heatPct().let { hp -> if (hp.isNaN()) "--" to w else if (hp < 0.5) "0%" to w
                 else (String.format(java.util.Locale.US, "+%.1f%%", hp) + (if (Run.avgSpeed > 0.5) " ${Math.round(io.github.michealsizemore1.beyondstride.RunMath.METERS_PER_MILE / Run.avgSpeed * hp / 100)}s" else "")) to 0xFFFFA94D.toInt() }
+            "temp" -> (if (Run.tempF.isNaN()) "--" else "${Math.round(Run.tempF)}°F") to w
+            "humidity" -> (if (Run.humidity.isNaN()) "--" else "${Math.round(Run.humidity)}%") to w
+            "dewPoint" -> (if (Run.tempF.isNaN() || Run.humidity.isNaN()) "--" else "${Math.round(io.github.michealsizemore1.beyondstride.Heat.dewPoint(Run.tempF, Run.humidity))}°") to w
             "tempF" -> (if (Run.tempF.isNaN()) "--" else "${Math.round(Run.tempF)}°" + (if (!Run.humidity.isNaN()) " ${Math.round(Run.humidity)}%" else "")) to w
             "hr" -> n(Run.heartRate) to hrColor(Run.heartRate)
             "avgHr" -> n(Run.avgHr) to hrColor(Run.avgHr)

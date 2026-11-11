@@ -21,7 +21,7 @@ object RunFields {
         "lapTime" to "Lap time", "lapDist" to "Lap distance", "lapPace" to "Lap pace", "lapHr" to "Lap HR",
         "lapPower" to "Lap power", "lapNum" to "Lap #", "lastLap" to "Last lap time",
         "stress" to "Stress", "intensity" to "Intensity",
-        "heatPace" to "Heat-adj pace", "heatAvgPace" to "Heat-adj avg", "heatLapPace" to "Heat-adj lap", "heatPct" to "Heat impact", "tempF" to "Temp · humidity",
+        "heatPace" to "Heat-adj pace", "heatAvgPace" to "Heat-adj avg", "heatLapPace" to "Heat-adj lap", "heatPct" to "Heat impact", "tempF" to "Temp · humidity", "temp" to "Temperature", "humidity" to "Humidity", "dewPoint" to "Dew point",
     )
     /** The heat screen: heat-adjusted pace on top, actual pace and heat impact, heat-adjusted average at the bottom. */
     fun heatScreen(): JSONObject = screen("8", "heatPace", "pace", "heatPct", "heatAvgPace", "avgPace", "heatLapPace", "lapPace", "tempF")
