@@ -178,7 +178,7 @@ object ActivityStore {
         try { o.put("insights", Insights.watch(ctx)) } catch (e: Exception) { }
         try { o.put("morning", MorningReport.json(MorningReport.build(ctx))) } catch (e: Exception) { }
         // Same as the phone's Today screen: evening report, Body Battery, weather and My notes.
-        try { if (java.time.LocalTime.now().hour >= 20 && EveningReport.enabled(ctx)) o.put("evening", MorningReport.json(EveningReport.build(ctx))) } catch (e: Exception) { }
+        try { if (EveningReport.ready(ctx)) o.put("evening", MorningReport.json(EveningReport.build(ctx))) } catch (e: Exception) { }
         try { val b = BodyBattery.today(ctx)
             o.put("battery", JSONObject().put("date", today.toString()).put("now", b.now).put("label", b.label).put("color", b.color).put("wake", b.wake).put("bed", b.bedtime)
                 .put("drained", b.activity + b.daily).put("watch", b.fromWatch).put("notes", org.json.JSONArray(b.notes))

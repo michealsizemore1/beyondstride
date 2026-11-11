@@ -9,13 +9,15 @@ import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-/** 🌙 Evening report (about 11:30 PM): how today went and what tomorrow looks like. */
+/** 🌙 Evening report (about 11 PM): how today went and what tomorrow looks like. */
 object EveningReport {
     private val S = ActivityStore
     private fun p(ctx: Context) = ctx.getSharedPreferences("evening", 0)
     fun enabled(ctx: Context) = p(ctx).getBoolean("on", true)
     fun setEnabled(ctx: Context, v: Boolean) = p(ctx).edit().putBoolean("on", v).apply()
-    fun time(ctx: Context) = p(ctx).getInt("time", 23 * 60 + 30)
+    fun time(ctx: Context) = p(ctx).getInt("time", 23 * 60)
+    /** From the report time on (11 PM), until midnight. */
+    fun ready(ctx: Context) = enabled(ctx) && java.time.LocalTime.now().let { it.hour * 60 + it.minute } >= time(ctx)
     fun setTime(ctx: Context, m: Int) = p(ctx).edit().putInt("time", m).putString("sent", "").apply()
 
     private const val GREEN = 0xFF5FD38D.toInt(); private const val YELLOW = 0xFFF2C94C.toInt(); private const val RED = 0xFFFF8A80.toInt(); private const val GREY = 0xFF9AA5A0.toInt()

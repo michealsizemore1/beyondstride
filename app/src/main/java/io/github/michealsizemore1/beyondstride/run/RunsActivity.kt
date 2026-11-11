@@ -288,8 +288,8 @@ open class RunsActivity : Activity() {
         try { col.addView(bodyBatteryCard()) } catch (e: Exception) { }
         if (System.currentTimeMillis() - DayStress.lastRead(this) > 15 * 60_000L) { val app = applicationContext
             Thread { try { DayStress.sync(app) } catch (e: Exception) { }; runOnUiThread { if (!isFinishing && System.currentTimeMillis() - DayStress.lastRead(app) < 60_000L) render() } }.start() }
-        // 🌙 Evening report (from 8 pm).
-        if (java.time.LocalTime.now().hour >= 20 && EveningReport.enabled(this)) col.addView(RunUi.card(this).apply {
+        // 🌙 Evening report (from 11 pm).
+        if (EveningReport.ready(this)) col.addView(RunUi.card(this).apply {
             background = RunUi.rounded(0xFF26264A.toInt(), dp(14).toFloat())
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dp(8) }
             addView(RunUi.text(ctx, "🌙 Evening report ▸", Color.WHITE, 16f, true))

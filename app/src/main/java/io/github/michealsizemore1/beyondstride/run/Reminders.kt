@@ -55,7 +55,9 @@ object Reminders {
     class EveningWork(c: Context, w: WorkerParameters) : Worker(c, w) {
         override fun doWork(): Result { evening(applicationContext); return Result.success() }
     }
-    fun evening(ctx: Context) { try { EveningReport.maybeNotify(ctx) { t, x -> notify(ctx, 961, t, x, EveningReportActivity::class.java) } } catch (e: Exception) { } }
+    fun evening(ctx: Context) { try { EveningReport.maybeNotify(ctx) { t, x -> notify(ctx, 961, t, x, EveningReportActivity::class.java)
+        // The watch gets the report too.
+        try { ActivityStore.watchSummary(ctx)?.let { io.github.michealsizemore1.beyondstride.NutritionStore.setActs(ctx, it) } } catch (e: Exception) { } } } catch (e: Exception) { } }
 
     class Work(c: Context, w: WorkerParameters) : Worker(c, w) {
         override fun doWork(): Result { try { check(applicationContext) } catch (e: Exception) { }; return Result.success() }
