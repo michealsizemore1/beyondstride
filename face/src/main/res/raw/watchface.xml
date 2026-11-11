@@ -5,12 +5,11 @@
   <Metadata key="PREVIEW_TIME" value="10:08:32"/>
   <Scene backgroundColor="#FF000000">
     <PartText x="110" y="26" width="230" height="34"><Text align="CENTER" ellipsis="TRUE"><Font family="SYNC_TO_DEVICE" size="26" color="#FFC6F432" weight="BOLD"><Template>%s %s    BAT %s<Parameter expression="[DAY_OF_WEEK_S]"/><Parameter expression="[DAY]"/><Parameter expression="[BATTERY_PERCENT]"/></Template></Font></Text></PartText>
-    <DigitalClock x="35" y="166" width="380" height="100">
+    <DigitalClock x="35" y="179" width="380" height="100">
       <TimeText format="hh:mm" hourFormat="SYNC_TO_DEVICE" align="CENTER" x="0" y="0" width="380" height="100">
         <Font family="SYNC_TO_DEVICE" size="96" color="#FFFFFFFF" weight="BOLD"></Font>
       </TimeText>
     </DigitalClock>
-    <PartText x="60" y="262" width="330" height="34"><Text align="CENTER" ellipsis="TRUE"><Font family="SYNC_TO_DEVICE" size="26" color="#FFFFFFFF" weight="BOLD"><Template>%s bpm    %s steps<Parameter expression="[HEART_RATE]"/><Parameter expression="[STEP_COUNT]"/></Template></Font></Text></PartText>
     
     <ComplicationSlot slotId="1" x="74" y="70" width="96" height="96" supportedTypes="SHORT_TEXT RANGED_VALUE" isCustomizable="TRUE">
       <DefaultProviderPolicy defaultSystemProvider="WATCH_BATTERY" defaultSystemProviderType="SHORT_TEXT" primaryProvider="io.github.michealsizemore1.beyondstride/io.github.michealsizemore1.beyondstride.run.WeatherComplication" primaryProviderType="SHORT_TEXT"/>
@@ -32,16 +31,15 @@
         </PartDraw><PartText x="2" y="18" width="92" height="32"><Text align="CENTER" ellipsis="TRUE"><Font family="SYNC_TO_DEVICE" size="26" color="#FFFFFFFF" weight="BOLD"><Template>%s<Parameter expression="[COMPLICATION.TEXT]"/></Template></Font></Text></PartText><PartText x="2" y="50" width="92" height="32"><Text align="CENTER" ellipsis="TRUE"><Font family="SYNC_TO_DEVICE" size="26" color="#FF2ECC71" weight="BOLD"><Template>%s<Parameter expression="[COMPLICATION.TITLE]"/></Template></Font></Text></PartText></Complication><Complication type="SHORT_TEXT">
         <PartDraw x="0" y="0" width="96" height="96"><Ellipse x="4" y="4" width="88" height="88"><Stroke color="#FF2ECC71" thickness="4"/></Ellipse></PartDraw><PartText x="2" y="18" width="92" height="32"><Text align="CENTER" ellipsis="TRUE"><Font family="SYNC_TO_DEVICE" size="26" color="#FFFFFFFF" weight="BOLD"><Template>%s<Parameter expression="[COMPLICATION.TEXT]"/></Template></Font></Text></PartText><PartText x="2" y="50" width="92" height="32"><Text align="CENTER" ellipsis="TRUE"><Font family="SYNC_TO_DEVICE" size="26" color="#FF2ECC71" weight="BOLD"><Template>%s<Parameter expression="[COMPLICATION.TITLE]"/></Template></Font></Text></PartText></Complication>
     </ComplicationSlot>
-    <ComplicationSlot slotId="3" x="280" y="70" width="96" height="96" supportedTypes="RANGED_VALUE SHORT_TEXT" isCustomizable="TRUE">
-      <DefaultProviderPolicy defaultSystemProvider="STEP_COUNT" defaultSystemProviderType="RANGED_VALUE" primaryProvider="io.github.michealsizemore1.beyondstride/io.github.michealsizemore1.beyondstride.run.ReadinessComplication" primaryProviderType="RANGED_VALUE"/>
-      <BoundingOval x="0" y="0" width="96" height="96"/><Complication type="RANGED_VALUE">
-        <PartDraw x="0" y="0" width="96" height="96">
-          <Arc centerX="48.0" centerY="48.0" width="88" height="88" startAngle="-140" endAngle="140"><Stroke color="#40FFFFFF" thickness="7" cap="ROUND"/></Arc>
-          <Arc centerX="48.0" centerY="48.0" width="88" height="88" startAngle="-140" endAngle="140"><Stroke color="#FFC6F432" thickness="7" cap="ROUND"/>
-            <Transform target="endAngle" value="-140 + 280 * clamp((([COMPLICATION.RANGED_VALUE_VALUE] - [COMPLICATION.RANGED_VALUE_MIN]) / ([COMPLICATION.RANGED_VALUE_MAX] - [COMPLICATION.RANGED_VALUE_MIN])), 0, 1)"/></Arc>
-        </PartDraw><PartText x="2" y="18" width="92" height="32"><Text align="CENTER" ellipsis="TRUE"><Font family="SYNC_TO_DEVICE" size="26" color="#FFFFFFFF" weight="BOLD"><Template>%s<Parameter expression="[COMPLICATION.TEXT]"/></Template></Font></Text></PartText><PartText x="2" y="50" width="92" height="32"><Text align="CENTER" ellipsis="TRUE"><Font family="SYNC_TO_DEVICE" size="26" color="#FFC6F432" weight="BOLD"><Template>%s<Parameter expression="[COMPLICATION.TITLE]"/></Template></Font></Text></PartText></Complication><Complication type="SHORT_TEXT">
-        <PartDraw x="0" y="0" width="96" height="96"><Ellipse x="4" y="4" width="88" height="88"><Stroke color="#FFC6F432" thickness="4"/></Ellipse></PartDraw><PartText x="2" y="18" width="92" height="32"><Text align="CENTER" ellipsis="TRUE"><Font family="SYNC_TO_DEVICE" size="26" color="#FFFFFFFF" weight="BOLD"><Template>%s<Parameter expression="[COMPLICATION.TEXT]"/></Template></Font></Text></PartText><PartText x="2" y="50" width="92" height="32"><Text align="CENTER" ellipsis="TRUE"><Font family="SYNC_TO_DEVICE" size="26" color="#FFC6F432" weight="BOLD"><Template>%s<Parameter expression="[COMPLICATION.TITLE]"/></Template></Font></Text></PartText></Complication>
-    </ComplicationSlot>
+    <Group name="steps" x="280" y="70" width="96" height="96">
+      <PartDraw x="0" y="0" width="96" height="96">
+        <Arc centerX="48.0" centerY="48.0" width="88" height="88" startAngle="-140" endAngle="140"><Stroke color="#40FFFFFF" thickness="7" cap="ROUND"/></Arc>
+        <Arc centerX="48.0" centerY="48.0" width="88" height="88" startAngle="-140" endAngle="140"><Stroke color="#FFC6F432" thickness="7" cap="ROUND"/>
+          <Transform target="endAngle" value="-140 + 280 * clamp([STEP_PERCENT] / 100, 0, 1)"/></Arc>
+      </PartDraw>
+      <PartText x="2" y="18" width="92" height="32"><Text align="CENTER" ellipsis="TRUE"><Font family="SYNC_TO_DEVICE" size="26" color="#FFFFFFFF" weight="BOLD"><Template>%s<Parameter expression="[STEP_COUNT]"/></Template></Font></Text></PartText>
+      <PartText x="2" y="50" width="92" height="32"><Text align="CENTER"><Font family="SYNC_TO_DEVICE" size="26" color="#FFC6F432" weight="BOLD">steps</Font></Text></PartText>
+    </Group>
     <ComplicationSlot slotId="4" x="74" y="292" width="96" height="96" supportedTypes="RANGED_VALUE SHORT_TEXT" isCustomizable="TRUE">
       <DefaultProviderPolicy defaultSystemProvider="STEP_COUNT" defaultSystemProviderType="SHORT_TEXT" primaryProvider="io.github.michealsizemore1.beyondstride/io.github.michealsizemore1.beyondstride.run.ProteinComplication" primaryProviderType="RANGED_VALUE"/>
       <BoundingOval x="0" y="0" width="96" height="96"/><Complication type="RANGED_VALUE">
