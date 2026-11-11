@@ -58,6 +58,12 @@ object FaceData {
     fun protein(ctx: Context): V? = today(ctx)?.let { d ->
         val t = acts(ctx)?.optJSONObject("face")?.optInt("protTarget", 0) ?: 0
         V("${Math.round(d.prot)}g", "prot", d.prot.toFloat(), if (t > 0) t.toFloat() else 150f, desc = "Protein ${Math.round(d.prot)} grams") }
+    fun carbs(ctx: Context): V? = today(ctx)?.let { d ->
+        val t = acts(ctx)?.optJSONObject("face")?.optInt("carbTarget", 0) ?: 0
+        V("${Math.round(d.carbs)}g", "carbs", d.carbs.toFloat(), if (t > 0) t.toFloat() else 400f, desc = "Carbs ${Math.round(d.carbs)} grams") }
+    fun fat(ctx: Context): V? = today(ctx)?.let { d ->
+        val t = acts(ctx)?.optJSONObject("face")?.optInt("fatTarget", 0) ?: 0
+        V("${Math.round(d.fat)}g", "fat", d.fat.toFloat(), if (t > 0) t.toFloat() else 90f, desc = "Fat ${Math.round(d.fat)} grams") }
     fun fluids(ctx: Context): V? {
         val d = today(ctx); val t = acts(ctx)?.optJSONObject("face")?.optInt("fluidTarget", 0) ?: 0
         val oz = d?.waterOz ?: 0
@@ -79,7 +85,7 @@ object FaceData {
     private fun trim(d: Double) = if (d == Math.floor(d)) d.toInt().toString() else String.format(Locale.US, "%.1f", d)
 
     val SERVICES = listOf(BatteryComplication::class.java, WeatherComplication::class.java, CaloriesComplication::class.java, ProteinComplication::class.java,
-        FluidsComplication::class.java, ReadinessComplication::class.java, WorkoutComplication::class.java, WeekMilesComplication::class.java)
+        FluidsComplication::class.java, CarbsComplication::class.java, FatComplication::class.java, ReadinessComplication::class.java, WorkoutComplication::class.java, WeekMilesComplication::class.java)
     /** New data from the phone: every face showing these refreshes. */
     fun refresh(ctx: Context) = SERVICES.forEach { c -> try { ComplicationDataSourceUpdateRequester.create(ctx, ComponentName(ctx, c)).requestUpdateAll() } catch (e: Exception) { } }
 }
@@ -100,3 +106,5 @@ class FluidsComplication : FaceComplication() { override fun value(ctx: Context)
 class ReadinessComplication : FaceComplication() { override fun value(ctx: Context) = FaceData.readiness(ctx); override val sample = FaceData.V("80", "ready", 80f) }
 class WorkoutComplication : FaceComplication() { override fun value(ctx: Context) = FaceData.workout(ctx); override val sample = FaceData.V("5mi", "today", long = "Easy Run 5 mi") }
 class WeekMilesComplication : FaceComplication() { override fun value(ctx: Context) = FaceData.weekMiles(ctx); override val sample = FaceData.V("12", "wk mi", 12f, 40f) }
+class CarbsComplication : FaceComplication() { override fun value(ctx: Context) = FaceData.carbs(ctx); override val sample = FaceData.V("250g", "carbs", 250f, 400f) }
+class FatComplication : FaceComplication() { override fun value(ctx: Context) = FaceData.fat(ctx); override val sample = FaceData.V("60g", "fat", 60f, 90f) }

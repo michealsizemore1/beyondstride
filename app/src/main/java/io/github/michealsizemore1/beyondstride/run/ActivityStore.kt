@@ -185,7 +185,9 @@ object ActivityStore {
                 face.put("workout", (Insights.headLine(t) ?: t.lines().first()).trim().substringAfter(": ").replace("**", "").take(40)) }
             face.put("planMi", Insights.plannedMiles(Insights.planText(ctx, today.toString())))
             face.put("fluidTarget", Insights.drinkTarget(ctx, today.toString()).total)
-            NutriDay.day(ctx, today.toString())?.let { nd -> if (nd.target > 0 && nd.mtProt > 0) face.put("protTarget", Math.round(nd.target * nd.mtProt / 100.0 / 4)) }
+            NutriDay.day(ctx, today.toString())?.let { nd -> if (nd.target > 0 && nd.mtProt > 0) face.put("protTarget", Math.round(nd.target * nd.mtProt / 100.0 / 4))
+                if (nd.target > 0 && nd.mtCarbs > 0) face.put("carbTarget", Math.round(nd.target * nd.mtCarbs / 100.0 / 4))
+                if (nd.target > 0 && nd.mtFat > 0) face.put("fatTarget", Math.round(nd.target * nd.mtFat / 100.0 / 9)) }
             o.put("face", face)
         } catch (e: Exception) { }
         // Same as the phone's Today screen: evening report, Body Battery, weather and My notes.
