@@ -177,6 +177,17 @@ object ActivityStore {
         // Planned vs done, recovery warning, drink target / sweat rate, long-run fueling.
         try { o.put("insights", Insights.watch(ctx)) } catch (e: Exception) { }
         try { o.put("morning", MorningReport.json(MorningReport.build(ctx))) } catch (e: Exception) { }
+        // For the watch face: readiness, today's workout and targets.
+        try {
+            val face = JSONObject().put("date", today.toString())
+            Insights.readiness(ctx)?.let { face.put("ready", it.score).put("readyLabel", it.label) }
+            Insights.planText(ctx, today.toString()).takeIf { it.isNotBlank() }?.let { t ->
+                face.put("workout", (Insights.headLine(t) ?: t.lines().first()).trim().substringAfter(": ").replace("**", "").take(40)) }
+            face.put("planMi", Insights.plannedMiles(Insights.planText(ctx, today.toString())))
+            face.put("fluidTarget", Insights.drinkTarget(ctx, today.toString()).total)
+            NutriDay.day(ctx, today.toString())?.let { nd -> if (nd.target > 0 && nd.mtProt > 0) face.put("protTarget", Math.round(nd.target * nd.mtProt / 100.0 / 4)) }
+            o.put("face", face)
+        } catch (e: Exception) { }
         // Same as the phone's Today screen: evening report, Body Battery, weather and My notes.
         try { if (EveningReport.ready(ctx)) o.put("evening", MorningReport.json(EveningReport.build(ctx))) } catch (e: Exception) { }
         try { val b = BodyBattery.today(ctx)

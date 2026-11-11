@@ -86,7 +86,7 @@ object RunSync {
                 io.github.michealsizemore1.beyondstride.Courses.pullAll(app, "watch")
                 try {
                     val nr = com.google.android.gms.tasks.Tasks.await(dc.getDataItems(Uri.parse("wear://*" + io.github.michealsizemore1.beyondstride.NutritionStore.PATH)))
-                    nr.map { DataMapItem.fromDataItem(it).dataMap }.maxByOrNull { it.getLong("at") }?.let { io.github.michealsizemore1.beyondstride.NutritionStore.apply(app, it) }
+                    nr.map { DataMapItem.fromDataItem(it).dataMap }.maxByOrNull { it.getLong("at") }?.let { io.github.michealsizemore1.beyondstride.NutritionStore.apply(app, it); FaceData.refresh(app) }
                     nr.release()
                     val lr = com.google.android.gms.tasks.Tasks.await(dc.getDataItems(Uri.parse("wear://*" + io.github.michealsizemore1.beyondstride.NutritionStore.LIB_PATH)))
                     lr.map { DataMapItem.fromDataItem(it).dataMap }.maxByOrNull { it.getLong("at") }?.let { io.github.michealsizemore1.beyondstride.NutritionStore.applyLibrary(app, it) }
@@ -222,6 +222,7 @@ class RunSettingsListener : WearableListenerService() {
             // Nutrition totals from the phone (Command Center).
             if (e.type == DataEvent.TYPE_CHANGED && e.dataItem.uri.path == io.github.michealsizemore1.beyondstride.NutritionStore.PATH) {
                 io.github.michealsizemore1.beyondstride.NutritionStore.apply(this, DataMapItem.fromDataItem(e.dataItem).dataMap)
+                FaceData.refresh(this)
                 return@forEach
             }
             if (e.type == DataEvent.TYPE_CHANGED && e.dataItem.uri.path == "/aifood") {

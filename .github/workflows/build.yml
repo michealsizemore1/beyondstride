@@ -24,7 +24,7 @@ jobs:
           gradle-version: "8.11.1"
 
       - name: Build APK
-        run: gradle :app:assembleDebug :wear:assembleDebug --no-daemon
+        run: gradle :app:assembleDebug :wear:assembleDebug :face:assembleDebug --no-daemon
 
       - name: Unit tests
         run: gradle :app:testDebugUnitTest --no-daemon
@@ -34,6 +34,7 @@ jobs:
         run: |
           cp app/build/outputs/apk/debug/app-debug.apk BeyondStride-PHONE.apk
           cp wear/build/outputs/apk/debug/wear-debug.apk BeyondStride-WATCH.apk
+          cp face/build/outputs/apk/debug/face-debug.apk BeyondStride-FACE.apk
 
       # Publishes the APK as a GitHub Release so you can download it straight from your phone
       - uses: softprops/action-gh-release@v2
@@ -43,4 +44,5 @@ jobs:
           files: |
             BeyondStride-PHONE.apk
             BeyondStride-WATCH.apk
+            BeyondStride-FACE.apk
           make_latest: true

@@ -8,3 +8,4 @@ dependencyResolutionManagement {
 rootProject.name = "BeyondStride"
 include(":app")
 include(":wear")
+include(":face")
