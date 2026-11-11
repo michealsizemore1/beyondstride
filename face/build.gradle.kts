@@ -23,8 +23,10 @@ android {
             keyPassword = "top25widget"
         }
     }
+    // No code at all in a Watch Face Format APK.
+    buildFeatures { buildConfig = false }
     buildTypes {
         debug { signingConfig = signingConfigs.getByName("fixed") }
-        release { isMinifyEnabled = false; signingConfig = signingConfigs.getByName("fixed") }
+        release { isMinifyEnabled = true; isShrinkResources = false; signingConfig = signingConfigs.getByName("fixed") }
     }
 }
