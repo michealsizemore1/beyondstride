@@ -196,11 +196,16 @@ class CoachActivity : Activity() {
         AlertDialog.Builder(this).setTitle("⛽ Fuel AI").setView(box)
             .setPositiveButton("Analyze") { _, _ ->
                 val q = "⛽ Fuel check: food on ${label(nutrDate)} → run on ${label(runDate)}" + ex.text.toString().trim().let { if (it.isNotEmpty()) " ($it)" else "" }
-                send(q, CoachAi.fuelBlock(ctx, nutrDate, runDate, ex.text.toString().trim()))
+                val rd = runDate; val nd = nutrDate
+                send(q, CoachAi.fuelBlock(ctx, nutrDate, runDate, ex.text.toString().trim())) { ans ->
+                    // Saved onto the run so it shows in Activities.
+                    val t = try { CoachAi.attachFuel(applicationContext, rd, nd, ans) } catch (e: Exception) { null }
+                    runOnUiThread { Toast.makeText(ctx, if (t != null) "⛽ Saved to \"$t\" in Activities" else "No run on that day to save it to", Toast.LENGTH_LONG).show() }
+                }
             }.setNegativeButton("Cancel", null).show()
     }
 
-    private fun send(q0: String, hidden: String? = null) {
+    private fun send(q0: String, hidden: String? = null, onAnswer: ((String) -> Unit)? = null) {
         val photo = attached
         val q = q0.trim().ifEmpty { if (photo != null) "What does this show? Analyze it alongside my data." else "" }; if (q.isEmpty() || busy) return
         if (!AiFood.hasKey(this)) { Toast.makeText(this, "Add your Anthropic key in Settings → AI food search first.", Toast.LENGTH_LONG).show(); return }
@@ -213,7 +218,7 @@ class CoachActivity : Activity() {
         val app = applicationContext
         Thread {
             val img = photo?.let { b -> try { java.io.File(CoachAi.imageDir(app), "${System.currentTimeMillis()}.jpg").apply { writeBytes(b) }.absolutePath } catch (e: Exception) { null } }
-            val err = try { CoachAi.ask(app, q, hidden, img); null } catch (e: Exception) { e.message ?: "Something went wrong" }
+            val err = try { val ans = CoachAi.ask(app, q, hidden, img); onAnswer?.invoke(ans); null } catch (e: Exception) { e.message ?: "Something went wrong" }
             runOnUiThread {
                 busy = false; pending = null; if (isFinishing) return@runOnUiThread
                 render()

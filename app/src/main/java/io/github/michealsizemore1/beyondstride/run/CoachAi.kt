@@ -213,6 +213,13 @@ ${context(ctx, question)}"""
     }
 
     /** Sends the conversation plus the new question; returns the answer. [hidden] = extra facts sent with it but not shown. Call off the main thread. */
+    /** Saves a Fuel AI answer onto the run (the longest one that day) so it shows in Activities. Returns the run's title, or null if there was no run. */
+    fun attachFuel(ctx: Context, runDate: String, nutrDate: String, text: String): String? {
+        val run = runs(ctx).filter { S.str(it, "date").take(10) == runDate }.maxByOrNull { S.num(it, "distance") } ?: return null
+        S.save(ctx, JSONObject().put("id", run.get("id")).put("fuelAi", text.take(6000)).put("fuelAiDay", nutrDate).put("fuelAiAt", System.currentTimeMillis()))
+        return S.str(run, "title").ifEmpty { "your run" }
+    }
+
     /** A photo you attached, as an image block for the AI (null if the file is gone). */
     private fun imageBlock(path: String): JSONObject? = try {
         val f = java.io.File(path); if (!f.exists()) null

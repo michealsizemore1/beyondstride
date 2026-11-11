@@ -367,6 +367,20 @@ class ActivitiesActivity : Activity() {
             body.addView(txt("Notes", 0xFF94A3B8.toInt(), 12f, true).apply { setPadding(0, dp(8), 0, 0) })
             body.addView(txt(n, RunUi.MUTED, 13f))
         }
+        // ⛽ Fuel AI analysis saved from Coach AI.
+        S.str(a, "fuelAi").takeIf { it.isNotEmpty() }?.let { f ->
+            val day = S.str(a, "fuelAiDay").let { d -> try { java.time.LocalDate.parse(d).format(java.time.format.DateTimeFormatter.ofPattern("EEE M/d", Locale.US)) } catch (e: Exception) { "" } }
+            val plain = f.replace(Regex("\\*\\*|^#+\\s*", RegexOption.MULTILINE), "")
+            body.addView(LinearLayout(ctx).apply {
+                orientation = LinearLayout.VERTICAL; background = RunUi.rounded(0xFF2E1F40.toInt(), dp(7).toFloat()); setPadding(dp(10), dp(8), dp(10), dp(8))
+                layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(8) }
+                addView(txt("⛽ Fuel AI" + (if (day.isNotEmpty()) " · food on $day" else "") + "  ▸", 0xFFC39BD3.toInt(), 12f, true))
+                addView(txt(plain.lines().filter { it.isNotBlank() }.take(4).joinToString("\n"), RunUi.MUTED, 13f).apply { maxLines = 4; ellipsize = android.text.TextUtils.TruncateAt.END })
+                setOnClickListener { android.app.AlertDialog.Builder(ctx).setTitle("⛽ Fuel AI" + if (day.isNotEmpty()) " · food on $day" else "")
+                    .setMessage(plain).setPositiveButton("OK", null)
+                    .setNeutralButton("Remove") { _, _ -> S.save(ctx, JSONObject().put("id", a.get("id")), listOf("fuelAi", "fuelAiDay", "fuelAiAt")); render() }.show() }
+            })
+        }
         S.str(a, "injuryReport").takeIf { it.isNotEmpty() }?.let { n ->
             body.addView(LinearLayout(ctx).apply {
                 orientation = LinearLayout.VERTICAL; background = RunUi.rounded(0xFF3A1E1E.toInt(), dp(7).toFloat()); setPadding(dp(10), dp(8), dp(10), dp(8))
