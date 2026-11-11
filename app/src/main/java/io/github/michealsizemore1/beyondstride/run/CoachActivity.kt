@@ -203,7 +203,7 @@ class CoachActivity : Activity() {
                 if (after != null) { val sel = CoachAi.scopes(this); sel.add("runs"); CoachAi.setScopes(this, sel); after() } }
             .setNeutralButton("Last 2") { _, _ -> CoachAi.setRunIds(this, emptyList()); render()
                 if (after != null) { val sel = CoachAi.scopes(this); sel.add("runs"); CoachAi.setScopes(this, sel); after() } }
-            .setNegativeButton("Cancel") { _, _ -> render() }.show()
+            .setNegativeButton("Cancel") { _, _ -> askedPick = false; render() }.setOnCancelListener { askedPick = false }.show()
     }
 
     private fun chip(t: String, on: Boolean, click: () -> Unit) = TextView(this).apply {
