@@ -25,6 +25,7 @@ class CoachActivity : Activity() {
     private lateinit var input: EditText
     private var busy = false
     private var pending: String? = null
+    private var askedPick = false
     private fun dp(v: Int) = RunUi.dp(this, v)
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -106,7 +107,7 @@ class CoachActivity : Activity() {
             CoachAi.QUICK.forEach { q -> col.addView(RunUi.text(this, q, Color.WHITE, 13f).apply {
                 background = RunUi.rounded(0xFF1E2A26.toInt(), dp(12).toFloat()); setPadding(dp(12), dp(9), dp(12), dp(9))
                 layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(6) }
-                setOnClickListener { send(q) } }) }
+                setOnClickListener { if (q.contains("runs I picked")) pickRuns { send(q) } else send(q) } }) }
         } else {
             col.addView(View(this), LinearLayout.LayoutParams(1, dp(8)))
             for (i in 0 until chat.length()) bubble(chat.getJSONObject(i))
@@ -170,6 +171,10 @@ class CoachActivity : Activity() {
     private fun send(q0: String, hidden: String? = null) {
         val q = q0.trim(); if (q.isEmpty() || busy) return
         if (!AiFood.hasKey(this)) { Toast.makeText(this, "Add your Anthropic key in Settings → AI food search first.", Toast.LENGTH_LONG).show(); return }
+        if (hidden == null && Regex("\\bcompar", RegexOption.IGNORE_CASE).containsMatchIn(q) && Regex("\\bruns?\\b", RegexOption.IGNORE_CASE).containsMatchIn(q) && !askedPick) {
+            askedPick = true; input.setText(""); pickRuns { send(q, null) }; return
+        }
+        askedPick = false
         busy = true; pending = q; input.setText("")
         render()
         val app = applicationContext
@@ -183,15 +188,21 @@ class CoachActivity : Activity() {
         }.start()
     }
 
-    private fun pickRuns() {
+    /** [after] runs once runs are chosen (used by "Compare the runs I picked"). */
+    private fun pickRuns(after: (() -> Unit)? = null) {
         val all = CoachAi.runs(this).take(80)
         if (all.isEmpty()) { Toast.makeText(this, "No runs yet.", Toast.LENGTH_SHORT).show(); render(); return }
         val ids = CoachAi.runIds(this).toMutableSet()
         val checked = BooleanArray(all.size) { CoachAi.id(all[it]) in ids }
-        AlertDialog.Builder(this).setTitle("Pick runs to analyze")
+        AlertDialog.Builder(this).setTitle(if (after != null) "Which runs should I compare?" else "Pick runs to analyze")
             .setMultiChoiceItems(all.map { CoachAi.runLabel(it) }.toTypedArray(), checked) { _, i, on -> checked[i] = on }
-            .setPositiveButton("Use these") { _, _ -> CoachAi.setRunIds(this, all.filterIndexed { i, _ -> checked[i] }.map { CoachAi.id(it) }.take(12)); render() }
-            .setNeutralButton("Last 2") { _, _ -> CoachAi.setRunIds(this, emptyList()); render() }
+            .setPositiveButton(if (after != null) "Compare these" else "Use these") { _, _ ->
+                val pick = all.filterIndexed { i, _ -> checked[i] }.map { CoachAi.id(it) }.take(12)
+                if (after != null && pick.size < 2) { Toast.makeText(this, "Pick at least 2 runs to compare.", Toast.LENGTH_SHORT).show(); pickRuns(after); return@setPositiveButton }
+                CoachAi.setRunIds(this, pick); render()
+                if (after != null) { val sel = CoachAi.scopes(this); sel.add("runs"); CoachAi.setScopes(this, sel); after() } }
+            .setNeutralButton("Last 2") { _, _ -> CoachAi.setRunIds(this, emptyList()); render()
+                if (after != null) { val sel = CoachAi.scopes(this); sel.add("runs"); CoachAi.setScopes(this, sel); after() } }
             .setNegativeButton("Cancel") { _, _ -> render() }.show()
     }
 
