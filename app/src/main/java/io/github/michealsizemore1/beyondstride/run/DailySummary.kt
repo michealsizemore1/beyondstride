@@ -84,7 +84,7 @@ object DailySummary {
         if (!Standalone.on(ctx) || !NutritionSync.ready(ctx)) return
         val pr = p(ctx); val now = System.currentTimeMillis()
         // Day summaries every 10 minutes; activities and plan days whenever they change.
-        val days = force || now - pr.getLong("at", 0L) >= 10 * 60_000L
+        val days = force || !pr.getBoolean("back35s", false) || now - pr.getLong("at", 0L) >= 10 * 60_000L
         if (days) pr.edit().putLong("at", now).apply()
         val base = Live.db(ctx) + "/nutrition/" + NutritionSync.key(ctx) + "/beyondstride/daily/"
         // The first time: the last 2 weeks, so this week's review has every day.
