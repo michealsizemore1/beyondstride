@@ -30,6 +30,9 @@ object FaceData {
     fun today(ctx: Context) = NutritionStore.days(ctx).lastOrNull { it.date == java.time.LocalDate.now().toString() }
     private fun todayKey() = java.time.LocalDate.now().toString()
 
+    // The face can't color emoji, so a status dot rides in the ring's minimum (a tiny, invisible offset) and the face draws it.
+    const val GREEN = -0.01f; const val ORANGE = -0.02f; const val RED = -0.03f
+
     /** One value: short text, optional title, and a range for the ring. */
     data class V(val text: String, val title: String = "", val value: Float? = null, val max: Float = 100f, val long: String? = null, val desc: String = "", val min: Float = 0f)
 
@@ -62,15 +65,15 @@ object FaceData {
     private fun macro(ctx: Context, name: String, label: String, grams: (io.github.michealsizemore1.beyondstride.Nutrition.Day) -> Double): V? = today(ctx)?.let { d ->
         val tile = d.macroTiles()?.firstOrNull { it.name == name }
         val kcal = d.prot * 4 + d.carbs * 4 + d.fat * 9
-        if (kcal <= 0) return@let V("--", label, 0f, 100f, desc = "$name: nothing logged yet", min = -0.03f)
+        if (kcal <= 0) return@let V("--", label, 0f, 100f, desc = "$name: nothing logged yet")
         val pct = tile?.actual ?: (grams(d) * (if (name == "Fat") 9 else 4) / kcal * 100)
         val goal = tile?.goal ?: 0
         val diff = Math.abs(pct - goal)
-        // The face can't color emoji, so the status rides in the ring's minimum (a tiny, invisible offset) and the face draws the dot:
-        // 0 = green, -0.01 = orange, -0.02 = red, -0.03 = no goal.
-        val status = if (goal <= 0) -0.03f else if (diff <= 3) 0f else if (diff <= 8) -0.01f else -0.02f
+        // Status dot for the face:
+        // -0.01 = green, -0.02 = orange, -0.03 = red, 0 = no dot (no goal).
+        val status = if (goal <= 0) 0f else if (diff <= 3) GREEN else if (diff <= 8) ORANGE else RED
         V("${Math.round(pct)}%", label, pct.toFloat(), if (goal > 0) goal.toFloat() else 100f,
-            desc = "$name ${Math.round(pct)} percent of calories" + (if (goal > 0) ", goal $goal percent" else "") + when (status) { 0f -> ", on target"; -0.01f -> ", a little off"; -0.02f -> ", off target"; else -> "" }, min = status)
+            desc = "$name ${Math.round(pct)} percent of calories" + (if (goal > 0) ", goal $goal percent" else "") + when (status) { GREEN -> ", on target"; ORANGE -> ", a little off"; RED -> ", off target"; else -> "" }, min = status)
     }
     fun protein(ctx: Context): V? = macro(ctx, "Protein", "prot") { it.prot }
     fun carbs(ctx: Context): V? = macro(ctx, "Carbs", "carbs") { it.carbs }
@@ -78,7 +81,10 @@ object FaceData {
     fun fluids(ctx: Context): V? {
         val d = today(ctx); val t = acts(ctx)?.optJSONObject("face")?.optInt("fluidTarget", 0) ?: 0
         val oz = d?.waterOz ?: 0
-        return V("${oz}oz", "fluid", oz.toFloat(), if (t > 0) t.toFloat() else 100f, desc = "Fluids $oz of $t ounces")
+        // Dot: green 90%+ of today's target, orange 60–89%, red under 60%.
+        val pct = if (t > 0) oz * 100 / t else -1
+        val status = if (pct < 0) 0f else if (pct >= 90) GREEN else if (pct >= 60) ORANGE else RED
+        return V("${oz}oz", "fluid", oz.toFloat(), if (t > 0) t.toFloat() else 100f, desc = "Fluids $oz of $t ounces" + if (pct >= 0) ", $pct percent" else "", min = status)
     }
     fun readiness(ctx: Context): V? = acts(ctx)?.optJSONObject("face")?.takeIf { it.optString("date") == todayKey() && it.has("ready") }?.let {
         V("${it.optInt("ready")}", "ready", it.optInt("ready").toFloat(), desc = "Readiness ${it.optInt("ready")} ${it.optString("readyLabel")}") }
@@ -112,10 +118,10 @@ abstract class FaceComplication : ComplicationDataSourceService() {
 class BatteryComplication : FaceComplication() { override fun value(ctx: Context) = FaceData.battery(ctx); override val sample = FaceData.V("72", "body", 72f) }
 class WeatherComplication : FaceComplication() { override fun value(ctx: Context) = FaceData.weather(ctx); override val sample = FaceData.V("54°", "☀️", long = "☀️ 54° Clear · H 61° L 38°") }
 class CaloriesComplication : FaceComplication() { override fun value(ctx: Context) = FaceData.calories(ctx); override val sample = FaceData.V("1,240", "left", 1800f, 3000f) }
-class ProteinComplication : FaceComplication() { override fun value(ctx: Context) = FaceData.protein(ctx); override val sample = FaceData.V("25%", "prot", 25f, 25f) }
-class FluidsComplication : FaceComplication() { override fun value(ctx: Context) = FaceData.fluids(ctx); override val sample = FaceData.V("64oz", "fluid", 64f, 110f) }
+class ProteinComplication : FaceComplication() { override fun value(ctx: Context) = FaceData.protein(ctx); override val sample = FaceData.V("25%", "prot", 25f, 25f, min = FaceData.GREEN) }
+class FluidsComplication : FaceComplication() { override fun value(ctx: Context) = FaceData.fluids(ctx); override val sample = FaceData.V("64oz", "fluid", 64f, 110f, min = FaceData.ORANGE) }
 class ReadinessComplication : FaceComplication() { override fun value(ctx: Context) = FaceData.readiness(ctx); override val sample = FaceData.V("80", "ready", 80f) }
 class WorkoutComplication : FaceComplication() { override fun value(ctx: Context) = FaceData.workout(ctx); override val sample = FaceData.V("5mi", "today", long = "Easy Run 5 mi") }
 class WeekMilesComplication : FaceComplication() { override fun value(ctx: Context) = FaceData.weekMiles(ctx); override val sample = FaceData.V("12", "wk mi", 12f, 40f) }
-class CarbsComplication : FaceComplication() { override fun value(ctx: Context) = FaceData.carbs(ctx); override val sample = FaceData.V("54%", "carbs", 54f, 60f, min = -0.01f) }
-class FatComplication : FaceComplication() { override fun value(ctx: Context) = FaceData.fat(ctx); override val sample = FaceData.V("27%", "fat", 15f, 15f, min = -0.02f) }
+class CarbsComplication : FaceComplication() { override fun value(ctx: Context) = FaceData.carbs(ctx); override val sample = FaceData.V("54%", "carbs", 54f, 60f, min = FaceData.ORANGE) }
+class FatComplication : FaceComplication() { override fun value(ctx: Context) = FaceData.fat(ctx); override val sample = FaceData.V("27%", "fat", 15f, 15f, min = FaceData.RED) }
