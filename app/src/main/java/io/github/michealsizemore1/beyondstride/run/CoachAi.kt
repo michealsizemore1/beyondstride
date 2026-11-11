@@ -73,9 +73,28 @@ object CoachAi {
         return o
     }
 
-    /** The data you chose, as text for the AI. */
-    fun context(ctx: Context): String {
-        val sc = scopes(ctx); val sb = StringBuilder(); val today = LocalDate.now()
+    /** What a question needs, so it always gets the right data even if a button is off. */
+    fun autoScopes(q: String): Set<String> {
+        val t = q.lowercase(); val out = HashSet<String>()
+        fun has(vararg w: String) = w.any { t.contains(it) }
+        if (has("overtrain", "too much", "fatigue", "tired", "recover", "fitter", "fitness", "improv", "progress", "trend", "on track", "race", "ready", "injur", "load", "mileage", "week"))
+            out += listOf("history", "recovery", "battery", "plan")
+        if (has("sleep", "hrv", "resting", "readiness")) out += "recovery"
+        if (has("food", "eat", "fuel", "nutrition", "calorie", "carb", "protein", "hydrat", "drink", "fluid")) out += "food"
+        if (has("weight", "pounds", " lb")) out += "weight"
+        if (has("weather", "heat", "hot", "humid", "cold", "dew")) out += "weather"
+        if (has("battery", "energy")) out += "battery"
+        if (has("plan", "workout", "tomorrow", "schedule")) out += "plan"
+        if (has("compare", "pace", "heart rate", "harder", "last run", "splits", "cadence", "power", "watts")) out += listOf("runs", "history")
+        return out
+    }
+
+    /** The data you chose (plus what the question needs), as text for the AI. */
+    fun context(ctx: Context, question: String = ""): String {
+        val sc = (scopes(ctx) + autoScopes(question)).toMutableSet()
+        if (sc.isEmpty() || sc == setOf("runs")) sc += listOf("history", "recovery")
+        val sb = StringBuilder(); val today = LocalDate.now()
+        sb.append("Data included: " + SCOPES.filter { it.key in sc }.joinToString(", ") { it.label.drop(2).trim() } + ".\n")
         sb.append("Today is ${today.format(java.time.format.DateTimeFormatter.ofPattern("EEEE, MMMM d, yyyy", Locale.US))}.\n")
         val st = ActivityStore.settings(ctx)
         sb.append("Runner: 53-year-old male distance runner (Boise / Meridian, Idaho, ~2,600 ft). Runs with a Galaxy Watch Ultra 2 and a Polar H10 chest strap; power in watts from the watch.")
@@ -83,7 +102,7 @@ object CoachAi {
         sb.append("\n")
         if ("runs" in sc) {
             val all = runs(ctx); val ids = runIds(ctx)
-            val chosen = if (ids.isEmpty()) all.take(2) else all.filter { id(it) in ids }
+            val chosen = (if (ids.isEmpty()) all.take(2) else all.filter { id(it) in ids }).ifEmpty { all.take(2) }
             sb.append("\n## Selected runs (${chosen.size})\n")
             chosen.sortedBy { S.str(it, "date") }.forEach { sb.append(runJson(it).toString()).append("\n") }
         }
@@ -97,7 +116,7 @@ object CoachAi {
                 Insights.adherence(ctx, today.toString())?.let { sb.append("Planned vs done today: ${it.status}\n") }
             }
         } catch (e: Exception) { }
-        if ("history" in sc) {
+        if ("history" in sc) try {
             sb.append("\n## Weekly mileage (Mon–Sun, newest last)\n")
             val all = runs(ctx); var mon = today.minusDays((today.dayOfWeek.value - 1).toLong()).minusWeeks(15)
             repeat(16) {
@@ -113,8 +132,8 @@ object CoachAi {
                     S.num(a, "heartRate").takeIf { it > 0 }?.let { Math.round(it).toString() } ?: "", S.num(a, "power").takeIf { it > 0 }?.let { Math.round(it).toString() } ?: "",
                     S.str(a, "temp").ifEmpty { S.str(a, "temperature") }).joinToString(" · ")).append("\n")
             }
-        }
-        if ("recovery" in sc) {
+        } catch (e: Exception) { }
+        if ("recovery" in sc) try {
             sb.append("\n## Sleep & morning checks (21 days)\n")
             val from = today.minusDays(21).toString()
             val nights = ReadinessSync.nights(ctx).filter { it.day >= from }.associateBy { it.day }
@@ -126,7 +145,7 @@ object CoachAi {
                     c?.takeIf { it.legs >= 0 }?.let { "legs ${it.legs}/5" }, c?.takeIf { it.sleepFeel >= 0 }?.let { "sleep feel ${it.sleepFeel}/5" }).joinToString(" · ") + "\n")
             }
             Insights.readiness(ctx)?.let { sb.append("Readiness today: ${it.score} (${it.label}) — ${it.advice}\n") }
-        }
+        } catch (e: Exception) { }
         if ("battery" in sc) try {
             val b = BodyBattery.today(ctx)
             sb.append("\n## Body Battery (estimate, 0–100)\nNow ${b.now} (${b.label}); woke at ${b.wake}; ${b.notes.joinToString("; ")}\n")
@@ -154,14 +173,14 @@ object CoachAi {
         return sb.toString()
     }
 
-    fun system(ctx: Context) = """You are Coach AI inside BeyondStride, the runner's personal analyst: an experienced distance-running coach and exercise physiologist.
+    fun system(ctx: Context, question: String = "") = """You are Coach AI inside BeyondStride, the runner's personal analyst: an experienced distance-running coach and exercise physiologist.
 Analyze and compare the data below to answer the runner's questions. Be specific: quote the actual numbers (pace, heart rate, watts, cadence, splits, decoupling, temperature, sleep, HRV, calories) and the dates, and compare them side by side.
 Explain the likely reasons behind differences (heat and dew point, elevation, fatigue from prior days, sleep / HRV, fueling and hydration, pacing, terrain) and say how confident you are.
 Finish with 2–4 clear, practical takeaways. Use only the data given — if something needed isn't there, say what's missing (the runner can add it with the data buttons) instead of guessing.
 Keep it readable on a phone: short sections with bold headings, bullets, no tables, no long preambles.
 
 DATA THE RUNNER CHOSE:
-${context(ctx)}"""
+${context(ctx, question)}"""
 
     /**
      * ⛽ Fuel AI (folded in from the Nutrition screen): how the food on [nutrDate] likely affected the run on [runDate].
@@ -200,7 +219,7 @@ ${context(ctx)}"""
         for (i in from until chat.length()) chat.getJSONObject(i).let { msgs.put(JSONObject().put("role", it.optString("role")).put("content", it.optString("content"))) }
         val full = if (hidden.isNullOrBlank()) question else hidden + "\n\n" + question
         msgs.put(JSONObject().put("role", "user").put("content", full))
-        val answer = AiFood.askChat(ctx, system(ctx), msgs)
+        val answer = AiFood.askChat(ctx, system(ctx, question + " " + (0 until chat.length()).filter { chat.getJSONObject(it).optString("role") == "user" }.takeLast(2).joinToString(" ") { chat.getJSONObject(it).optString("show", chat.getJSONObject(it).optString("content")) }), msgs)
         chat.put(JSONObject().put("role", "user").put("content", full).put("show", question)); chat.put(JSONObject().put("role", "assistant").put("content", answer))
         saveChat(ctx, chat)
         return answer
