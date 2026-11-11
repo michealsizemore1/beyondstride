@@ -27,6 +27,9 @@ object Insights {
     fun plannedMiles(text: String): Double {
         val first = headLine(text) ?: return 0.0
         if (Regex("rest\\s*day|no workout", RegexOption.IGNORE_CASE).containsMatchIn(first)) return 0.0
+        // Same reading as the Workouts list and the watch: warm-up + every repeat + cool-down ("2 × 2 mi" intervals = 6 mi, not 2).
+        try { io.github.michealsizemore1.beyondstride.Workouts.fromPlanText(text)?.let { io.github.michealsizemore1.beyondstride.Workouts.plannedMeters(it) }
+            ?.takeIf { it > 0 }?.let { return Math.round(it / io.github.michealsizemore1.beyondstride.RunMath.METERS_PER_MILE * 10) / 10.0 } } catch (e: Exception) { }
         val body = if (first.contains(":")) first.substringAfter(":") else first
         val units = Regex("(\\d+(?:\\.\\d+)?)\\s*(?:-\\s*\\d+(?:\\.\\d+)?\\s*)?(mi|miles?|E|LR|L|MP|M|T|R|easy|long|recovery|rec|steady|tempo|progression)\\b", RegexOption.IGNORE_CASE)
         val nums = units.findAll(body).mapNotNull { it.groupValues[1].toDoubleOrNull() }.filter { it in 1.0..60.0 }.toList()
