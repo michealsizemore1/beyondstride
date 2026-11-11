@@ -69,6 +69,7 @@ class ActivitiesActivity : Activity() {
         // The Command Center's arrangement: today's workout on top; the active / upcoming plans below the activities.
         planWaiting(col)
         plans.optJSONObject("current")?.let { todayWorkout(col, it, plans.optBoolean("collapsed")) }
+        calendar(col, all, plans)
         mileage(col, all)
         // Collapsible sections, most-used first: how training is going → records / race times → conditions →
         // notes → setup and gear (zones, shoes, plan upload). Each starts closed.
@@ -240,6 +241,89 @@ class ActivitiesActivity : Activity() {
                 acts.forEach { listBox.addView(card(it, null, true)) }
             }
         } else f.take(300).forEach { listBox.addView(card(it, shortDate(S.str(it, "date")), false)) }
+    }
+
+    // ---------------------------------------------------------------- 📅 calendar
+    private var calMonth: java.time.YearMonth = java.time.YearMonth.now()
+
+    private fun planDay(plans: JSONObject, date: String): String = listOf("current", "upcoming").firstNotNullOfOrNull { k ->
+        plans.optJSONObject(k)?.optJSONObject("days")?.optString(date)?.takeIf { it.isNotBlank() } }
+        ?: plans.optJSONArray("archived")?.let { a -> (0 until a.length()).firstNotNullOfOrNull { a.optJSONObject(it)?.optJSONObject("days")?.optString(date)?.takeIf { t -> t.isNotBlank() } } } ?: ""
+
+    /** Month calendar: miles run each day (green = plan met, yellow = short, red = missed), planned miles in grey. Tap a day for its run. */
+    private fun calendar(col: LinearLayout, all: List<JSONObject>, plans: JSONObject) {
+        val ctx = this
+        val byDay = all.filter { S.str(it, "type") != "Rest Day" }.groupBy { S.str(it, "date").take(10) }
+        val today = java.time.LocalDate.now()
+        val first = calMonth.atDay(1)
+        val start = first.minusDays((first.dayOfWeek.value % 7).toLong())   // Sunday first, like the plan weeks
+        val GREEN = 0xFF5FD38D.toInt(); val YELLOW = 0xFFF2C94C.toInt(); val RED = 0xFFFF8A80.toInt()
+        col.addView(RunUi.card(this).apply {
+            layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(14) }
+            // Header: ‹ November 2026 ›
+            addView(LinearLayout(ctx).apply {
+                orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+                addView(txt("‹", RunUi.ACCENT, 26f, true).apply { setPadding(dp(8), 0, dp(14), 0); setOnClickListener { calMonth = calMonth.minusMonths(1); render() } })
+                val mi = byDay.filterKeys { it.startsWith(calMonth.toString()) }.values.flatten().filter { S.isRun(S.str(it, "type").ifEmpty { "run" }) }.sumOf { S.num(it, "distance") }
+                addView(LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_HORIZONTAL
+                    addView(txt("📅 " + calMonth.format(java.time.format.DateTimeFormatter.ofPattern("MMMM yyyy", Locale.US)), Color.WHITE, 17f, true).apply { gravity = Gravity.CENTER })
+                    addView(txt(String.format(Locale.US, "%.1f mi", mi) + if (calMonth != java.time.YearMonth.now()) "  ·  tap for this month" else "", RunUi.MUTED, 11f).apply { gravity = Gravity.CENTER
+                        if (calMonth != java.time.YearMonth.now()) setOnClickListener { calMonth = java.time.YearMonth.now(); render() } })
+                }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
+                addView(txt("›", RunUi.ACCENT, 26f, true).apply { setPadding(dp(14), 0, dp(8), 0); setOnClickListener { calMonth = calMonth.plusMonths(1); render() } })
+            })
+            fun row() = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL }
+            addView(row().apply { setPadding(0, dp(6), 0, dp(2))
+                (listOf("S", "M", "T", "W", "T", "F", "S", "Wk")).forEach { addView(txt(it, RunUi.MUTED, 11f, true).apply { gravity = Gravity.CENTER }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f)) } })
+            var d = start
+            while (d <= calMonth.atEndOfMonth()) {
+                val r = row(); var wk = 0.0
+                for (i in 0 until 7) {
+                    val day = d; val key = day.toString(); val inMonth = day.month == calMonth.month
+                    val acts = byDay[key].orEmpty()
+                    val done = acts.filter { S.isRun(S.str(it, "type").ifEmpty { "run" }) }.sumOf { S.num(it, "distance") }; wk += done
+                    val pt = planDay(plans, key); val planned = if (pt.isNotEmpty()) Insights.plannedMiles(pt) else 0.0
+                    val past = day < today
+                    val (txtMi, c) = when {
+                        done > 0 && planned > 0 -> String.format(Locale.US, "%.1f", done) to (if (done >= planned * 0.9) GREEN else YELLOW)
+                        done > 0 -> String.format(Locale.US, "%.1f", done) to 0xFF7DD3FC.toInt()
+                        acts.isNotEmpty() -> "✓" to 0xFF7DD3FC.toInt()
+                        planned > 0 && past -> "✗" to RED
+                        planned > 0 -> fmtNum(planned) to RunUi.MUTED
+                        else -> "" to RunUi.MUTED
+                    }
+                    r.addView(LinearLayout(ctx).apply {
+                        orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_HORIZONTAL; setPadding(0, dp(5), 0, dp(5))
+                        alpha = if (inMonth) 1f else 0.35f
+                        background = when { day == today -> RunUi.rounded(0xFF3A4A1C.toInt(), dp(8).toFloat()); acts.isNotEmpty() -> RunUi.rounded(0xFF26302C.toInt(), dp(8).toFloat()); else -> null }
+                        addView(txt("${day.dayOfMonth}", if (day == today) RunUi.ACCENT else Color.WHITE, 13f, day == today).apply { gravity = Gravity.CENTER })
+                        addView(txt(txtMi.ifEmpty { " " }, c, 11f, true).apply { gravity = Gravity.CENTER })
+                        if (acts.isNotEmpty() || pt.isNotEmpty()) setOnClickListener { dayPopup(key, acts, pt) }
+                    }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f).apply { setMargins(dp(1), dp(1), dp(1), dp(1)) })
+                    d = d.plusDays(1)
+                }
+                r.addView(txt(if (wk > 0) String.format(Locale.US, "%.1f", wk) else "", 0xFFE67E22.toInt(), 11f, true).apply { gravity = Gravity.CENTER }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f).apply { gravity = Gravity.CENTER_VERTICAL })
+                addView(r)
+            }
+            addView(txt("Miles run: green = plan met · yellow = short · blue = no plan · ✗ missed · grey = planned. Tap a day.", RunUi.DIM, 10f).apply { setPadding(0, dp(6), 0, 0) })
+        })
+    }
+
+    /** The day's run(s) and plan in a pop-up. */
+    private fun dayPopup(date: String, acts: List<JSONObject>, planText: String) {
+        val ctx = this
+        val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(12), dp(4), dp(12), dp(12)) }
+        if (planText.isNotEmpty()) box.addView(RunUi.card(this).apply {
+            addView(txt("📋 Plan", RunUi.ACCENT, 13f, true))
+            addView(txt((Insights.headLine(planText) ?: planText).trim(), Color.WHITE, 14f).apply { setPadding(0, dp(2), 0, 0) })
+            Insights.plannedMiles(planText).takeIf { it > 0 }?.let { addView(txt("${fmtNum(it)} mi planned", RunUi.MUTED, 12f)) }
+            Insights.adherence(ctx, date)?.let { a -> addView(txt(a.status, a.color, 13f, true).apply { setPadding(0, dp(4), 0, 0) }) }
+        })
+        if (acts.isEmpty()) box.addView(txt(if (date < java.time.LocalDate.now().toString()) "No run logged this day." else "Nothing logged yet.", RunUi.MUTED, 14f).apply { setPadding(0, dp(12), 0, 0) })
+        acts.forEach { box.addView(card(it, null, false)) }
+        AlertDialog.Builder(ctx).setTitle("📅 " + longDate(date))
+            .setView(ScrollView(ctx).apply { setBackgroundColor(RunUi.BG); addView(box) })
+            .setPositiveButton("Close", null).show()
     }
 
     private fun shortDate(d: String) = try { java.time.LocalDate.parse(d).format(java.time.format.DateTimeFormatter.ofPattern("EEE, MMM d, yyyy", Locale.US)) } catch (e: Exception) { d }
