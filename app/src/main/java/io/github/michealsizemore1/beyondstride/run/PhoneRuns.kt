@@ -212,6 +212,8 @@ class RunReceiverService : WearableListenerService() {
                     // Straight to the Command Center (through the cloud) — no tap needed.
                     val sent = try { CommandCenter.autoOn(this) && CommandCenter.upload(this, listOf(json.optLong("start"))) > 0 } catch (e: Exception) { false }
                     notifyRun(PhoneRuns.read(this, json.optLong("start")) ?: json, sent)
+                    // ⚖️ Weigh-in reminder a few minutes after the run is logged (if it was today).
+                    try { if (java.time.Instant.ofEpochMilli(json.optLong("start")).atZone(java.time.ZoneId.systemDefault()).toLocalDate() == java.time.LocalDate.now()) Reminders.afterRun(this) } catch (e: Exception) { }
                     // (Automatic Stryd lookups are off: Stryd only has runs after an offline sync, which isn't used.)
                 }
             } catch (e: Exception) { android.util.Log.w("RunReceiver", "run sync failed", e) }

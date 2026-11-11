@@ -58,6 +58,27 @@ object Reminders {
     class EveningWork(c: Context, w: WorkerParameters) : Worker(c, w) {
         override fun doWork(): Result { evening(applicationContext); return Result.success() }
     }
+    // ── ⚖️ Weigh in after a run ──
+    fun weighOn(ctx: Context) = ctx.getSharedPreferences("evening", 0).getBoolean("weighOn", true)
+    fun setWeighOn(ctx: Context, v: Boolean) = ctx.getSharedPreferences("evening", 0).edit().putBoolean("weighOn", v).apply()
+    /** A run just came in: remind to weigh in 5 minutes later (unless a post-run weight is in by then, e.g. from the Withings scale). */
+    fun afterRun(ctx: Context) {
+        if (!weighOn(ctx)) return
+        try { WorkManager.getInstance(ctx).enqueueUniqueWork("weighin", androidx.work.ExistingWorkPolicy.REPLACE,
+            androidx.work.OneTimeWorkRequestBuilder<WeighWork>().setInitialDelay(5, TimeUnit.MINUTES).build()) } catch (e: Exception) { }
+    }
+    class WeighWork(c: Context, w: WorkerParameters) : Worker(c, w) {
+        override fun doWork(): Result { weighCheck(applicationContext); return Result.success() }
+    }
+    fun weighCheck(ctx: Context) {
+        val today = io.github.michealsizemore1.beyondstride.Readiness.today()
+        fun has() = (NutriDay.day(ctx, today)?.postWeight ?: 0.0) > 0
+        if (has()) return
+        try { if (WeightImport.enabled(ctx)) WeightImport.sync(ctx, 1) } catch (e: Exception) { }
+        if (has()) return
+        notify(ctx, 962, "⚖️ Check your weight", "Step on the scale now for your post-run weight — it gives your sweat rate and how much to drink to rehydrate.", io.github.michealsizemore1.beyondstride.run.NutritionActivity::class.java)
+    }
+
     fun evening(ctx: Context) { try { EveningReport.maybeNotify(ctx) { t, x -> notify(ctx, 961, t, x, EveningReportActivity::class.java)
         // The watch gets the report too.
         try { ActivityStore.watchSummary(ctx)?.let { io.github.michealsizemore1.beyondstride.NutritionStore.setActs(ctx, it) } } catch (e: Exception) { } } } catch (e: Exception) { } }
