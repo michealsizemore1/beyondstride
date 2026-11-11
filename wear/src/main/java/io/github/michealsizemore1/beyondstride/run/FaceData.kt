@@ -55,15 +55,24 @@ object FaceData {
             val left = d.target - d.cal
             V(String.format(Locale.US, "%,d", Math.abs(left)), if (left >= 0) "left" else "over", d.cal.toFloat(), d.target.toFloat(), desc = "Calories $left left of ${d.target}")
         } }
-    fun protein(ctx: Context): V? = today(ctx)?.let { d ->
-        val t = acts(ctx)?.optJSONObject("face")?.optInt("protTarget", 0) ?: 0
-        V("${Math.round(d.prot)}g", "prot", d.prot.toFloat(), if (t > 0) t.toFloat() else 150f, desc = "Protein ${Math.round(d.prot)} grams") }
-    fun carbs(ctx: Context): V? = today(ctx)?.let { d ->
-        val t = acts(ctx)?.optJSONObject("face")?.optInt("carbTarget", 0) ?: 0
-        V("${Math.round(d.carbs)}g", "carbs", d.carbs.toFloat(), if (t > 0) t.toFloat() else 400f, desc = "Carbs ${Math.round(d.carbs)} grams") }
-    fun fat(ctx: Context): V? = today(ctx)?.let { d ->
-        val t = acts(ctx)?.optJSONObject("face")?.optInt("fatTarget", 0) ?: 0
-        V("${Math.round(d.fat)}g", "fat", d.fat.toFloat(), if (t > 0) t.toFloat() else 90f, desc = "Fat ${Math.round(d.fat)} grams") }
+    /**
+     * A macro as its share of today's calories vs your ratio goal: "25%", with a dot — 🟢 on target (within 3%),
+     * 🟠 a little off (within 8%), 🔴 well off. The ring fills toward the goal %.
+     */
+    private fun macro(ctx: Context, name: String, label: String, grams: (io.github.michealsizemore1.beyondstride.Nutrition.Day) -> Double): V? = today(ctx)?.let { d ->
+        val tile = d.macroTiles()?.firstOrNull { it.name == name }
+        val kcal = d.prot * 4 + d.carbs * 4 + d.fat * 9
+        if (kcal <= 0) return@let V("--", label, 0f, 100f, desc = "$name: nothing logged yet")
+        val pct = tile?.actual ?: (grams(d) * (if (name == "Fat") 9 else 4) / kcal * 100)
+        val goal = tile?.goal ?: 0
+        val diff = Math.abs(pct - goal)
+        val dot = if (goal <= 0) "" else if (diff <= 3) "🟢" else if (diff <= 8) "🟠" else "🔴"
+        V(dot + "${Math.round(pct)}%", label, pct.toFloat(), if (goal > 0) goal.toFloat() else 100f,
+            desc = "$name ${Math.round(pct)} percent of calories" + if (goal > 0) ", goal $goal percent" else "")
+    }
+    fun protein(ctx: Context): V? = macro(ctx, "Protein", "prot") { it.prot }
+    fun carbs(ctx: Context): V? = macro(ctx, "Carbs", "carbs") { it.carbs }
+    fun fat(ctx: Context): V? = macro(ctx, "Fat", "fat") { it.fat }
     fun fluids(ctx: Context): V? {
         val d = today(ctx); val t = acts(ctx)?.optJSONObject("face")?.optInt("fluidTarget", 0) ?: 0
         val oz = d?.waterOz ?: 0
@@ -101,10 +110,10 @@ abstract class FaceComplication : ComplicationDataSourceService() {
 class BatteryComplication : FaceComplication() { override fun value(ctx: Context) = FaceData.battery(ctx); override val sample = FaceData.V("72", "body", 72f) }
 class WeatherComplication : FaceComplication() { override fun value(ctx: Context) = FaceData.weather(ctx); override val sample = FaceData.V("54°", "☀️", long = "☀️ 54° Clear · H 61° L 38°") }
 class CaloriesComplication : FaceComplication() { override fun value(ctx: Context) = FaceData.calories(ctx); override val sample = FaceData.V("1,240", "left", 1800f, 3000f) }
-class ProteinComplication : FaceComplication() { override fun value(ctx: Context) = FaceData.protein(ctx); override val sample = FaceData.V("92g", "prot", 92f, 150f) }
+class ProteinComplication : FaceComplication() { override fun value(ctx: Context) = FaceData.protein(ctx); override val sample = FaceData.V("🟢25%", "prot", 25f, 25f) }
 class FluidsComplication : FaceComplication() { override fun value(ctx: Context) = FaceData.fluids(ctx); override val sample = FaceData.V("64oz", "fluid", 64f, 110f) }
 class ReadinessComplication : FaceComplication() { override fun value(ctx: Context) = FaceData.readiness(ctx); override val sample = FaceData.V("80", "ready", 80f) }
 class WorkoutComplication : FaceComplication() { override fun value(ctx: Context) = FaceData.workout(ctx); override val sample = FaceData.V("5mi", "today", long = "Easy Run 5 mi") }
 class WeekMilesComplication : FaceComplication() { override fun value(ctx: Context) = FaceData.weekMiles(ctx); override val sample = FaceData.V("12", "wk mi", 12f, 40f) }
-class CarbsComplication : FaceComplication() { override fun value(ctx: Context) = FaceData.carbs(ctx); override val sample = FaceData.V("250g", "carbs", 250f, 400f) }
-class FatComplication : FaceComplication() { override fun value(ctx: Context) = FaceData.fat(ctx); override val sample = FaceData.V("60g", "fat", 60f, 90f) }
+class CarbsComplication : FaceComplication() { override fun value(ctx: Context) = FaceData.carbs(ctx); override val sample = FaceData.V("🟠58%", "carbs", 58f, 60f) }
+class FatComplication : FaceComplication() { override fun value(ctx: Context) = FaceData.fat(ctx); override val sample = FaceData.V("🟢17%", "fat", 17f, 15f) }
