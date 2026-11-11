@@ -75,6 +75,9 @@ class RunActivity : Activity() {
     private val screensListener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
         if (key == "screens" && !savingScreens) runOnUiThread { loadScreens()
             if (overlayOpen && editingScreens >= -1 && editorCol?.isAttachedToWindow == true) { if (editingScreens >= 0 && editingScreens < screens.length()) showScreenEditor(editingScreens) else showScreensEditor() } } }
+    /** New data from the phone (reports, Body Battery, weather…): refresh the start screen if it's showing. */
+    private val phoneDataListener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+        if (key == "acts") runOnUiThread { if (!isFinishing && screen == Screen.START && !showSettings && !overlayOpen && !Run.isActive) { startBuilt = false; render() } } }
     @Volatile private var savingScreens = false
     private var editingScreens = -2
     private var editorCol: View? = null
@@ -102,6 +105,7 @@ class RunActivity : Activity() {
         io.github.michealsizemore1.beyondstride.SettingsSync.watch(this, "run", "watch")
         loadScreens()
         prefs.registerOnSharedPreferenceChangeListener(screensListener)
+        getSharedPreferences("nutrition", 0).registerOnSharedPreferenceChangeListener(phoneDataListener)
         // Keep the screen awake so the app keeps focus — otherwise, once the watch dims, the bottom
         // button goes to the system instead of the app (and closes it).
         if (prefs.getBoolean("keepOn", true)) window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -1128,6 +1132,8 @@ class RunActivity : Activity() {
                     backLink(c) } }
             }
         }
+        // When the phone last sent this (helps tell if the watch is getting updates).
+        acts.optLong("at").takeIf { it > 0 }?.let { at -> col.addView(label("From phone " + java.text.SimpleDateFormat("h:mm a", java.util.Locale.US).format(java.util.Date(at)), C.MUTED, 8f).apply { setPadding(0, dp(6), 0, 0) }) }
         acts.optJSONObject("evening")?.takeIf { it.optString("date") == today && java.time.LocalTime.now().hour >= 17 }?.let { m ->
             card(0xFF26264A.toInt()) { addView(label("🌙 Evening report ▸", Color.WHITE, 12f, true)); addView(label(m.optString("headline"), C.MUTED, 9f))
                 setOnClickListener { showReport("evening", "🌙 Evening", 0xFF26264A.toInt()) } }
