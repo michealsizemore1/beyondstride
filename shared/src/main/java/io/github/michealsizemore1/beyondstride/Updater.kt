@@ -85,6 +85,19 @@ object Updater {
         }.start()
     }
 
+    const val FACE_PKG = "io.github.michealsizemore1.beyondstride.watchface"
+    fun faceInstalled(ctx: Context) = try { ctx.packageManager.getPackageInfo(FACE_PKG, 0); true } catch (e: Exception) { false }
+    /** Downloads the latest BeyondStride watch face (BeyondStride-FACE.apk) and installs it. Returns an error or null. Call off the main thread. */
+    fun installFace(ctx: Context, progress: (Int) -> Unit = {}): String? {
+        val url = try {
+            val c = (URL(API).openConnection() as HttpURLConnection).apply { connectTimeout = 12_000; readTimeout = 15_000
+                setRequestProperty("Accept", "application/vnd.github+json"); setRequestProperty("User-Agent", "BeyondStride-app") }
+            val a = JSONObject(c.inputStream.bufferedReader().readText()).optJSONArray("assets")
+            (0 until (a?.length() ?: 0)).map { a!!.getJSONObject(it) }.firstOrNull { it.optString("name") == "BeyondStride-FACE.apk" }?.optString("browser_download_url")
+        } catch (e: Exception) { null } ?: return "Couldn't find the watch face download — check the watch is online."
+        return install(ctx, Release(0, url, ""), progress, FACE_PKG, 10_000)
+    }
+
     /** Forget the last check so the next [check] asks GitHub right away. */
     fun forceNext(ctx: Context) = p(ctx).edit().putLong("checked", 0).apply()
     fun lastChecked(ctx: Context) = p(ctx).getLong("checked", 0)
@@ -98,7 +111,7 @@ object Updater {
      * Downloads and installs [r]. [progress] gets 0–100; returns an error message or null when handed to Android.
      * Call off the main thread.
      */
-    fun install(ctx: Context, r: Release, progress: (Int) -> Unit = {}): String? {
+    fun install(ctx: Context, r: Release, progress: (Int) -> Unit = {}, pkg: String = ctx.packageName, minBytes: Long = 100_000): String? {
         val file = File(ctx.cacheDir, "update-${r.build}.apk")
         try {
             val c = (URL(r.url).openConnection() as HttpURLConnection).apply {
@@ -110,10 +123,10 @@ object Updater {
                 val buf = ByteArray(64 * 1024); var done = 0L; var n: Int
                 while (ins.read(buf).also { n = it } > 0) { out.write(buf, 0, n); done += n; if (total > 0) progress((done * 100 / total).toInt()) }
             } }
-            if (file.length() < 100_000) return "The download looks incomplete — try again."
+            if (file.length() < minBytes) return "The download looks incomplete — try again."
             val pi = ctx.packageManager.packageInstaller
             val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL).apply {
-                setAppPackageName(ctx.packageName)
+                setAppPackageName(pkg)
                 if (Build.VERSION.SDK_INT >= 31) setRequireUserAction(PackageInstaller.SessionParams.USER_ACTION_NOT_REQUIRED)
             }
             val id = pi.createSession(params)

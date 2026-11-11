@@ -718,6 +718,21 @@ class RunActivity : Activity() {
             }
             col.addView(box)
         }
+        // ⌚ BeyondStride watch face (a separate small app).
+        run {
+            val U = io.github.michealsizemore1.beyondstride.Updater
+            val box = card2()
+            val has = U.faceInstalled(this)
+            val st = label(if (has) "Installed · tap to update. Long-press your watch face → + Add → BeyondStride" else "Downloads and installs it", C.MUTED, 10f)
+            box.addView(label(if (has) "⌚ Watch face ✓" else "⌚ Install watch face", Color.WHITE, 12f, true)); box.addView(st)
+            box.setOnClickListener {
+                if (!U.canInstall(this)) { st.text = "Turn on \"Allow from this source\", then tap again"; try { startActivity(U.permissionIntent(this)) } catch (e: Exception) { }; return@setOnClickListener }
+                st.text = "Downloading…"
+                Thread { val err = U.installFace(applicationContext) { pct -> runOnUiThread { st.text = "Downloading… $pct%" } }
+                    runOnUiThread { st.text = err ?: "Installing — confirm if asked. Then long-press your watch face → + Add → BeyondStride" } }.start()
+            }
+            col.addView(box)
+        }
         col.addView(label("Done", Color.BLACK, 16f, true).apply {
             background = rounded(C.ACCENT, 24)
             setPadding(0, dp(10), 0, dp(10))
