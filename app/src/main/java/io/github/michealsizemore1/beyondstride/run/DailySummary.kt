@@ -72,7 +72,8 @@ object DailySummary {
             .apply { if (nd != null && nd.count > 0) put("nutrition", JSONObject().put("cal", nd.cal).put("target", nd.target).put("prot", Math.round(nd.prot)).put("carbs", Math.round(nd.carbs))
                 .put("fat", Math.round(nd.fat)).put("water", nd.waterOz).put("waterOnly", nd.water).put("sports", nd.sportsOz).put("other", nd.otherOz)
                 .put("quality", Food.dayQuality(nd)?.score?.let { Math.round(it * 10) / 10.0 } ?: 0.0).put("microScore", Math.round(nd.microScore * 10) / 10.0)
-                .put("micros", JSONObject().apply { put("fiber", Math.round(nd.fiber)); put("sodium", nd.sodium); nd.micros.forEach { m -> put(m.field, Math.round(m.value * 10) / 10.0) } })) }
+                .put("micros", JSONObject().apply { put("fiber", Math.round(nd.fiber)); put("sodium", nd.sodium); nd.micros.forEach { m -> put(m.field, Math.round(m.value * 10) / 10.0) } })
+                .put("microTargets", JSONObject().apply { nd.micros.forEach { m -> put(m.field, JSONObject().put("t", m.target).put("mx", m.max).put("u", m.unit).put("s", m.status).put("n", m.name)) } })) }
     }
 
     /** Posts today's and yesterday's summaries when they changed (at most every 10 minutes). Call off the main thread. */
