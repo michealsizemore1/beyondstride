@@ -132,7 +132,7 @@ object Updater {
             val id = pi.createSession(params)
             pi.openSession(id).use { s ->
                 s.openWrite("BeyondStride.apk", 0, file.length()).use { out -> file.inputStream().use { it.copyTo(out) }; s.fsync(out) }
-                val intent = Intent(ctx, UpdateReceiver::class.java).setPackage(ctx.packageName)
+                val intent = Intent(ctx, UpdateReceiver::class.java).setPackage(ctx.packageName).putExtra("pkg", pkg)
                 val flags = PendingIntent.FLAG_UPDATE_CURRENT or (if (Build.VERSION.SDK_INT >= 31) PendingIntent.FLAG_MUTABLE else 0)
                 s.commit(PendingIntent.getBroadcast(ctx, id, intent, flags).intentSender)
             }
@@ -156,9 +156,16 @@ class UpdateReceiver : BroadcastReceiver() {
                     else intent.getParcelableExtra(Intent.EXTRA_INTENT)) ?: return
                 ctx.startActivity(confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
             }
-            PackageInstaller.STATUS_SUCCESS -> { }
+            PackageInstaller.STATUS_SUCCESS -> {
+                // The app itself restarts on update; the watch face doesn't, so say it's done.
+                if (intent.getStringExtra("pkg") == Updater.FACE_PKG) {
+                    ctx.getSharedPreferences("updater", 0).edit().putLong("faceAt", System.currentTimeMillis()).apply()
+                    android.widget.Toast.makeText(ctx, "⌚ Watch face installed ✓ — switch to another face and back to see the new version", android.widget.Toast.LENGTH_LONG).show()
+                }
+            }
             else -> {
                 val msg = intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE) ?: "Install didn't finish"
+                if (intent.getStringExtra("pkg") == Updater.FACE_PKG) ctx.getSharedPreferences("updater", 0).edit().putString("faceErr", msg).apply()
                 android.widget.Toast.makeText(ctx, "Update: $msg", android.widget.Toast.LENGTH_LONG).show()
             }
         }

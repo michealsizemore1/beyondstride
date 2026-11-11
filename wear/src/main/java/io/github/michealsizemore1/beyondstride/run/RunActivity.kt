@@ -723,13 +723,29 @@ class RunActivity : Activity() {
             val U = io.github.michealsizemore1.beyondstride.Updater
             val box = card2()
             val has = U.faceInstalled(this)
-            val st = label(if (has) "Installed · tap to update. Long-press your watch face → + Add → BeyondStride" else "Downloads and installs it", C.MUTED, 10f)
+            val up = getSharedPreferences("updater", 0); val at = up.getLong("faceAt", 0L)
+            val when0 = if (at > 0) " (updated " + java.text.SimpleDateFormat("MMM d h:mm a", java.util.Locale.US).format(java.util.Date(at)) + ")" else ""
+            val st = label(if (has) "Installed$when0 · tap to update" else "Downloads and installs it", C.MUTED, 10f)
             box.addView(label(if (has) "⌚ Watch face ✓" else "⌚ Install watch face", Color.WHITE, 12f, true)); box.addView(st)
             box.setOnClickListener {
                 if (!U.canInstall(this)) { st.text = "Turn on \"Allow from this source\", then tap again"; try { startActivity(U.permissionIntent(this)) } catch (e: Exception) { }; return@setOnClickListener }
                 st.text = "Downloading…"
                 Thread { val err = U.installFace(applicationContext) { pct -> runOnUiThread { st.text = "Downloading… $pct%" } }
-                    runOnUiThread { st.text = err ?: "Installing — confirm if asked. Then long-press your watch face → + Add → BeyondStride" } }.start()
+                    runOnUiThread { st.text = err ?: "Installing…"
+                        if (err == null) {
+                            // Watch for the result (the installer reports back in a few seconds).
+                            val start = System.currentTimeMillis(); up.edit().remove("faceErr").apply()
+                            val h = android.os.Handler(mainLooper)
+                            val poll = object : Runnable { override fun run() {
+                                val done = up.getLong("faceAt", 0L) > start; val e = up.getString("faceErr", null)
+                                when {
+                                    done -> { st.text = "Installed ✓ — switch to another face and back (or long-press → + Add → BeyondStride)" }
+                                    e != null -> st.text = "Didn't install: $e"
+                                    System.currentTimeMillis() - start > 60_000 -> st.text = "No answer from the installer — tap to try again"
+                                    else -> h.postDelayed(this, 1000)
+                                } } }
+                            h.postDelayed(poll, 1000)
+                        } } }.start()
             }
             col.addView(box)
         }
