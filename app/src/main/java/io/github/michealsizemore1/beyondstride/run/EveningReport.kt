@@ -95,7 +95,7 @@ object EveningReport {
         return MorningReport.Report(today, headline, sec, advice)
     }
 
-    /** Once a day at the set time (11:30 PM). */
+    /** Once a day at the set time (11 PM). */
     fun maybeNotify(ctx: Context, notify: (String, String) -> Unit) {
         if (!enabled(ctx)) return
         val pr = p(ctx); val today = Readiness.today(); if (pr.getString("sent", "") == today) return

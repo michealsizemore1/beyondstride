@@ -10,7 +10,7 @@ import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-/** 🌙 Evening report on the phone (also opened from the 11:30 PM notification). */
+/** 🌙 Evening report on the phone (also opened from the 11 PM notification). */
 class EveningReportActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) { super.onCreate(savedInstanceState); render()
         val app = applicationContext; Thread { if (TodayWeather.fetch(app)) runOnUiThread { if (!isFinishing) render() } }.start() }

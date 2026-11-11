@@ -45,6 +45,9 @@ object Reminders {
     fun scheduleEvening(ctx: Context, replace: Boolean = false) {
         if (!EveningReport.enabled(ctx)) { try { WorkManager.getInstance(ctx).cancelUniqueWork("evening") } catch (e: Exception) { }; return }
         val m = EveningReport.time(ctx); val now = java.time.LocalDateTime.now()
+        // The time changed (e.g. 11:30 → 11 PM): rebook the waiting job.
+        val ep = ctx.getSharedPreferences("evening", 0)
+        if (ep.getInt("bookedFor", -1) != m) { ep.edit().putInt("bookedFor", m).apply(); if (!replace) { scheduleEvening(ctx, replace = true); return } }
         var at = now.toLocalDate().atTime(m / 60, m % 60)
         val sent = ctx.getSharedPreferences("evening", 0).getString("sent", "") == java.time.LocalDate.now().toString()
         if (!at.isAfter(now)) at = if (sent) at.plusDays(1) else now.plusMinutes(1)
