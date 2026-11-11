@@ -48,6 +48,7 @@ class CoachActivity : Activity() {
         })
         setContentView(root)
         render()
+        if (intent.getBooleanExtra("fuel", false)) fuelDialog()
     }
 
     private fun render() {
@@ -81,6 +82,15 @@ class CoachActivity : Activity() {
             })
         }
 
+        // ⛽ Fuel AI (how a day's eating affected a run).
+        col.addView(LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL; background = RunUi.rounded(0xFF3A2350.toInt(), dp(12).toFloat()); setPadding(dp(12), dp(9), dp(12), dp(9))
+            layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(10) }
+            addView(RunUi.text(ctx, "⛽ Fuel AI ▸", Color.WHITE, 14f, true))
+            addView(RunUi.text(ctx, "How a day's eating likely affected a run — pick the food day and the run day", RunUi.MUTED, 12f))
+            setOnClickListener { fuelDialog() }
+        })
+
         // Conversation (or ideas to start).
         val chat = CoachAi.chat(this)
         if (chat.length() == 0 && pending == null) {
@@ -102,7 +112,7 @@ class CoachActivity : Activity() {
         val me = m.optString("role") == "user"
         col.addView(TextView(this).apply {
             setTextColor(if (me) Color.BLACK else Color.WHITE); textSize = 14f; setLineSpacing(0f, 1.15f); setTextIsSelectable(true)
-            text = if (me) m.optString("content") else md(m.optString("content"))
+            text = if (me) m.optString("show", m.optString("content")) else md(m.optString("content"))
             background = RunUi.rounded(if (me) RunUi.ACCENT else RunUi.CARD, dp(14).toFloat()); setPadding(dp(12), dp(10), dp(12), dp(10))
             layoutParams = LinearLayout.LayoutParams(if (me) WRAP_CONTENT else MATCH_PARENT, WRAP_CONTENT).apply {
                 topMargin = dp(8); gravity = if (me) Gravity.END else Gravity.START; if (me) marginStart = dp(40) }
@@ -123,14 +133,40 @@ class CoachActivity : Activity() {
         return Html.fromHtml(html, Html.FROM_HTML_MODE_LEGACY)
     }
 
-    private fun send(q0: String) {
+    private fun fuelDialog() {
+        val ctx = this
+        val dates = (0..30).map { java.time.LocalDate.now().minusDays(it.toLong()).toString() }
+        fun label(d: String) = java.time.LocalDate.parse(d).format(java.time.format.DateTimeFormatter.ofPattern("EEE M/d", java.util.Locale.US)) +
+            (if (d == dates[0]) " (today)" else if (d == dates[1]) " (yesterday)" else "")
+        // Defaults: the latest run day, and the food the day before it.
+        val lastRun = CoachAi.runs(this).firstOrNull()?.let { ActivityStore.str(it, "date").take(10) }?.takeIf { it in dates } ?: dates[0]
+        var runDate = lastRun; var nutrDate = java.time.LocalDate.parse(lastRun).minusDays(1).toString()
+        val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(20), dp(8), dp(20), 0) }
+        val nutrBtn = RunUi.text(this, "", Color.WHITE, 15f, true); val runBtn = RunUi.text(this, "", Color.WHITE, 15f, true)
+        fun refresh() { nutrBtn.text = "🍽️ Food day: ${label(nutrDate)}  ▾"; runBtn.text = "🏃 Run day: ${label(runDate)}  ▾" }
+        refresh()
+        listOf(nutrBtn to true, runBtn to false).forEach { (b, isNutr) ->
+            b.setPadding(0, dp(10), 0, dp(10))
+            b.setOnClickListener { AlertDialog.Builder(ctx).setItems(dates.map { label(it) }.toTypedArray()) { _, i -> if (isNutr) nutrDate = dates[i] else runDate = dates[i]; refresh() }.show() }
+            box.addView(b)
+        }
+        val ex = EditText(this).apply { hint = "Anything else? (sleep, heat, how the run felt…)"; setTextColor(Color.WHITE); setHintTextColor(RunUi.MUTED) }
+        box.addView(ex)
+        AlertDialog.Builder(this).setTitle("⛽ Fuel AI").setView(box)
+            .setPositiveButton("Analyze") { _, _ ->
+                val q = "⛽ Fuel check: food on ${label(nutrDate)} → run on ${label(runDate)}" + ex.text.toString().trim().let { if (it.isNotEmpty()) " ($it)" else "" }
+                send(q, CoachAi.fuelBlock(ctx, nutrDate, runDate, ex.text.toString().trim()))
+            }.setNegativeButton("Cancel", null).show()
+    }
+
+    private fun send(q0: String, hidden: String? = null) {
         val q = q0.trim(); if (q.isEmpty() || busy) return
         if (!AiFood.hasKey(this)) { Toast.makeText(this, "Add your Anthropic key in Settings → AI food search first.", Toast.LENGTH_LONG).show(); return }
         busy = true; pending = q; input.setText("")
         render()
         val app = applicationContext
         Thread {
-            val err = try { CoachAi.ask(app, q); null } catch (e: Exception) { e.message ?: "Something went wrong" }
+            val err = try { CoachAi.ask(app, q, hidden); null } catch (e: Exception) { e.message ?: "Something went wrong" }
             runOnUiThread {
                 busy = false; pending = null; if (isFinishing) return@runOnUiThread
                 render()

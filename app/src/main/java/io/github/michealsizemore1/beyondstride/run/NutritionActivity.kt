@@ -165,7 +165,7 @@ class NutritionActivity : Activity() {
         run {
             fun tools(mode: String) = startActivity(android.content.Intent(ctx, NutritionToolsActivity::class.java).putExtra("mode", mode))
             val tiles = listOf(
-                Triple("🥗 Meal Ideas", 0xFF059669.toInt()) { tools("ideas") }, Triple("🧠 Fuel AI", 0xFF8E44AD.toInt()) { tools("fuel") },
+                Triple("🥗 Meal Ideas", 0xFF059669.toInt()) { tools("ideas") }, Triple("🧠 Fuel AI", 0xFF8E44AD.toInt()) { startActivity(android.content.Intent(this, CoachActivity::class.java).putExtra("fuel", true)) },
                 Triple("📅 Copy Day", 0xFF16A085.toInt()) { FoodUi.copyDay(this@NutritionActivity) { render() } },
             )
             tiles.chunked(3).forEach { row ->

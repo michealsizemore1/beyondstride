@@ -163,14 +163,45 @@ Keep it readable on a phone: short sections with bold headings, bullets, no tabl
 DATA THE RUNNER CHOSE:
 ${context(ctx)}"""
 
-    /** Sends the conversation plus the new question; returns the answer. Call off the main thread. */
-    fun ask(ctx: Context, question: String): String {
+    /**
+     * ⛽ Fuel AI (folded in from the Nutrition screen): how the food on [nutrDate] likely affected the run on [runDate].
+     * Same facts as before — the day's calories, macros, fluids and every meal, the run, and fuel taken during it.
+     */
+    fun fuelBlock(ctx: Context, nutrDate: String, runDate: String, extra: String): String {
+        fun fmt(d: String) = LocalDate.parse(d).format(java.time.format.DateTimeFormatter.ofPattern("EEE MMM d", Locale.US))
+        val n = NutriDay.day(ctx, nutrDate); val r = NutriDay.day(ctx, runDate)
+        val sb = StringBuilder("FUEL ANALYSIS REQUEST — act as a sports nutritionist. Analyze how the nutrition on ${fmt(nutrDate)} likely affected the run on ${fmt(runDate)}. Be specific and practical (max about 350 words), then give what to eat differently next time.\n")
+        if (extra.isNotBlank()) sb.append("Runner's notes: $extra\n")
+        sb.append("\nNUTRITION (${fmt(nutrDate)}): " + (if (n != null && n.cal > 0) "${n.cal} kcal" + (if (n.target > 0) " of ${n.target} target" else "") else "No calories logged"))
+        if (n != null && n.cal > 0) {
+            sb.append(" | Protein ${Math.round(n.prot)} g | Carbs ${Math.round(n.carbs)} g | Fat ${Math.round(n.fat)} g | Fluids ${n.waterOz} oz")
+            Food.dayQuality(n)?.let { sb.append(" | Food quality ${String.format(Locale.US, "%.1f", it.score)}/10") }
+            sb.append("\n")
+            n.foods.groupBy { it.meal }.takeIf { it.isNotEmpty() }?.let { g -> sb.append("Meals:\n")
+                io.github.michealsizemore1.beyondstride.Nutrition.MEAL_ORDER.filter { g.containsKey(it) }.forEach { m ->
+                    sb.append((io.github.michealsizemore1.beyondstride.Nutrition.MEAL_NAMES[m] ?: m) + ": " + g[m]!!.joinToString(", ") { "${it.name} (${it.kcal} cal)" } + "\n") } }
+            n.micros.filter { it.status == "Low" }.takeIf { it.isNotEmpty() }?.let { l -> sb.append("Low nutrients: " + l.joinToString(", ") { "${it.name} ${Math.round(it.pct)}%" } + "\n") }
+        }
+        val runs = runs(ctx).filter { S.str(it, "date").take(10) == runDate }
+        sb.append("\nRUN (${fmt(runDate)}): ")
+        if (runs.isEmpty()) sb.append("No run recorded\n") else runs.forEach { sb.append(runJson(it).toString()).append("\n") }
+        if (runDate != nutrDate && r != null) {
+            if (r.waterOz > 0) sb.append("Fluids on run day: ${r.waterOz} oz\n")
+            r.foods.filter { it.meal != "sports" }.takeIf { it.isNotEmpty() }?.let { f -> sb.append("Also eaten on run day: " + f.joinToString(", ") { "${it.name} (${it.kcal} cal)" } + "\n") }
+        }
+        (r ?: n)?.foods?.filter { it.meal == "sports" }?.takeIf { it.isNotEmpty() }?.let { sp -> sb.append("Sports/race nutrition (during run): " + sp.joinToString(", ") { "${it.name} (${it.kcal} cal)" } + "\n") }
+        return sb.toString()
+    }
+
+    /** Sends the conversation plus the new question; returns the answer. [hidden] = extra facts sent with it but not shown. Call off the main thread. */
+    fun ask(ctx: Context, question: String, hidden: String? = null): String {
         val chat = chat(ctx)
         val msgs = JSONArray(); val from = Math.max(0, chat.length() - 12)
-        for (i in from until chat.length()) msgs.put(chat.getJSONObject(i))
-        msgs.put(JSONObject().put("role", "user").put("content", question))
+        for (i in from until chat.length()) chat.getJSONObject(i).let { msgs.put(JSONObject().put("role", it.optString("role")).put("content", it.optString("content"))) }
+        val full = if (hidden.isNullOrBlank()) question else hidden + "\n\n" + question
+        msgs.put(JSONObject().put("role", "user").put("content", full))
         val answer = AiFood.askChat(ctx, system(ctx), msgs)
-        chat.put(JSONObject().put("role", "user").put("content", question)); chat.put(JSONObject().put("role", "assistant").put("content", answer))
+        chat.put(JSONObject().put("role", "user").put("content", full).put("show", question)); chat.put(JSONObject().put("role", "assistant").put("content", answer))
         saveChat(ctx, chat)
         return answer
     }
