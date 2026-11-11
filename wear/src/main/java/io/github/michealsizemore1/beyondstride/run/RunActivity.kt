@@ -1128,7 +1128,7 @@ class RunActivity : Activity() {
                     backLink(c) } }
             }
         }
-        acts.optJSONObject("evening")?.takeIf { it.optString("date") == today && java.time.LocalTime.now().hour >= 21 }?.let { m ->
+        acts.optJSONObject("evening")?.takeIf { it.optString("date") == today && java.time.LocalTime.now().hour >= 17 }?.let { m ->
             card(0xFF26264A.toInt()) { addView(label("🌙 Evening report ▸", Color.WHITE, 12f, true)); addView(label(m.optString("headline"), C.MUTED, 9f))
                 setOnClickListener { showReport("evening", "🌙 Evening", 0xFF26264A.toInt()) } }
         }

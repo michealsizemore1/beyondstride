@@ -296,6 +296,13 @@ open class RunsActivity : Activity() {
             addView(RunUi.text(ctx, "How today went, what's left to eat and drink, and tomorrow's plan", RunUi.MUTED, 12f))
             setOnClickListener { startActivity(Intent(ctx, EveningReportActivity::class.java)) }
         })
+        else if (EveningReport.enabled(this) && java.time.LocalTime.now().hour >= 17) col.addView(RunUi.card(this).apply {
+            background = RunUi.rounded(0xFF1E1E38.toInt(), dp(14).toFloat())
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dp(8) }
+            addView(RunUi.text(ctx, "🌙 Going to bed early? Get tonight's report now ▸", Color.WHITE, 14f, true))
+            addView(RunUi.text(ctx, "Sends it to your watch too, and skips the 11 PM one", RunUi.MUTED, 12f))
+            setOnClickListener { val app = applicationContext; Thread { EveningReport.getEarly(app) }.start(); startActivity(Intent(ctx, EveningReportActivity::class.java)) }
+        })
         // ☀️ Morning report (until noon).
         if (java.time.LocalTime.now().hour < 12 && MorningReport.enabled(this)) col.addView(RunUi.card(this).apply {
             background = RunUi.rounded(0xFF243B2E.toInt(), dp(14).toFloat())

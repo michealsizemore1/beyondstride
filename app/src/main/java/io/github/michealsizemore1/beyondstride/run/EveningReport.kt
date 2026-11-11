@@ -17,7 +17,13 @@ object EveningReport {
     fun setEnabled(ctx: Context, v: Boolean) = p(ctx).edit().putBoolean("on", v).apply()
     fun time(ctx: Context) = p(ctx).getInt("time", 23 * 60)
     /** From the report time on (11 PM), until midnight. */
-    fun ready(ctx: Context) = enabled(ctx) && java.time.LocalTime.now().let { it.hour * 60 + it.minute } >= time(ctx)
+    fun ready(ctx: Context) = enabled(ctx) && (java.time.LocalTime.now().let { it.hour * 60 + it.minute } >= time(ctx) || early(ctx))
+    /** Going to bed early: tonight's report now (and no second one at 11 PM). */
+    fun early(ctx: Context) = p(ctx).getString("early", "") == Readiness.today()
+    fun getEarly(ctx: Context) {
+        p(ctx).edit().putString("early", Readiness.today()).putString("sent", Readiness.today()).apply()
+        try { ActivityStore.watchSummary(ctx)?.let { io.github.michealsizemore1.beyondstride.NutritionStore.setActs(ctx, it) } } catch (e: Exception) { }
+    }
     fun setTime(ctx: Context, m: Int) = p(ctx).edit().putInt("time", m).putString("sent", "").apply()
 
     private const val GREEN = 0xFF5FD38D.toInt(); private const val YELLOW = 0xFFF2C94C.toInt(); private const val RED = 0xFFFF8A80.toInt(); private const val GREY = 0xFF9AA5A0.toInt()
