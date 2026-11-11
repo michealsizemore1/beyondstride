@@ -5,9 +5,9 @@
   <Metadata key="PREVIEW_TIME" value="10:08:32"/>
   <Scene backgroundColor="#FF000000">
     <PartText x="110" y="26" width="230" height="34"><Text align="CENTER" ellipsis="TRUE"><Font family="SYNC_TO_DEVICE" size="26" color="#FFC6F432" weight="BOLD"><Template>%s %s    BAT %s<Parameter expression="[DAY_OF_WEEK_S]"/><Parameter expression="[DAY]"/><Parameter expression="[BATTERY_PERCENT]"/></Template></Font></Text></PartText>
-    <DigitalClock x="35" y="179" width="380" height="100">
-      <TimeText format="hh:mm" hourFormat="SYNC_TO_DEVICE" align="CENTER" x="0" y="0" width="380" height="100">
-        <Font family="SYNC_TO_DEVICE" size="96" color="#FFFFFFFF" weight="BOLD"></Font>
+    <DigitalClock x="100" y="184" width="250" height="90">
+      <TimeText format="hh:mm" hourFormat="SYNC_TO_DEVICE" align="CENTER" x="0" y="0" width="250" height="90">
+        <Font family="SYNC_TO_DEVICE" size="80" color="#FFFFFFFF" weight="BOLD"></Font>
       </TimeText>
     </DigitalClock>
     
@@ -76,6 +76,30 @@
       <BoundingBox x="0" y="0" width="250" height="34"/>
       <Complication type="LONG_TEXT"><PartText x="0" y="0" width="250" height="34"><Text align="CENTER" ellipsis="TRUE"><Font family="SYNC_TO_DEVICE" size="26" color="#FFC6F432" weight="BOLD"><Template>%s<Parameter expression="[COMPLICATION.TEXT]"/></Template></Font></Text></PartText></Complication>
       <Complication type="SHORT_TEXT"><PartText x="0" y="0" width="250" height="34"><Text align="CENTER" ellipsis="TRUE"><Font family="SYNC_TO_DEVICE" size="26" color="#FFC6F432" weight="BOLD"><Template>%s %s<Parameter expression="[COMPLICATION.TITLE]"/><Parameter expression="[COMPLICATION.TEXT]"/></Template></Font></Text></PartText></Complication>
+    </ComplicationSlot>
+    <ComplicationSlot slotId="8" x="10" y="184" width="90" height="90" supportedTypes="RANGED_VALUE SHORT_TEXT" isCustomizable="TRUE">
+      <DefaultProviderPolicy defaultSystemProvider="DATE" defaultSystemProviderType="SHORT_TEXT" primaryProvider="io.github.michealsizemore1.beyondstride/io.github.michealsizemore1.beyondstride.run.CaloriesComplication" primaryProviderType="RANGED_VALUE"/>
+      <BoundingOval x="0" y="0" width="90" height="90"/>
+      <Complication type="RANGED_VALUE">
+        <PartDraw x="0" y="0" width="90" height="90">
+          <Arc centerX="45.0" centerY="45.0" width="82" height="82" startAngle="-140" endAngle="140"><Stroke color="#40FFFFFF" thickness="7" cap="ROUND"/></Arc>
+          <Arc centerX="45.0" centerY="45.0" width="82" height="82" startAngle="-140" endAngle="140"><Stroke color="#FFF39C12" thickness="7" cap="ROUND"/>
+            <Transform target="endAngle" value="-140 + 280 * clamp((([COMPLICATION.RANGED_VALUE_VALUE] - [COMPLICATION.RANGED_VALUE_MIN]) / ([COMPLICATION.RANGED_VALUE_MAX] - [COMPLICATION.RANGED_VALUE_MIN])), 0, 1)"/></Arc>
+        </PartDraw><PartText x="1" y="16" width="88" height="32"><Text align="CENTER" ellipsis="TRUE"><Font family="SYNC_TO_DEVICE" size="26" color="#FFFFFFFF" weight="BOLD"><Template>%s<Parameter expression="[COMPLICATION.TEXT]"/></Template></Font></Text></PartText><PartText x="1" y="46" width="88" height="32"><Text align="CENTER" ellipsis="TRUE"><Font family="SYNC_TO_DEVICE" size="26" color="#FFF39C12" weight="BOLD"><Template>%s<Parameter expression="[COMPLICATION.TITLE]"/></Template></Font></Text></PartText></Complication>
+      <Complication type="SHORT_TEXT">
+        <PartDraw x="0" y="0" width="90" height="90"><Ellipse x="4" y="4" width="82" height="82"><Stroke color="#FFF39C12" thickness="4"/></Ellipse></PartDraw><PartText x="1" y="16" width="88" height="32"><Text align="CENTER" ellipsis="TRUE"><Font family="SYNC_TO_DEVICE" size="26" color="#FFFFFFFF" weight="BOLD"><Template>%s<Parameter expression="[COMPLICATION.TEXT]"/></Template></Font></Text></PartText><PartText x="1" y="46" width="88" height="32"><Text align="CENTER" ellipsis="TRUE"><Font family="SYNC_TO_DEVICE" size="26" color="#FFF39C12" weight="BOLD"><Template>%s<Parameter expression="[COMPLICATION.TITLE]"/></Template></Font></Text></PartText></Complication>
+    </ComplicationSlot>
+    <ComplicationSlot slotId="9" x="350" y="184" width="90" height="90" supportedTypes="RANGED_VALUE SHORT_TEXT" isCustomizable="TRUE">
+      <DefaultProviderPolicy defaultSystemProvider="DAY_OF_WEEK" defaultSystemProviderType="SHORT_TEXT" primaryProvider="io.github.michealsizemore1.beyondstride/io.github.michealsizemore1.beyondstride.run.ReadinessComplication" primaryProviderType="RANGED_VALUE"/>
+      <BoundingOval x="0" y="0" width="90" height="90"/>
+      <Complication type="RANGED_VALUE">
+        <PartDraw x="0" y="0" width="90" height="90">
+          <Arc centerX="45.0" centerY="45.0" width="82" height="82" startAngle="-140" endAngle="140"><Stroke color="#40FFFFFF" thickness="7" cap="ROUND"/></Arc>
+          <Arc centerX="45.0" centerY="45.0" width="82" height="82" startAngle="-140" endAngle="140"><Stroke color="#FFC6F432" thickness="7" cap="ROUND"/>
+            <Transform target="endAngle" value="-140 + 280 * clamp((([COMPLICATION.RANGED_VALUE_VALUE] - [COMPLICATION.RANGED_VALUE_MIN]) / ([COMPLICATION.RANGED_VALUE_MAX] - [COMPLICATION.RANGED_VALUE_MIN])), 0, 1)"/></Arc>
+        </PartDraw><PartText x="1" y="16" width="88" height="32"><Text align="CENTER" ellipsis="TRUE"><Font family="SYNC_TO_DEVICE" size="26" color="#FFFFFFFF" weight="BOLD"><Template>%s<Parameter expression="[COMPLICATION.TEXT]"/></Template></Font></Text></PartText><PartText x="1" y="46" width="88" height="32"><Text align="CENTER" ellipsis="TRUE"><Font family="SYNC_TO_DEVICE" size="26" color="#FFC6F432" weight="BOLD"><Template>%s<Parameter expression="[COMPLICATION.TITLE]"/></Template></Font></Text></PartText></Complication>
+      <Complication type="SHORT_TEXT">
+        <PartDraw x="0" y="0" width="90" height="90"><Ellipse x="4" y="4" width="82" height="82"><Stroke color="#FFC6F432" thickness="4"/></Ellipse></PartDraw><PartText x="1" y="16" width="88" height="32"><Text align="CENTER" ellipsis="TRUE"><Font family="SYNC_TO_DEVICE" size="26" color="#FFFFFFFF" weight="BOLD"><Template>%s<Parameter expression="[COMPLICATION.TEXT]"/></Template></Font></Text></PartText><PartText x="1" y="46" width="88" height="32"><Text align="CENTER" ellipsis="TRUE"><Font family="SYNC_TO_DEVICE" size="26" color="#FFC6F432" weight="BOLD"><Template>%s<Parameter expression="[COMPLICATION.TITLE]"/></Template></Font></Text></PartText></Complication>
     </ComplicationSlot>
   </Scene>
 </WatchFace>
