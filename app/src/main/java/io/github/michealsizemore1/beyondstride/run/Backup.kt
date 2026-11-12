@@ -90,6 +90,77 @@ object Backup {
         try { write(ctx, u) } catch (e: Exception) { meta(ctx).edit().putString("info", "Automatic backup failed — tap Back up now").apply() }
     }
 
+    // ---------------------------------------------------------------- 🌙 nightly backups
+    /** A dated backup every night (about 11:45 PM) in Downloads/BeyondStride — the last [KEEP] days are kept. */
+    const val KEEP = 14
+    const val FOLDER = "Download/BeyondStride/"
+    fun dailyOn(ctx: Context) = meta(ctx).getBoolean("daily", true)
+    fun setDailyOn(ctx: Context, on: Boolean) { meta(ctx).edit().putBoolean("daily", on).apply(); if (on) scheduleDaily(ctx) else try { androidx.work.WorkManager.getInstance(ctx).cancelUniqueWork("dailyBackup") } catch (e: Exception) { } }
+    fun dailyLast(ctx: Context) = meta(ctx).getString("dailyDate", "") ?: ""
+    fun dailyLastAt(ctx: Context) = meta(ctx).getLong("dailyAt", 0L)
+    fun dailyInfo(ctx: Context) = meta(ctx).getString("dailyInfo", "") ?: ""
+
+    /** Books tonight's backup (11:45 PM). Safe to call often — a waiting one is kept. */
+    fun scheduleDaily(ctx: Context) {
+        if (!dailyOn(ctx)) return
+        val now = java.time.LocalDateTime.now()
+        var at = now.toLocalDate().atTime(23, 45)
+        if (!at.isAfter(now)) at = at.plusDays(1)
+        try { androidx.work.WorkManager.getInstance(ctx).enqueueUniqueWork("dailyBackup", androidx.work.ExistingWorkPolicy.KEEP,
+            androidx.work.OneTimeWorkRequestBuilder<DailyWork>().setInitialDelay(java.time.Duration.between(now, at).toMillis(), java.util.concurrent.TimeUnit.MILLISECONDS).build()) } catch (e: Exception) { }
+    }
+    class DailyWork(c: Context, w: androidx.work.WorkerParameters) : androidx.work.Worker(c, w) {
+        override fun doWork(): Result {
+            try { daily(applicationContext, force = true) } catch (e: Exception) { }
+            return Result.success()   // tomorrow night's is booked by the hourly check once this one has finished
+        }
+    }
+
+    /**
+     * Makes tonight's backup when it's due: from 11:30 PM, or straight away if a night was missed (phone off).
+     * Also refreshes your chosen backup file. Returns a summary, or null if nothing was due. Call off the main thread.
+     */
+    fun daily(ctx: Context, force: Boolean = false): String? {
+        if (!dailyOn(ctx)) return null
+        val today = java.time.LocalDate.now(); val t = java.time.LocalTime.now(); val last = dailyLast(ctx)
+        val due = force || (last < today.toString() && t.hour * 60 + t.minute >= 23 * 60 + 30) || last < today.minusDays(1).toString()
+        if (!due || (last == today.toString() && !force)) return null
+        val name = "BeyondStride-daily-$today.zip"
+        val info = try {
+            val (runs, courses) = writeDaily(ctx, name)
+            info(ctx, runs, courses)
+        } catch (e: Exception) { meta(ctx).edit().putString("dailyInfo", "Nightly backup failed: ${e.message}").apply(); return null }
+        meta(ctx).edit().putString("dailyDate", today.toString()).putLong("dailyAt", System.currentTimeMillis()).putString("dailyInfo", info).apply()
+        try { autoUpdate(ctx) } catch (e: Exception) { }
+        return info
+    }
+
+    private fun writeDaily(ctx: Context, name: String): Pair<Int, Int> {
+        if (android.os.Build.VERSION.SDK_INT >= 29) {
+            val cr = ctx.contentResolver; val col = android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI
+            // Ours from earlier nights (newest first): replace tonight's, keep the last KEEP.
+            val mine = ArrayList<Pair<Long, String>>()
+            cr.query(col, arrayOf(android.provider.MediaStore.MediaColumns._ID, android.provider.MediaStore.MediaColumns.DISPLAY_NAME),
+                "${android.provider.MediaStore.MediaColumns.RELATIVE_PATH}=? AND ${android.provider.MediaStore.MediaColumns.DISPLAY_NAME} LIKE ?",
+                arrayOf(FOLDER, "BeyondStride-daily-%"), null)?.use { c -> while (c.moveToNext()) mine += c.getLong(0) to c.getString(1) }
+            mine.filter { it.second == name }.forEach { try { cr.delete(android.content.ContentUris.withAppendedId(col, it.first), null, null) } catch (e: Exception) { } }
+            val v = android.content.ContentValues().apply {
+                put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, name); put(android.provider.MediaStore.MediaColumns.MIME_TYPE, "application/zip")
+                put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH, FOLDER); put(android.provider.MediaStore.MediaColumns.IS_PENDING, 1)
+            }
+            val uri = cr.insert(col, v) ?: throw java.io.IOException("couldn't create the file")
+            val r = try { cr.openOutputStream(uri, "w")!!.use { writeTo(ctx, it) } } catch (e: Exception) { cr.delete(uri, null, null); throw e }
+            cr.update(uri, android.content.ContentValues().apply { put(android.provider.MediaStore.MediaColumns.IS_PENDING, 0) }, null, null)
+            mine.filter { it.second != name }.sortedByDescending { it.second }.drop(KEEP - 1)
+                .forEach { try { cr.delete(android.content.ContentUris.withAppendedId(col, it.first), null, null) } catch (e: Exception) { } }
+            return r
+        }
+        val dir = File(ctx.getExternalFilesDir(null) ?: ctx.filesDir, "backups").apply { mkdirs() }
+        val r = File(dir, name).outputStream().use { writeTo(ctx, it) }
+        dir.listFiles()?.filter { it.name.startsWith("BeyondStride-daily-") }?.sortedByDescending { it.name }?.drop(KEEP)?.forEach { it.delete() }
+        return r
+    }
+
     /** Reads a backup file without changing anything: what's in it. */
     fun peek(ctx: Context, uri: Uri): JSONObject? = try {
         ctx.contentResolver.openInputStream(uri)!!.use { ins ->

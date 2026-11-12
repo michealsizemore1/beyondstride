@@ -259,6 +259,10 @@ class RunSettingsActivity : Activity() {
             }.apply { layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(8) } })
         })
         switch("Update the backup after every run", "Keeps the saved backup file current automatically", Backup.auto(this)) { Backup.setAuto(ctx, it) }
+        switch("🌙 Nightly backup", "A dated backup every night at 11:45 PM in Downloads › BeyondStride (last ${Backup.KEEP} days kept). Also refreshes your saved backup file.", Backup.dailyOn(this)) { Backup.setDailyOn(ctx, it) }
+        if (Backup.dailyOn(this)) col.addView(RunUi.text(ctx, Backup.dailyLastAt(ctx).takeIf { it > 0 }?.let { "Last nightly backup: " +
+            java.text.SimpleDateFormat("EEE, MMM d · h:mm a", java.util.Locale.getDefault()).format(java.util.Date(it)) + Backup.dailyInfo(ctx).let { i -> if (i.isNotBlank()) "\n$i" else "" } }
+            ?: Backup.dailyInfo(ctx).ifBlank { "First nightly backup: tonight at 11:45 PM" }, RunUi.MUTED, 12f).apply { setPadding(dp(4), 0, 0, dp(6)) })
         // 🔔 Reminders (checked about once an hour; each one at most once).
         col.addView(RunUi.text(this, "🔔 Reminders", Color.WHITE, 15f, true).apply { setPadding(0, dp(14), 0, 0) })
         switch("☀️ Morning report", "Right after your morning check and weigh-in (or by " + java.time.LocalTime.of(MorningReport.time(this) / 60, MorningReport.time(this) % 60).format(java.time.format.DateTimeFormatter.ofPattern("h:mm a", java.util.Locale.US)) +

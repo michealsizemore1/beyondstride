@@ -146,6 +146,7 @@ object Reminders {
         val now = LocalTime.now(); val today = LocalDate.now()
         try { NutritionSync.refreshIfStale(ctx, 30 * 60_000L) } catch (e: Exception) { }
         try { Local.upkeep(ctx, hourly = true) } catch (e: Exception) { }
+        try { Backup.daily(ctx); Backup.scheduleDaily(ctx) } catch (e: Exception) { }   // 🌙 nightly backup (catches up if a night was missed)
         morning(ctx)
         evening(ctx); scheduleEvening(ctx)
         try { schedulePre(ctx) } catch (e: Exception) { }
