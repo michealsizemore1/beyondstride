@@ -253,6 +253,19 @@ class RunSettingsActivity : Activity() {
             }.apply { layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(10) } })
             if (Backup.uri(ctx) != null) addView(RunUi.button(ctx, "Back up to a new file…", RunUi.CARD, Color.WHITE) { newBackup() }
                 .apply { layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(8) } })
+            addView(RunUi.button(ctx, "☁️ Share backup to OneDrive / Drive…", RunUi.CARD, Color.WHITE) {
+                Toast.makeText(ctx, "Making the backup…", Toast.LENGTH_SHORT).show()
+                Thread {
+                    val f = try { java.io.File(cacheDir, "backup").apply { mkdirs(); listFiles()?.forEach { it.delete() } }.let { d ->
+                        java.io.File(d, Backup.fileName()).also { out -> out.outputStream().use { Backup.writeTo(ctx, it) } } } } catch (e: Exception) { null }
+                    runOnUiThread {
+                        if (f == null) { Toast.makeText(ctx, "Couldn't make the backup", Toast.LENGTH_LONG).show(); return@runOnUiThread }
+                        val u = androidx.core.content.FileProvider.getUriForFile(ctx, "$packageName.files", f)
+                        startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("application/zip").putExtra(Intent.EXTRA_STREAM, u)
+                            .putExtra(Intent.EXTRA_SUBJECT, f.name).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION), "Save the backup to…"))
+                    }
+                }.start()
+            }.apply { layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(8) } })
             addView(RunUi.button(ctx, "Restore from a backup…", RunUi.CARD, Color.WHITE) {
                 @Suppress("DEPRECATION") startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE)
                     .setType("*/*").putExtra(Intent.EXTRA_MIME_TYPES, arrayOf("application/zip", "application/octet-stream", "application/x-zip-compressed")), 82)

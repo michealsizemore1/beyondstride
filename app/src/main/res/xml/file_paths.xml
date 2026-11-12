@@ -2,4 +2,5 @@
 <paths>
     <cache-path name="tcx" path="tcx/" />
     <cache-path name="photos" path="photos/" />
+    <cache-path name="backup" path="backup/" />
 </paths>
