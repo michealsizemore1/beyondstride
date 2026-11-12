@@ -67,6 +67,8 @@ object DailySummary {
         ReadinessSync.nights(ctx).lastOrNull { it.day == date }?.takeIf { it.minutes > 0 }?.let { w.put("sleep", "${it.minutes / 60}:${String.format("%02d", it.minutes % 60)}") }
         ReadinessSync.checks(ctx).lastOrNull { it.day == date }?.takeIf { it.hr > 0 }?.let { w.put("restHr", it.hr) }
         ReadinessSync.nights(ctx).lastOrNull { it.day == date }?.takeIf { it.sleepHr > 0 }?.let { w.put("sleepHr", it.sleepHr) }
+        // HRV: the morning check (Polar H10), ms.
+        ReadinessSync.checks(ctx).lastOrNull { it.day == date }?.takeIf { it.rmssd > 0 }?.let { w.put("hrv", Math.round(it.rmssd)) }
         nd?.weight?.takeIf { it > 0 }?.let { w.put("weight", f1(it)) }
         return JSONObject().put("date", date).put("text", lines.joinToString("\n")).put("miles", Math.round(miles * 100) / 100.0)
             .put("cal", nd?.cal ?: 0).put("wellness", w).put("at", System.currentTimeMillis())
@@ -84,11 +86,11 @@ object DailySummary {
         if (!Standalone.on(ctx) || !NutritionSync.ready(ctx)) return
         val pr = p(ctx); val now = System.currentTimeMillis()
         // Day summaries every 10 minutes; activities and plan days whenever they change.
-        val days = force || !pr.getBoolean("back35s", false) || now - pr.getLong("at", 0L) >= 10 * 60_000L
+        val days = force || !pr.getBoolean("backHrv", false) || now - pr.getLong("at", 0L) >= 10 * 60_000L
         if (days) pr.edit().putLong("at", now).apply()
         val base = Live.db(ctx) + "/nutrition/" + NutritionSync.key(ctx) + "/beyondstride/daily/"
-        // The first time: the last 2 weeks, so this week's review has every day.
-        val back = if (!days) -1L else if (pr.getBoolean("back35s", false)) 1L else 34L
+        // The first time (again when new numbers were added, like HRV): the last 4 months, so Weekly / Monthly tables have every day.
+        val back = if (!days) -1L else if (pr.getBoolean("backHrv", false)) 1L else 120L
         (back downTo 0L).map { LocalDate.now().minusDays(it).toString() }.forEach { d ->
             try {
                 val o = build(ctx, d); val sig = (o.optString("text") + o.optJSONObject("wellness") + o.optJSONObject("nutrition")).hashCode()
@@ -99,7 +101,7 @@ object DailySummary {
                 if (c.responseCode in 200..299) pr.edit().putInt("sig_$d", sig).apply()
             } catch (e: Exception) { }
         }
-        if (days) pr.edit().putBoolean("back35s", true).apply()
+        if (days) pr.edit().putBoolean("backHrv", true).apply()
         // Activities (the last 400 days) for the Command Center's Weekly / Monthly / Yearly fitness and goals.
         try {
             val from = LocalDate.now().minusDays(400).toString()
