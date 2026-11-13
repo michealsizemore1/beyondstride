@@ -30,7 +30,8 @@ object DayReviewAi {
                 .setConstraints(androidx.work.Constraints.Builder().setRequiredNetworkType(androidx.work.NetworkType.CONNECTED).build()).build()) } catch (e: Exception) { }
     }
     class Work(c: Context, w: androidx.work.WorkerParameters) : androidx.work.Worker(c, w) {
-        override fun doWork(): Result { try { maybeRun(applicationContext, force = true) } catch (e: Exception) { }; return Result.success() }
+        override fun doWork(): Result { try { maybeRun(applicationContext, force = true) } catch (e: Exception) { }
+            try { WeeklyRunWrap.maybeAuto(applicationContext, force = true) } catch (e: Exception) { }; return Result.success() }
     }
 
     /** Writes today's review when it's due and not done yet (from report time − 5 min until midnight). Call off the main thread. */

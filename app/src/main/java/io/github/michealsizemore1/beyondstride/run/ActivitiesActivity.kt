@@ -1101,16 +1101,7 @@ class ActivitiesActivity : Activity() {
     }
 
     private var wrnNote: EditText? = null
-    private fun runsInWeek(week: String): List<JSONObject> {
-        val start = java.time.LocalDate.parse(week); val end = start.plusDays(6)
-        val seen = HashSet<String>()
-        return S.list(this).filter { a ->
-            val d = S.str(a, "date").take(10); val rt = listOf("type", "title", "name", "workout").joinToString(" ") { S.str(a, it) }
-            val isRun = Regex("run|jog|tempo|interval|fartlek|long|recovery|race|marathon|stride", RegexOption.IGNORE_CASE).containsMatchIn(rt) && !Regex("rest day|walk|bike|cycl|strength|swim", RegexOption.IGNORE_CASE).containsMatchIn(S.str(a, "type"))
-            if (d < start.toString() || d > end.toString() || !isRun || S.num(a, "distance") <= 0 && S.durSec(S.str(a, "duration")) <= 0) false
-            else seen.add(d + "|" + String.format(Locale.US, "%.3f", S.num(a, "distance")) + "|" + S.str(a, "duration").trim())
-        }
-    }
+    private fun runsInWeek(week: String): List<JSONObject> = WeeklyRunWrap.runsInWeek(this, week)
 
     /** Same prompt and facts as the Command Center's "AI Weekly Run Wrap-Up". */
     private fun wrapUp(week: String, note: EditText) {
@@ -1127,22 +1118,7 @@ class ActivitiesActivity : Activity() {
             }
             android.widget.Toast.makeText(this, "No running activities were found for ${wrnLabel()}.", android.widget.Toast.LENGTH_LONG).show(); return
         }
-        var mi = 0.0; var mins = 0.0; var elev = 0.0; var cal = 0.0; var pS = 0.0; var pN = 0; var longest: JSONObject? = null
-        runs.forEach { a -> val m = S.num(a, "distance"); mi += m; mins += S.durSec(S.str(a, "duration")) / 60.0; elev += S.num(a, "elevGain"); cal += S.num(a, "calories")
-            if (S.num(a, "power") > 0) { pS += S.num(a, "power"); pN++ }; if (longest == null || m > S.num(longest!!, "distance")) longest = a }
-        fun pace(sec: Double): String { val m = Math.floor(sec / 60).toInt(); val s = Math.round(sec % 60).toInt(); return "$m:" + (if (s < 10) "0" else "") + s }
-        fun fmtMins(m: Double): String { val r = Math.round(m).toInt(); return if (r < 60) "${r}m" else "${r / 60}h ${r % 60}m" }
-        val avgPace = if (mi > 0 && mins > 0) pace(mins * 60 / mi) + "/mi" else "not available"
-        val lines = runs.sortedBy { S.str(it, "date") }.joinToString("\n") { a -> listOf(
-            S.str(a, "date").ifEmpty { "No date" }, S.str(a, "title").ifEmpty { S.str(a, "type").ifEmpty { "Run" } }, String.format(Locale.US, "%.2f mi", S.num(a, "distance")),
-            S.str(a, "duration").ifEmpty { "duration unavailable" }, S.str(a, "pace").takeIf { it.isNotEmpty() }?.let { "$it/mi" } ?: "pace unavailable",
-            if (S.num(a, "power") > 0) "${Math.round(S.num(a, "power"))} W" else "power unavailable", if (S.num(a, "heartRate") > 0) "${Math.round(S.num(a, "heartRate"))} bpm" else "heart rate unavailable",
-            if (S.num(a, "elevGain") > 0) "${Math.round(S.num(a, "elevGain"))} ft gain" else "elevation unavailable",
-            S.str(a, "notes").takeIf { it.isNotEmpty() }?.let { "notes: $it" } ?: "", S.str(a, "injuryReport").takeIf { it.isNotEmpty() }?.let { "injury report: $it" } ?: "").filter { it.isNotEmpty() }.joinToString(" | ") }
-        val prompt = "Write a concise weekly running wrap-up for ${wrnLabel()}. Use only the supplied facts and do not invent performance, recovery, injury, or health claims. Keep it encouraging, practical, and about 150-220 words. Use short headings: Week at a Glance, Strongest Session, Patterns & Recovery, and Focus for Next Week. If a conclusion is uncertain, say so. This is training reflection, not medical advice.\n\n" +
-            "SUMMARY\nRuns: ${runs.size}\nDistance: ${String.format(Locale.US, "%.2f", mi)} miles\nTime: ${fmtMins(mins)}\nAverage pace: $avgPace\nElevation gain: ${Math.round(elev)} ft\nCalories: ${Math.round(cal)}\nAverage recorded power: " +
-            (if (pN > 0) "${Math.round(pS / pN)} W" else "not available") + "\nLongest run: " + (longest?.let { (S.str(it, "title").ifEmpty { "Run" }) + ", " + String.format(Locale.US, "%.2f", S.num(it, "distance")) + " miles" } ?: "not available") + "\n\n" +
-            "ACTIVITIES\n$lines\n\nATHLETE NOTES\n" + note.text.toString().trim().ifEmpty { "No notes entered." }
+        val prompt = WeeklyRunWrap.prompt(this, week, note.text.toString()) ?: return
         val wait = AlertDialog.Builder(this).setMessage("⏳ Thinking...").setCancelable(false).show()
         Thread {
             val r = try { Result.success(AiFood.askText(ctx, prompt, 2200)) } catch (e: Exception) { Result.failure(e) }

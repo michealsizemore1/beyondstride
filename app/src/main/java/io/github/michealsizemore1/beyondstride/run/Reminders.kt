@@ -147,7 +147,8 @@ object Reminders {
         try { NutritionSync.refreshIfStale(ctx, 30 * 60_000L) } catch (e: Exception) { }
         try { Local.upkeep(ctx, hourly = true) } catch (e: Exception) { }
         try { Backup.daily(ctx); Backup.scheduleDaily(ctx) } catch (e: Exception) { }
-        try { DayReviewAi.maybeRun(ctx); DayReviewAi.schedule(ctx) } catch (e: Exception) { }   // 🌙 backup Day Review for the Command Center   // 🌙 nightly backup (catches up if a night was missed)
+        try { DayReviewAi.maybeRun(ctx); DayReviewAi.schedule(ctx) } catch (e: Exception) { }
+        try { WeeklyRunWrap.maybeAuto(ctx) } catch (e: Exception) { }   // 📝 Weekly Run Notes on Sunday night   // 🌙 backup Day Review for the Command Center   // 🌙 nightly backup (catches up if a night was missed)
         morning(ctx)
         evening(ctx); scheduleEvening(ctx)
         try { schedulePre(ctx) } catch (e: Exception) { }
