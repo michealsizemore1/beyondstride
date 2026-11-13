@@ -23,6 +23,8 @@ object EveningReport {
     fun getEarly(ctx: Context) {
         p(ctx).edit().putString("early", Readiness.today()).putString("sent", Readiness.today()).apply()
         try { ActivityStore.watchSummary(ctx)?.let { io.github.michealsizemore1.beyondstride.NutritionStore.setActs(ctx, it) } } catch (e: Exception) { }
+        // Tell the Command Center now, so its Day Review is filled before you go to bed.
+        val app = ctx.applicationContext; Thread { try { DailySummary.publish(app, force = true) } catch (e: Exception) { } }.start()
     }
     fun setTime(ctx: Context, m: Int) = p(ctx).edit().putInt("time", m).putString("sent", "").apply()
 

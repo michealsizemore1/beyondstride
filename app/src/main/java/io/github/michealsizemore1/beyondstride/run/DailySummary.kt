@@ -74,6 +74,8 @@ object DailySummary {
         nd?.weight?.takeIf { it > 0 }?.let { w.put("weight", f1(it)) }
         return JSONObject().put("date", date).put("text", lines.joinToString("\n")).put("miles", Math.round(miles * 100) / 100.0)
             .put("cal", nd?.cal ?: 0).put("wellness", w).put("at", System.currentTimeMillis())
+            // Evening report time (and whether tonight's was asked for early) — the Command Center fills its Day Review just before.
+            .apply { if (date == Readiness.today()) put("evening", JSONObject().put("time", if (EveningReport.enabled(ctx)) EveningReport.time(ctx) else 0).put("early", EveningReport.early(ctx))) }
             .apply { if (nd != null && nd.count > 0) put("nutrition", JSONObject().put("cal", nd.cal).put("target", nd.target).put("prot", Math.round(nd.prot)).put("carbs", Math.round(nd.carbs))
                 .put("fat", Math.round(nd.fat)).put("water", nd.waterOz).put("waterOnly", nd.water).put("sports", nd.sportsOz).put("other", nd.otherOz)
                 .put("quality", Food.dayQuality(nd)?.score?.let { Math.round(it * 10) / 10.0 } ?: 0.0).put("microScore", Math.round(nd.microScore * 10) / 10.0)
@@ -95,7 +97,7 @@ object DailySummary {
         val back = if (!days) -1L else if (pr.getBoolean("backHrv", false)) 1L else 120L
         (back downTo 0L).map { LocalDate.now().minusDays(it).toString() }.forEach { d ->
             try {
-                val o = build(ctx, d); val sig = (o.optString("text") + o.optJSONObject("wellness") + o.optJSONObject("nutrition")).hashCode()
+                val o = build(ctx, d); val sig = (o.optString("text") + o.optJSONObject("wellness") + o.optJSONObject("nutrition") + o.optJSONObject("evening")).hashCode()
                 if (!force && pr.getInt("sig_$d", 0) == sig) return@forEach
                 val c = (URL("$base$d.json").openConnection() as HttpURLConnection).apply {
                     requestMethod = "PUT"; doOutput = true; connectTimeout = 15_000; readTimeout = 20_000; setRequestProperty("Content-Type", "application/json") }
