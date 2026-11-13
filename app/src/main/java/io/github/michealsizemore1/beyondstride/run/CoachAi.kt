@@ -18,6 +18,7 @@ object CoachAi {
     private val S = ActivityStore
     data class Scope(val key: String, val label: String, val hint: String)
     val SCOPES = listOf(
+        Scope("all", "🗂️ All runs & metrics", "every run with every tracked metric: pace, HR, power, cadence, elevation, weather, decoupling, execution score, zones, splits, stress"),
         Scope("runs", "🏃 Runs I pick", "full details of the runs you select"),
         Scope("plan", "📅 Training plan", "this week, next week and race day"),
         Scope("history", "📈 Mileage history", "weekly miles, runs and long run for 16 weeks, plus recent runs"),
@@ -37,7 +38,12 @@ object CoachAi {
     )
 
     fun p(ctx: Context) = ctx.getSharedPreferences("coach", 0)
-    fun scopes(ctx: Context): MutableSet<String> = p(ctx).getStringSet("scopes", setOf("runs", "plan", "recovery"))!!.toMutableSet()
+    fun scopes(ctx: Context): MutableSet<String> {
+        val pr = p(ctx)
+        // "All runs & metrics" is on for everyone (added Nov 2026) — switch it off with its button if you want a shorter answer.
+        if (!pr.getBoolean("allOn", false)) { val s = (pr.getStringSet("scopes", setOf("runs", "plan", "recovery"))!! + "all"); pr.edit().putStringSet("scopes", s).putBoolean("allOn", true).apply() }
+        return pr.getStringSet("scopes", setOf("all", "runs", "plan", "recovery"))!!.toMutableSet()
+    }
     fun setScopes(ctx: Context, s: Set<String>) = p(ctx).edit().putStringSet("scopes", s).apply()
     fun runIds(ctx: Context): MutableList<String> = (p(ctx).getString("runs", "") ?: "").split(",").filter { it.isNotBlank() }.toMutableList()
     fun setRunIds(ctx: Context, ids: List<String>) = p(ctx).edit().putString("runs", ids.joinToString(",")).apply()
@@ -73,6 +79,62 @@ object CoachAi {
         return o
     }
 
+    private fun f1(d: Double) = String.format(Locale.US, "%.1f", d)
+    private fun clockS(sec: Int) = if (sec >= 3600) String.format(Locale.US, "%d:%02d:%02d", sec / 3600, sec / 60 % 60, sec % 60) else String.format(Locale.US, "%d:%02d", sec / 60, sec % 60)
+
+    /**
+     * Everything the watch recorded for a run (if BeyondStride recorded it): decoupling, execution score, max HR / power,
+     * cadence, stride, normalized power, stress, HR zone minutes, weather and (optionally) mile splits.
+     */
+    fun watchMetrics(ctx: Context, a: JSONObject, splits: Boolean = false): String? {
+        val start = S.idOf(a).toLongOrNull() ?: return null
+        val run = PhoneRuns.file(ctx, start).takeIf { it.exists() }?.let { PhoneRuns.read(it) } ?: return null
+        val out = ArrayList<String>()
+        io.github.michealsizemore1.beyondstride.Decoupling.of(run)?.let { d -> d.main?.let { m -> out += "decoupling ${f1(m)}%" + (d.pwHr?.let { " (power:HR ${f1(it)}%" } ?: " (") + (d.paHr?.let { " pace:HR ${f1(it)}%" } ?: "") + ", HR ${d.hr1}→${d.hr2}, ${d.minutes} min" + (if (!d.steady) ", uneven effort" else "") + ")" } }
+        ExecScores.forRun(ctx, start)?.let { out += "execution score ${it.score}/100 (${it.label})" }
+        run.optInt("maxHr").takeIf { it > 0 }?.let { out += "max HR $it" }
+        run.optInt("maxPower").takeIf { it > 0 }?.let { out += "max power $it W" }
+        run.optInt("np").takeIf { it > 0 }?.let { out += "normalized power $it W" }
+        run.optDouble("avgCadence", 0.0).takeIf { it > 0 }?.let { out += "cadence ${Math.round(it)} spm" }
+        run.optDouble("avgStride", 0.0).takeIf { it > 0 }?.let { out += "stride ${String.format(Locale.US, "%.2f", it)} m" }
+        run.optDouble("stress", 0.0).takeIf { it > 0 }?.let { out += "stress ${Math.round(it)}" }
+        run.optDouble("intensity", 0.0).takeIf { it > 0 }?.let { out += "intensity ${String.format(Locale.US, "%.2f", it)}" }
+        run.optDouble("elevGain", 0.0).takeIf { it > 0 }?.let { out += "climb ${Math.round(it * 3.28084)} ft" }
+        run.optJSONArray("hrZoneSeconds")?.let { z -> if (z.length() >= 5) out += "HR zones min " + (0 until 5).joinToString("/") { "Z${it + 1} ${Math.round(z.optDouble(it) / 60)}" } }
+        run.optJSONArray("zoneSeconds")?.let { z -> if (z.length() >= 5) out += "power zones min " + (0 until z.length()).joinToString("/") { "Z${it + 1} ${Math.round(z.optDouble(it) / 60)}" } }
+        run.optJSONObject("weather")?.let { w -> listOfNotNull(w.optLong("tempF", -999).takeIf { it > -999 }?.let { "${it}°F" }, w.optLong("humidity", -1).takeIf { it >= 0 }?.let { "$it% humidity" },
+            w.optDouble("windMph", -1.0).takeIf { it >= 0 }?.let { "wind ${Math.round(it)} mph" }, w.optLong("aqi", -1).takeIf { it >= 0 }?.let { "AQI $it" }).takeIf { it.isNotEmpty() }?.let { out += "weather " + it.joinToString(", ") } }
+        if (splits) run.optJSONArray("laps")?.let { l -> if (l.length() in 1..60) out += "laps " + (0 until l.length()).mapNotNull { l.optJSONObject(it) }.joinToString("; ") { x ->
+            listOfNotNull(x.optDouble("m", 0.0).takeIf { it > 0 }?.let { "${f1(it / 1609.344)} mi" }, x.optInt("sec").takeIf { it > 0 }?.let { clockS(it) },
+                x.optInt("hr").takeIf { it > 0 }?.let { "HR $it" }, x.optInt("pw").takeIf { it > 0 }?.let { "$it W" }, x.optInt("cad").takeIf { it > 0 }?.let { "$it spm" }).joinToString(" ") } }
+        return out.takeIf { it.isNotEmpty() }?.joinToString(" · ")
+    }
+
+    /** Every run, oldest first, one line each with every metric on file (+ what the watch recorded). */
+    private fun allRuns(ctx: Context): String {
+        val all = runs(ctx).sortedBy { S.str(it, "date") }
+        if (all.isEmpty()) return ""
+        val sb = StringBuilder("\n## All runs (${all.size}) — date · title · type · miles · time · pace · avg HR · power · cadence · climb ft · calories · temp/humidity · RSS · execution · notes\n")
+        val skip = setOf("id", "date", "title", "type", "distance", "duration", "pace", "heartRate", "power", "cadence", "elevGain", "calories", "temp", "temperature", "humidity", "rss", "execScore", "notes", "source",
+            "points", "track", "gps", "route", "polyline", "samples", "hrseries", "series", "stream", "streams", "map", "photo", "photos", "routeUrl")
+        all.forEach { a ->
+            fun n(k: String) = S.num(a, k).takeIf { it > 0 }
+            val line = listOf(S.str(a, "date").take(10), S.str(a, "title").take(40), S.str(a, "type"), String.format(Locale.US, "%.2f", S.num(a, "distance")), S.str(a, "duration"), S.str(a, "pace"),
+                n("heartRate")?.let { Math.round(it).toString() } ?: "", n("power")?.let { Math.round(it).toString() } ?: "", n("cadence")?.let { Math.round(it).toString() } ?: "",
+                n("elevGain")?.let { Math.round(it).toString() } ?: "", n("calories")?.let { Math.round(it).toString() } ?: "",
+                listOfNotNull(S.str(a, "temp").ifEmpty { S.str(a, "temperature") }.ifEmpty { null }?.let { "$it°" }, n("humidity")?.let { "${Math.round(it)}%" }).joinToString(" "),
+                n("rss")?.let { Math.round(it).toString() } ?: "", n("execScore")?.let { Math.round(it).toString() } ?: "", S.str(a, "notes").replace("\n", " ").take(160)).joinToString(" · ")
+            sb.append(line)
+            // Any other fields on the activity (e.g. Garmin / Stryd imports: training effect, max HR, form power, LSS…).
+            val extra = a.keys().asSequence().filter { it !in skip && it.lowercase() !in skip }.mapNotNull { k -> val v = a.opt(k)
+                if (v == null || v is JSONArray || v is JSONObject) null else v.toString().takeIf { it.isNotBlank() && it != "0" && it != "0.0" && it != "false" && it != "null" && it.length <= 60 }?.let { "$k=$it" } }.toList()
+            if (extra.isNotEmpty()) sb.append(" · ").append(extra.joinToString(", "))
+            watchMetrics(ctx, a)?.let { sb.append(" · ").append(it) }
+            sb.append("\n")
+        }
+        return sb.toString()
+    }
+
     /** What a question needs, so it always gets the right data even if a button is off. */
     fun autoScopes(q: String): Set<String> {
         val t = q.lowercase(); val out = HashSet<String>()
@@ -86,6 +148,7 @@ object CoachAi {
         if (has("battery", "energy")) out += "battery"
         if (has("plan", "workout", "tomorrow", "schedule")) out += "plan"
         if (has("compare", "pace", "heart rate", "harder", "last run", "splits", "cadence", "power", "watts")) out += listOf("runs", "history")
+        if (has("decoupl", "drift", "efficien", "best", "worst", "fastest", "slowest", "all my runs", "every run", "execution", "zone", "trend", "pr ", "personal best", "longest")) out += "all"
         return out
     }
 
@@ -100,11 +163,12 @@ object CoachAi {
         sb.append("Runner: 53-year-old male distance runner (Boise / Meridian, Idaho, ~2,600 ft). Runs with a Galaxy Watch Ultra 2 and a Polar H10 chest strap; power in watts from the watch.")
         listOf("maxHr" to "max HR", "restHr" to "resting HR", "lthr" to "lactate threshold HR", "ftp" to "threshold power").forEach { (k, l) -> st.optDouble(k, 0.0).takeIf { it > 0 }?.let { sb.append(" $l ${Math.round(it)}.") } }
         sb.append("\n")
+        if ("all" in sc) try { sb.append(allRuns(ctx)) } catch (e: Exception) { }
         if ("runs" in sc) {
             val all = runs(ctx); val ids = runIds(ctx)
             val chosen = (if (ids.isEmpty()) all.take(2) else all.filter { id(it) in ids }).ifEmpty { all.take(2) }
             sb.append("\n## Selected runs (${chosen.size})\n")
-            chosen.sortedBy { S.str(it, "date") }.forEach { sb.append(runJson(it).toString()).append("\n") }
+            chosen.sortedBy { S.str(it, "date") }.forEach { a -> sb.append(runJson(a).toString()).append("\n"); watchMetrics(ctx, a, splits = true)?.let { sb.append("  recorded: $it\n") } }
         }
         if ("plan" in sc) try {
             val plan = PlanStore.data(ctx).optJSONObject("current"); val days = plan?.optJSONObject("days")
@@ -176,6 +240,7 @@ object CoachAi {
     fun system(ctx: Context, question: String = "") = """You are Coach AI inside BeyondStride, the runner's personal analyst: an experienced distance-running coach and exercise physiologist.
 Analyze and compare the data below to answer the runner's questions. Be specific: quote the actual numbers (pace, heart rate, watts, cadence, splits, decoupling, temperature, sleep, HRV, calories) and the dates, and compare them side by side.
 Explain the likely reasons behind differences (heat and dew point, elevation, fatigue from prior days, sleep / HRV, fueling and hydration, pacing, terrain) and say how confident you are.
+Decoupling, execution score, zones, splits and other "recorded" metrics exist only for runs BeyondStride recorded on the watch; older imported runs (Garmin / Stryd / Strava) have the summary numbers on their line — work with what each run has and say which runs a comparison covers.
 Finish with 2–4 clear, practical takeaways. Use only the data given — if something needed isn't there, say what's missing (the runner can add it with the data buttons) instead of guessing.
 Keep it readable on a phone: short sections with bold headings, bullets, no tables, no long preambles.
 
