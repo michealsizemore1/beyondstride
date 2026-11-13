@@ -17,8 +17,7 @@ import io.github.michealsizemore1.beyondstride.RunMath
 class FitnessActivity : Activity() {
     override fun onResume() {
         super.onResume(); render()
-        if (NutritionSync.justOpened) NutritionSync.refreshAfterNutrition(this) { runOnUiThread { if (!isFinishing) render() } }
-        else Thread { if (NutritionSync.refreshIfStale(this, 60_000L)) runOnUiThread { if (!isFinishing) render() } }.start()
+        Thread { if (NutritionSync.refreshIfStale(this, 60_000L)) runOnUiThread { if (!isFinishing) render() } }.start()
     }
 
     private val panels = HashSet<String>()

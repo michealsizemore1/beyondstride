@@ -72,11 +72,11 @@ class RunDetailActivity : Activity() {
             )))
         })
 
-        // Send buttons.
+        // Add to Activities.
         col.addView(LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             setPadding(0, dp(10), 0, 0)
-            addView(RunUi.button(ctx, if (Standalone.on(ctx)) "Add to Activities" else if (PhoneRuns.sentToCommandCenter(ctx, start)) "Resend to CC" else "Send to Command Center",
+            addView(RunUi.button(ctx, "Add to Activities",
                 RunUi.CC, Color.WHITE) { CommandCenter.send(ctx, listOf(start)) },
                 LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
         })
@@ -330,7 +330,7 @@ class RunDetailActivity : Activity() {
             setPadding(0, dp(24), 0, 0)
             setOnClickListener {
                 AlertDialog.Builder(ctx).setTitle("Delete this run from the phone and watch?")
-                    .setMessage(if (Standalone.on(ctx)) "It stays in Activities if it was added there." else "It stays in the Command Center if it was sent there.")
+                    .setMessage("It stays in Activities if it was added there.")
                     .setPositiveButton("Delete") { _, _ -> PhoneRuns.deleteEverywhere(ctx, start); finish() }
                     .setNegativeButton("Cancel", null).show()
             }

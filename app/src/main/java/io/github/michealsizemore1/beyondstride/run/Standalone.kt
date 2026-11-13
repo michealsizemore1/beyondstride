@@ -2,10 +2,12 @@ package io.github.michealsizemore1.beyondstride.run
 
 import android.content.Context
 
-/** Once switched on, BeyondStride owns all its data and no longer talks to the Command Center (which stays as it was). */
+/**
+ * BeyondStride owns all its data (stand-alone since Nov 7, 2026 — the Command Center was left as it was). The old
+ * Command Center sync is gone, so this is always on; [since] is when the switch was made.
+ */
 object Standalone {
     private fun p(ctx: Context) = ctx.getSharedPreferences("standalone", 0)
-    fun on(ctx: Context) = p(ctx).getBoolean("on", false)
+    @Suppress("UNUSED_PARAMETER") fun on(ctx: Context) = true
     fun since(ctx: Context) = p(ctx).getLong("at", 0L)
-    fun set(ctx: Context, v: Boolean) = p(ctx).edit().putBoolean("on", v).putLong("at", if (v) System.currentTimeMillis() else 0L).apply()
 }

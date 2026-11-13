@@ -4,13 +4,11 @@ import android.content.Context
 import io.github.michealsizemore1.beyondstride.Hydration
 import org.json.JSONArray
 import org.json.JSONObject
-import java.net.HttpURLConnection
-import java.net.URL
 
 /**
- * The Command Center's Activities (shared to Firebase by its page): every activity, each card's extra lines
- * (zones, heat, sleep, previous-day water / food / fuel impact) and its CP / max HR / resting HR.
- * Changes made here are shown at once and sent to the Command Center (which keeps the real list).
+ * BeyondStride's Activities (stand-alone since Nov 2026; first copied from the Command Center): every activity, each card's
+ * extra lines (zones, heat, sleep, previous-day water / food / fuel impact) and CP / max HR / resting HR.
+ * Changes go through the local change log and are applied here.
  */
 object ActivityStore {
     private fun p(ctx: Context) = ctx.getSharedPreferences("activities", 0)
@@ -61,10 +59,7 @@ object ActivityStore {
 
     /** Extras are keyed by id with . $ # [ ] / replaced by _ (Firebase can't store those in keys). */
     fun extras(ctx: Context, id: Any?): JSONObject {
-        if (Standalone.on(ctx)) return ActivityEngine.extras(ctx)[idStr(id)] ?: JSONObject()
-        val ex = raw(ctx).optJSONObject("extras") ?: return JSONObject()
-        val raw = idStr(id)
-        return ex.optJSONObject(raw.replace(Regex("[.$#\\[\\]/]"), "_").ifEmpty { "_" }) ?: ex.optJSONObject(raw) ?: JSONObject()
+        return ActivityEngine.extras(ctx)[idStr(id)] ?: JSONObject()
     }
     private fun pending(ctx: Context, vararg ops: String) = Hydration.changes(ctx).filter { it.f in ops }.sortedBy { it.at }
         .mapNotNull { c -> try { c.f to JSONObject(c.x ?: "{}") } catch (e: Exception) { null } }
@@ -224,14 +219,13 @@ object ActivityStore {
         return out
     }
     fun saveWeekNote(ctx: Context, week: String, text: String) { Hydration.queue(ctx, "wrnSave", JSONObject().put("week", week).put("text", text)); Thread { HydrationSync.flush(ctx.applicationContext) }.start() }
-    /** A Garmin / Stryd / Strava CSV, imported by the Command Center's own importer. */
+    /** A Garmin / Stryd / Strava CSV, imported here (duplicates skipped). */
     /** Stand-alone: the whole data (list, settings, goals, shoes, notes…) saved as BeyondStride's own. */
     fun rawJson(ctx: Context) = try { JSONObject(rawStr(ctx)) } catch (e: Exception) { JSONObject() }
     fun setRaw(ctx: Context, o: JSONObject) { p(ctx).edit().putString("data", o.toString()).putLong("at", Math.max(1L, fetchedAt(ctx))).apply(); CloudCopy.dirty(ctx) }
     fun setNotice(ctx: Context, msg: String) = p(ctx).edit().putString("notice", JSONObject().put("msg", msg).put("at", System.currentTimeMillis()).toString()).apply()
     fun importCsv(ctx: Context, csv: String, hint: String, name: String) {
-        if (Standalone.on(ctx)) { val app = ctx.applicationContext; Thread { setNotice(app, ActivityImport.importCsv(app, csv, hint)) }.start(); return }
-        Hydration.queue(ctx, "actImport", JSONObject().put("csv", csv).put("hint", hint).put("name", name)); Thread { HydrationSync.flush(ctx.applicationContext) }.start() }
+        val app = ctx.applicationContext; Thread { setNotice(app, ActivityImport.importCsv(app, csv, hint)) }.start() }
     /** The Command Center's last message (e.g. "Imported 12 activities (garmin).") and when. */
     fun notice(ctx: Context): Pair<String, Long>? = try { JSONObject(p(ctx).getString("notice", "") ?: "").let { it.optString("msg") to it.optLong("at") }.takeIf { it.first.isNotEmpty() } } catch (e: Exception) { null }
 
@@ -258,37 +252,8 @@ object ActivityStore {
         Thread { HydrationSync.flush(ctx.applicationContext) }.start()
     }
 
-    /** Reads the Command Center's Activities. Call off the main thread. */
-    fun refresh(ctx: Context): Boolean {
-        if (Standalone.on(ctx)) { Local.commit(ctx); return false }
-        if (!NutritionSync.ready(ctx)) return false
-        HydrationSync.reconcile(ctx)
-        CcStatus.fetch(ctx)
-        return try {
-            val c = (URL(Live.db(ctx) + "/nutrition/" + NutritionSync.key(ctx) + "/activities.json").openConnection() as HttpURLConnection)
-                .apply { connectTimeout = 12_000; readTimeout = 25_000 }
-            if (c.responseCode != 200) { p(ctx).edit().putString("status", "Couldn't read Activities (HTTP ${c.responseCode})").apply(); return false }
-            val txt = c.inputStream.bufferedReader().readText()
-            // What the Command Center last said about sharing (shown when nothing has arrived).
-            try {
-                val sc = (URL(Live.db(ctx) + "/nutrition/" + NutritionSync.key(ctx) + "/activitiesStatus.json").openConnection() as HttpURLConnection).apply { connectTimeout = 10_000; readTimeout = 10_000 }
-                val st = if (sc.responseCode == 200) sc.inputStream.bufferedReader().readText() else "null"
-                val o = if (st == "null") null else JSONObject(st)
-                p(ctx).edit().putString("status", if (o == null) "The Command Center hasn't tried to share Activities yet — reload its page (it needs the latest version)."
-                    else "Command Center: " + o.optString("stage") + (if (o.has("count")) " · ${o.optInt("count")} activities" else "") + (if (o.has("bytes")) " · ${o.optInt("bytes") / 1024} KB" else "") +
-                        (if (o.has("status")) " · HTTP ${o.optInt("status")}" else "") + (o.optString("err").takeIf { it.isNotEmpty() }?.let { " · $it" } ?: "") +
-                        " · " + android.text.format.DateUtils.getRelativeTimeSpanString(o.optLong("at"))).apply()
-            } catch (e: Exception) { }
-            try {
-                val nc = (URL(Live.db(ctx) + "/nutrition/" + NutritionSync.key(ctx) + "/notice.json").openConnection() as HttpURLConnection).apply { connectTimeout = 10_000; readTimeout = 10_000 }
-                if (nc.responseCode == 200) nc.inputStream.bufferedReader().readText().takeIf { it != "null" && it.isNotBlank() }?.let { p(ctx).edit().putString("notice", it).apply() }
-            } catch (e: Exception) { }
-            if (txt == "null" || txt.isBlank()) return true
-            val changed = txt != p(ctx).getString("data", "")
-            p(ctx).edit().putString("data", txt).putLong("at", System.currentTimeMillis()).apply()
-            changed
-        } catch (e: Exception) { false }
-    }
+    /** Applies any changes waiting in the local change log (BeyondStride keeps its own Activities). Call off the main thread. */
+    fun refresh(ctx: Context): Boolean { Local.commit(ctx); return false }
 
     // ── Helpers matching the Command Center ──
     fun num(a: JSONObject, k: String) = a.opt(k)?.toString()?.toDoubleOrNull() ?: 0.0

@@ -42,7 +42,7 @@ object CloudCopy {
 
     /** Sends what changed. [force] sends the data copy even if nothing is marked changed. Call off the main thread. */
     @Synchronized fun sync(ctx: Context, force: Boolean = false): Boolean {
-        if (!ready(ctx) || !Standalone.on(ctx)) return false
+        if (!ready(ctx)) return false
         val pr = p(ctx); var ok = true
         val stale = System.currentTimeMillis() - pr.getLong("at", 0L) > 24 * 3600_000L
         if (force || stale || pr.getBoolean("dirty", false)) {

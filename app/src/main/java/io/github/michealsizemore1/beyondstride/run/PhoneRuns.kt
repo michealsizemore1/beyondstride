@@ -110,12 +110,10 @@ object RunSettings {
             .putInt("cp", cp).putFloat("cal", cal.toFloat()).putString("ccUrl", ccUrl)
             .putLong("settingsAt", System.currentTimeMillis()).apply()
         pushToWatch(ctx)
-        // Stand-alone: one set of zones — Activities / Fitness and the plan's TRAINING ZONES follow these numbers.
-        if (Standalone.on(ctx)) {
-            val st = ActivityStore.settings(ctx)
-            if (st.optDouble("maxHr", 0.0) != hrMax || st.optDouble("restHr", 0.0) != hrRest || st.optDouble("cp", 0.0) != cp.toDouble())
-                ActivityStore.saveSettings(ctx, org.json.JSONObject().put("maxHr", hrMax).put("restHr", hrRest).put("cp", cp))
-        }
+        // One set of zones — Activities / Fitness and the plan's TRAINING ZONES follow these numbers.
+        val st = ActivityStore.settings(ctx)
+        if (st.optDouble("maxHr", 0.0) != hrMax || st.optDouble("restHr", 0.0) != hrRest || st.optDouble("cp", 0.0) != cp.toDouble())
+            ActivityStore.saveSettings(ctx, org.json.JSONObject().put("maxHr", hrMax).put("restHr", hrRest).put("cp", cp))
     }
 
     // Shared with the watch (same names): run options and audio prompts.
@@ -229,7 +227,7 @@ class RunReceiverService : WearableListenerService() {
         val n = android.app.Notification.Builder(this, "runs")
             .setSmallIcon(R.drawable.ic_stat_run)
             .setContentTitle("${PhoneRuns.title(json)} saved")
-            .setContentText(PhoneRuns.shortLine(json) + if (sentToCc) (if (Standalone.on(this)) " · added to Activities" else " · sent to Command Center") else "")
+            .setContentText(PhoneRuns.shortLine(json) + if (sentToCc) " · added to Activities" else "")
             .setContentIntent(open).setAutoCancel(true).build()
         try { nm.notify(json.optLong("start").toInt(), n) } catch (e: SecurityException) { }
     }

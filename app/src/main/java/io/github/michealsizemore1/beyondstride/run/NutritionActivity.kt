@@ -63,11 +63,7 @@ class NutritionActivity : Activity() {
     override fun onResume() {
         io.github.michealsizemore1.beyondstride.Theme.load(this, "runsettings")
         super.onResume(); render()
-        if (!NutriDay.isToday()) Thread { if (NutriDay.fetch(this, NutriDay.date())) runOnUiThread { if (!isFinishing) render() } }.start()
-        // Your whole nutrition history (every day before the last 3 weeks), downloaded once and topped up now and then.
-        Thread { if (NutriDay.fetchAllIfDue(this) { runOnUiThread { if (!isFinishing) render() } } > 0) runOnUiThread { if (!isFinishing) render() } }.start()
-        if (NutritionSync.justOpened) NutritionSync.refreshAfterNutrition(this) { runOnUiThread { if (!isFinishing) render() } }
-        else Thread { if (NutritionSync.refreshIfStale(this, 30_000L)) runOnUiThread { if (!isFinishing) render() } }.start()
+        Thread { if (NutritionSync.refreshIfStale(this, 30_000L)) runOnUiThread { if (!isFinishing) render() } }.start()
     }
 
     private fun render() {
@@ -86,7 +82,6 @@ class NutritionActivity : Activity() {
         val vd = java.time.LocalDate.parse(NutriDay.date()); val today0 = java.time.LocalDate.now()
         fun go(d: java.time.LocalDate) {
             NutriDay.viewed = if (d >= today0) null else d.toString(); render()
-            if (!NutriDay.isToday()) Thread { if (NutriDay.fetch(ctx, NutriDay.date())) runOnUiThread { if (!isFinishing) render() } }.start()
         }
         col.addView(LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
@@ -103,14 +98,10 @@ class NutritionActivity : Activity() {
         })
         run {
             val n = NutriDay.historyCount(ctx)
-            col.addView(RunUi.text(ctx, if (NutriDay.loading) "⏳ Downloading your nutrition history… ${n} past days so far"
-                else if (n > 0) "History: ${NutriDay.allDates(ctx).size} days with food on this phone · tap the date for any day" else "Tap the date to jump to any day", RunUi.DIM, 11f).apply { setPadding(0, dp(4), 0, 0) })
+            col.addView(RunUi.text(ctx, if (n > 0) "History: ${NutriDay.allDates(ctx).size} days with food on this phone · tap the date for any day" else "Tap the date to jump to any day", RunUi.DIM, 11f).apply { setPadding(0, dp(4), 0, 0) })
         }
         if (!NutriDay.isToday()) {
             col.addView(RunUi.text(ctx, "Back to today ▸", RunUi.ACCENT, 13f, true).apply { setPadding(0, dp(6), 0, 0); setOnClickListener { go(today0) } })
-            if (t == null && NutriDay.missing(ctx, NutriDay.date()))
-                col.addView(RunUi.text(ctx, if (NutriDay.waiting(ctx, NutriDay.date())) "⏳ Asked the Command Center for this day — open its page (it answers within a minute), then come back."
-                    else "Loading this day…", 0xFFF2C94C.toInt(), 12f).apply { setPadding(0, dp(6), 0, 0) })
         }
 
         // Today: calories, macros, fluids (and weights).
@@ -309,7 +300,7 @@ class NutritionActivity : Activity() {
                     r = when (dbSort) {
                         "prot" -> r.sortedByDescending { it.prot ?: 0.0 }; "carbs" -> r.sortedByDescending { it.carbs ?: 0.0 }; "fat" -> r.sortedBy { it.fat ?: Double.MAX_VALUE }
                         "saved" -> r; else -> r.sortedByDescending { it.micros[dbSort] ?: 0.0 } }
-                    if (r.isEmpty()) list.addView(RunUi.text(ctx, if (favs.isEmpty() && healthy.isEmpty()) (if (Standalone.on(ctx)) "No saved foods yet — tap ⭐ on a food to add it." else "Your Command Center food database shows here once it's been opened there.") else "No match.", RunUi.MUTED, 12f).apply { setPadding(0, dp(8), 0, 0) })
+                    if (r.isEmpty()) list.addView(RunUi.text(ctx, if (favs.isEmpty() && healthy.isEmpty()) "No saved foods yet — tap ⭐ on a food to add it." else "No match.", RunUi.MUTED, 12f).apply { setPadding(0, dp(8), 0, 0) })
                     r.take(200).forEach { f ->
                         list.addView(dbRow(f.name, f.servingLabel + " · P ${(f.prot ?: 0.0).toInt()} · C ${(f.carbs ?: 0.0).toInt()} · F ${(f.fat ?: 0.0).toInt()} g", ((f.cal ?: 0.0) * f.servings).toInt(),
                             delete = { FoodLibrary.delete(ctx, dbTab, f.name) }, image = FoodLibrary.imageFor(ctx, f)) {
@@ -344,24 +335,21 @@ class NutritionActivity : Activity() {
                     android.app.AlertDialog.Builder(ctx).setTitle("Add to").setItems(N.MEAL_ORDER.map { (MEAL_ICON[it] ?: "") + "  " + (MEAL_LABEL[it] ?: it) }.toTypedArray()) { _, i -> dbMeal = N.MEAL_ORDER[i]; render() }.show()
                 }
             })
-            // Food Database tools (run in the Command Center, where the database lives).
+            // Food Database tools.
             if (dbTab == "fav" || dbTab == "healthy") {
-                val sa = Standalone.on(ctx)
-                val stats = if (sa) FoodTools.stats(ctx) else FoodLibrary.stats(ctx)
+                val stats = FoodTools.stats(ctx)
                 fun tile(icon: String, title: String, sub: String, fg: Int, bg: Int, action: String, ask: String) = RunUi.text(ctx, "$icon\n$title" + (if (sub.isNotEmpty()) "\n$sub" else ""), fg, 12f, true).apply {
                     gravity = Gravity.CENTER; background = RunUi.rounded(bg, dp(10).toFloat()); setPadding(dp(4), dp(10), dp(4), dp(10))
                     setOnClickListener {
                         android.app.AlertDialog.Builder(ctx).setTitle(title).setMessage(ask)
                             .setPositiveButton("Run") { _, _ ->
-                                if (sa) runTool(action)
-                                else { FoodLibrary.libAction(ctx, action)
-                                    android.widget.Toast.makeText(ctx, "Sent — the Command Center runs it next time it's open", android.widget.Toast.LENGTH_LONG).show() } }
+                                runTool(action) }
                             .setNegativeButton("Cancel", null).show()
                     }
                 }
                 listOf(
                     listOf(tile("🧪", "Enrich All", if (stats.first > 0) "(${stats.first} need it)" else "(all complete)", 0xFFA5B4FC.toInt(), 0xFF262A45.toInt(), "enrich",
-                        "Fill in missing nutrients in your Food Database using AI (your Anthropic key" + (if (sa) " on this phone" else " in the Command Center") + "). Runs one food at a time; restaurant foods are skipped."),
+                        "Fill in missing nutrients in your Food Database using AI (your Anthropic key on this phone). Runs one food at a time; restaurant foods are skipped."),
                         tile("↩️", "Undo All", "(${stats.second} foods)", 0xFFFDA4AF.toInt(), 0xFF3A2329.toInt(), "undo", "Remove every AI-estimated value from your Food Database. This can't be undone.")),
                     listOf(tile("↻", "Rescan Foods", "", 0xFFFDBA74.toInt(), 0xFF3A2A1A.toInt(), "rescan", "Re-check every saved Nutrition day and barcode picture for healthy foods."),
                         tile("🧹", "Remove Dupes", "", 0xFFFDBA74.toInt(), 0xFF3A2A1A.toInt(), "dedupe", "Remove duplicate foods from your saved foods."))
@@ -489,15 +477,6 @@ class NutritionActivity : Activity() {
             chart("Water", null, 0xFF3498DB.toInt(), " oz") { (if (it.water + it.sportsOz + it.otherOz > 0) it.water else it.waterOz).toDouble() }
             chart("Total liquids (excl. caffeine)", "Water + sports drinks + other drinks, minus coffee, energy drinks and black/green tea. GU drink mix still counts.",
                 0xFF16A085.toInt(), " oz") { it.waterOz.toDouble() }
-        }
-
-        // The Command Center's own Nutrition page (AI search, label scan, food database) — still there too.
-        if (!Standalone.on(this)) {
-            col.addView(RunUi.button(this, "Open Nutrition in the Command Center", RunUi.CARD, Color.WHITE) { RunUi.openNutrition(this) }.apply {
-                layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(22) }
-            })
-            col.addView(RunUi.text(this, "Food logged in either app shows in both.", RunUi.DIM, 11f).apply {
-                gravity = Gravity.CENTER; setPadding(0, dp(6), 0, 0) })
         }
 
         // Keep the page where it was when it's redrawn (opening a meal, adding or editing a food…).

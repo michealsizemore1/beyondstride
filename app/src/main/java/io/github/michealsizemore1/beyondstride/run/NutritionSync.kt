@@ -1,15 +1,11 @@
 package io.github.michealsizemore1.beyondstride.run
 
 import android.content.Context
-import io.github.michealsizemore1.beyondstride.Nutrition
 import io.github.michealsizemore1.beyondstride.NutritionStore
-import java.net.HttpURLConnection
-import java.net.URL
 
 /**
- * Reads the daily nutrition totals the Command Center shares (Firebase: <db>/nutrition/<key>/days).
- * The db is the LiveTrack database; the key is a private random code made here and handed to the
- * Command Center in the Nutrition tab's link.
+ * The private key BeyondStride uses in your Firebase database (the LiveTrack database) — for the cloud copy, the day
+ * summaries the Command Center reads, and Activities shared to it — and the nutrition refresh.
  */
 object NutritionSync {
     private fun p(ctx: Context) = ctx.getSharedPreferences("runsettings", 0)
@@ -32,57 +28,9 @@ object NutritionSync {
         return "&bs=" + android.util.Base64.encodeToString(raw.toByteArray(), android.util.Base64.URL_SAFE or android.util.Base64.NO_WRAP or android.util.Base64.NO_PADDING)
     }
 
-    /** Last error (shown on the Nutrition card), empty when the last read worked. */
-    fun lastError(ctx: Context) = ctx.getSharedPreferences("nutrition", 0).getString("err", "") ?: ""
 
-    /** Reads the last 21 days. Returns true if anything changed. Call off the main thread. */
-    fun fetch(ctx: Context): Boolean {
-        if (Standalone.on(ctx)) return Local.refreshDays(ctx)
-        if (!ready(ctx)) return false
-        val sp = ctx.getSharedPreferences("nutrition", 0)
-        // Fluids / weights entered here: send any waiting, and drop the ones the Command Center has taken (first,
-        // so the days read below already include them).
-        HydrationSync.reconcile(ctx)
-        return try {
-            val url = Live.db(ctx) + "/nutrition/" + key(ctx) + "/days.json?orderBy=%22%24key%22&limitToLast=21"
-            val c = (URL(url).openConnection() as HttpURLConnection).apply { connectTimeout = 12_000; readTimeout = 15_000 }
-            val code = c.responseCode
-            if (code != 200) {
-                sp.edit().putString("err", if (code == 401 || code == 403) "rules" else "HTTP $code").apply()
-                return false
-            }
-            val body = c.inputStream.bufferedReader().readText()
-            val days = synchronized(io.github.michealsizemore1.beyondstride.Hydration) {
-                io.github.michealsizemore1.beyondstride.Hydration.overlay(ctx, Nutrition.parse(body).map { d ->
-                    // A day with foods but no micronutrient totals (older shares): work them out here.
-                    if (d.foods.isNotEmpty() && d.micros.isEmpty()) io.github.michealsizemore1.beyondstride.Food.summarize(d, d.foods).copy(cal = d.cal) else d }) }
-            val before = Nutrition.json(NutritionStore.days(ctx))
-            sp.edit().putString("err", "").apply()
-            FoodLibrary.refresh(ctx)
-            CcStatus.fetch(ctx)
-            NutritionStore.save(ctx, CalorieTargets.apply(ctx, days))
-            FoodLibrary.quickToWatch(ctx)
-            FoodLibrary.libraryToWatch(ctx)
-            Nutrition.json(days.takeLast(21)) != before
-        } catch (e: Exception) { sp.edit().putString("err", "offline").apply(); false }
-    }
-
-    /** Set when the Nutrition tab is opened: the next screen refresh re-reads a few times while the page shares. */
-    @Volatile var justOpened = false
-
-    /**
-     * After coming back from the Nutrition tab the Command Center may still be sending, so read now and again
-     * at 5, 15 and 40 seconds. [onChange] runs (on a background thread) whenever new data arrives.
-     */
-    fun refreshAfterNutrition(ctx: Context, onChange: () -> Unit) {
-        justOpened = false
-        Thread {
-            for (wait in longArrayOf(0, 5_000, 10_000, 25_000)) {
-                try { Thread.sleep(wait) } catch (e: InterruptedException) { return@Thread }
-                if (fetch(ctx)) onChange()
-            }
-        }.start()
-    }
+    /** Brings the nutrition days up to date from BeyondStride's own data. Returns true if anything changed. Call off the main thread. */
+    fun fetch(ctx: Context): Boolean = Local.refreshDays(ctx)
 
     /** Fetch if the last read is older than [maxAgeMs]. */
     fun refreshIfStale(ctx: Context, maxAgeMs: Long = 2 * 60_000L) =

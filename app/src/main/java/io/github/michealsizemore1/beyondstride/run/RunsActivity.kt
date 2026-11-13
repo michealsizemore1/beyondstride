@@ -49,7 +49,7 @@ open class RunsActivity : Activity() {
         io.github.michealsizemore1.beyondstride.Theme.load(this, "runsettings")
         super.onResume()
         if (wrongDevice) return
-        if (Standalone.on(this)) { val app = applicationContext; Thread { try { Local.upkeep(app) } catch (e: Exception) { } }.start() }
+        run { val app = applicationContext; Thread { try { Local.upkeep(app) } catch (e: Exception) { } }.start() }
         // LiveTrack is on (e.g. restored from a backup) but this app may not text yet: ask once per launch.
         if (!askedSms && getSharedPreferences("runsettings", 0).getBoolean("liveOn", false) && Live.smsOn(this) && Live.contacts(this).isNotEmpty() &&
             checkSelfPermission(android.Manifest.permission.SEND_SMS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
@@ -65,8 +65,7 @@ open class RunsActivity : Activity() {
             if (now != had) runOnUiThread { if (!isFinishing) render() }
         }.start()
         // Today's nutrition from the Command Center.
-        if (NutritionSync.justOpened) NutritionSync.refreshAfterNutrition(this) { runOnUiThread { if (!isFinishing) render() } }
-        else Thread { if (NutritionSync.refreshIfStale(this, 60_000L)) runOnUiThread { if (!isFinishing) render() } }.start()
+        Thread { if (NutritionSync.refreshIfStale(this, 60_000L)) runOnUiThread { if (!isFinishing) render() } }.start()
         // Last night's sleep from Samsung Health (via Health Connect), for the readiness score.
         Thread {
             if (System.currentTimeMillis() - io.github.michealsizemore1.beyondstride.ReadinessSync.nightsAt(this) > 30 * 60_000L && SleepData.granted(this)) {
@@ -217,11 +216,6 @@ open class RunsActivity : Activity() {
 
     private fun render() {
         PhoneStatus.push(this)
-        // Opened from the watch's Command Center button notification.
-        if (intent?.getBooleanExtra("sendCc", false) == true) {
-            intent.removeExtra("sendCc")
-            PhoneStatus.unsentCc(this).takeIf { it.isNotEmpty() }?.let { CommandCenter.send(this, it) }
-        }
         val ctx = this
         val dp = { v: Int -> RunUi.dp(ctx, v) }
         val col = LinearLayout(this).apply {
@@ -354,7 +348,7 @@ open class RunsActivity : Activity() {
             })
         })
 
-        // 2. Command Center + LiveTrack.
+        // 2. Activities + LiveTrack.
         val unsentCc = runs.map { it.optLong("start") }.filter { !PhoneRuns.sentToCommandCenter(this, it) }
         val live = getSharedPreferences("runsettings", 0).getBoolean("liveOn", false)
         col.addView(LinearLayout(this).apply {
@@ -369,14 +363,12 @@ open class RunsActivity : Activity() {
                 setOnClickListener { onClick() }
             }
             val lp = { last: Boolean -> LinearLayout.LayoutParams(0, MATCH_PARENT, 1f).apply { if (!last) marginEnd = dp(6) } }
-            val sa = Standalone.on(ctx)
-            addView(tile(if (sa) "Activities" else "Command Center", if (unsentCc.isEmpty()) (if (sa) "✓ added" else "✓ sent") else (if (sa) "Add ${unsentCc.size}" else "Send ${unsentCc.size}"), RunUi.CC) {
-                if (unsentCc.isEmpty()) Toast.makeText(ctx, if (sa) "All runs are already in Activities" else "All runs are already in the Command Center", Toast.LENGTH_SHORT).show()
-                else if (CommandCenter.autoOn(ctx)) Thread {
+            addView(tile("Activities", if (unsentCc.isEmpty()) "✓ added" else "Add ${unsentCc.size}", RunUi.CC) {
+                if (unsentCc.isEmpty()) Toast.makeText(ctx, "All runs are already in Activities", Toast.LENGTH_SHORT).show()
+                else Thread {
                     val n = CommandCenter.upload(ctx, unsentCc)
-                    runOnUiThread { Toast.makeText(ctx, if (n > 0) (if (sa) "Added $n to Activities" else "Sent $n — they appear in Activities next time the Command Center is open") else "Couldn't send — check your connection", Toast.LENGTH_LONG).show(); render() }
+                    runOnUiThread { Toast.makeText(ctx, if (n > 0) "Added $n to Activities" else "Couldn't add them — try again", Toast.LENGTH_SHORT).show(); recreate() }
                 }.start()
-                else CommandCenter.send(ctx, unsentCc)
             }, lp(false))
             val smsBlocked = live && Live.smsOn(ctx) && checkSelfPermission(android.Manifest.permission.SEND_SMS) != android.content.pm.PackageManager.PERMISSION_GRANTED
             addView(tile("LiveTrack", if (smsBlocked) "● ON · texts not allowed" else if (live) "● ON" else "Off", if (live) 0xFF1F6FB2.toInt() else RunUi.CARD) {
@@ -435,7 +427,7 @@ open class RunsActivity : Activity() {
                     addView(RunUi.text(ctx, PhoneRuns.title(run), Color.WHITE, 17f, true), LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
                     val badges = buildList {
                         if (run.has("stryd")) add("Stryd ✓")
-                        if (PhoneRuns.sentToCommandCenter(ctx, start)) add(if (Standalone.on(ctx)) "In Activities ✓" else "CC ✓")
+                        if (PhoneRuns.sentToCommandCenter(ctx, start)) add("In Activities ✓")
                     }.joinToString("  ")
                     addView(RunUi.text(ctx, badges, RunUi.MUTED, 12f))
                 })

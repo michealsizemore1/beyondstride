@@ -9,20 +9,16 @@ import io.github.michealsizemore1.beyondstride.Readiness
 import io.github.michealsizemore1.beyondstride.RunMath
 import org.json.JSONObject
 
-/** Phone: the calorie target's settings (shared with the Command Center) and today's result. */
+/** Phone: the calorie target's settings and today's result. */
 object CalorieTargets {
     private fun p(ctx: Context) = ctx.getSharedPreferences("calorietarget", 0)
 
-    /** The Command Center's settings, unless a change made here hasn't reached it yet. */
+    /** Your settings (the ones copied from the Command Center at the switch, if never changed here). */
     fun settings(ctx: Context): CalorieTarget.Settings {
-        val pending = Hydration.changes(ctx).any { it.f == "calSettings" }
         val mine = p(ctx).getString("settings", null)?.let { try { JSONObject(it) } catch (e: Exception) { null } }
-        val cc = FoodLibrary.calSettings(ctx)
-        return CalorieTarget.Settings.from(if (pending || cc == null || (Standalone.on(ctx) && mine != null)) mine else cc)
+        return CalorieTarget.Settings.from(mine ?: FoodLibrary.calSettings(ctx))
     }
 
-    /** At cut-over: keep the Command Center's last settings as BeyondStride's own. */
-    fun keep(ctx: Context) { p(ctx).edit().putString("settings", settings(ctx).json().toString()).apply() }
     fun set(ctx: Context, s: CalorieTarget.Settings) {
         p(ctx).edit().putString("settings", s.json().toString()).apply()
         Hydration.queue(ctx, "calSettings", s.json())

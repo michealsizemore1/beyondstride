@@ -24,7 +24,7 @@ object PhoneStatus {
         Thread {
             try {
                 val req = PutDataMapRequest.create("/phonestatus").apply {
-                    dataMap.putInt("ccUnsent", unsentCc(app).size); dataMap.putBoolean("standalone", Standalone.on(app))
+                    dataMap.putInt("ccUnsent", unsentCc(app).size); dataMap.putBoolean("standalone", true)
                     dataMap.putInt("runs", PhoneRuns.list(app).size)
                 }.asPutDataRequest().setUrgent()
                 Tasks.await(Wearable.getDataClient(app).putDataItem(req))
@@ -40,23 +40,13 @@ object PhoneStatus {
                 ctx.getSharedPreferences("runsettings", 0).edit().putString("screens", org.json.JSONArray(String(data)).toString()).apply()
             } catch (e: Exception) { }
             "/cmd/cc" -> {
-                // Automatic: send through the cloud, no tap needed.
-                if (CommandCenter.autoOn(ctx)) {
-                    Thread {
-                        val list = unsentCc(ctx)
-                        val sent = if (list.isEmpty()) 0 else CommandCenter.upload(ctx, list)
-                        if (list.isNotEmpty()) notify(ctx, 901, if (sent > 0) (if (Standalone.on(ctx)) "Added $sent run${if (sent == 1) "" else "s"} to Activities" else "Sent $sent run${if (sent == 1) "" else "s"} to the Command Center") else "Couldn't send runs",
-                            if (sent > 0) (if (Standalone.on(ctx)) "They're in BeyondStride's Activities now" else "They appear in Activities next time the Command Center is open") else "No connection — try again in a moment",
-                            Intent(ctx, RunsActivity::class.java))
-                    }.start()
-                    return
-                }
-                // The Command Center opens in the phone's browser, which needs a tap on the phone.
-                val n = unsentCc(ctx).size
-                if (Standalone.on(ctx)) { Thread { val s = CommandCenter.upload(ctx, unsentCc(ctx)); notify(ctx, 901, if (s > 0) "Added $s run${if (s == 1) "" else "s"} to Activities" else "Activities are up to date", "All runs are in BeyondStride's Activities", Intent(ctx, RunsActivity::class.java)) }.start(); return }
-                notify(ctx, 901, if (n > 0) "Send $n run${if (n == 1) "" else "s"} to Command Center" else "Command Center is up to date",
-                    if (n > 0) "Tap to open the Command Center and add them" else "All runs are already there",
-                    Intent(ctx, RunsActivity::class.java).putExtra("sendCc", n > 0))
+                // "Add to Activities" from the watch: every run not in Activities yet goes in.
+                Thread {
+                    val list = unsentCc(ctx)
+                    val sent = if (list.isEmpty()) 0 else CommandCenter.upload(ctx, list)
+                    notify(ctx, 901, if (sent > 0) "Added $sent run${if (sent == 1) "" else "s"} to Activities" else if (list.isEmpty()) "Activities are up to date" else "Couldn't add the runs",
+                        if (sent > 0 || list.isEmpty()) "They're in BeyondStride's Activities" else "Try again in a moment", Intent(ctx, RunsActivity::class.java))
+                }.start()
             }
             // Watch asked for directions to a trail start (no Google Maps on the watch).
             "/cmd/directions" -> {

@@ -5,8 +5,6 @@ import io.github.michealsizemore1.beyondstride.Food
 import io.github.michealsizemore1.beyondstride.NutritionStore
 import org.json.JSONArray
 import org.json.JSONObject
-import java.net.HttpURLConnection
-import java.net.URL
 import java.net.URLEncoder
 
 /**
@@ -56,7 +54,7 @@ object FoodLibrary {
     }
     /** A food renamed in a meal: the same food in Favorites / Healthy 7+ / saved meals (and its photo) gets the new name too (stand-alone). */
     fun rename(ctx: Context, old: String, new: String) {
-        if (!Standalone.on(ctx) || old.equals(new, false)) return
+        if (old.equals(new, false)) return
         val key = old.trim().lowercase(); val l = lib(ctx); var changed = false
         fun fix(a: JSONArray?) { if (a == null) return; for (i in 0 until a.length()) a.optJSONObject(i)?.let { o -> if (o.optString("name").trim().lowercase() == key) { o.put("name", new); changed = true } } }
         fix(l.optJSONArray("favorites")); fix(l.optJSONArray("healthy"))
@@ -114,15 +112,6 @@ object FoodLibrary {
         return map[f.name.lowercase().trim()] ?: ""
     }
 
-    /** (foods that need enriching, foods with AI estimates) from the Command Center. */
-    fun stats(ctx: Context): Pair<Int, Int> = lib(ctx).optJSONObject("stats")?.let { it.optInt("needEnrich") to it.optInt("estimated") } ?: (0 to 0)
-
-    /** Asks the Command Center to run a Food Database tool: enrich, undo, rescan, dedupe. */
-    fun libAction(ctx: Context, action: String) {
-        io.github.michealsizemore1.beyondstride.Hydration.queue(ctx, "libAction", JSONObject().put("action", action))
-        Thread { HydrationSync.flush(ctx.applicationContext) }.start()
-    }
-
     /** The Command Center's calorie-target settings (shared with the food database). */
     fun calSettings(ctx: Context): JSONObject? = lib(ctx).optJSONObject("calSettings")
 
@@ -150,22 +139,6 @@ object FoodLibrary {
         val hidden = p(ctx).getStringSet("hiddenRecent", emptySet()) ?: emptySet()
         return NutritionStore.days(ctx).sortedByDescending { it.date }.flatMap { it.foods.reversed() }
             .filter { it.name.isNotBlank() && it.name.lowercase().trim() !in hidden && seen.add(it.name.lowercase().trim()) }.take(limit)
-    }
-
-    /** Reads the Command Center's food database (every 10 minutes at most). Call off the main thread. */
-    fun refresh(ctx: Context, force: Boolean = false): Boolean {
-        if (Standalone.on(ctx) || !NutritionSync.ready(ctx)) return false
-        if (!force && System.currentTimeMillis() - p(ctx).getLong("at", 0) < 10 * 60_000L) return false
-        return try {
-            val c = (URL(Live.db(ctx) + "/nutrition/" + NutritionSync.key(ctx) + "/library.json").openConnection() as HttpURLConnection)
-                .apply { connectTimeout = 12_000; readTimeout = 20_000 }
-            if (c.responseCode != 200) return false
-            val txt = c.inputStream.bufferedReader().readText()
-            val changed = txt != p(ctx).getString("lib", "")
-            p(ctx).edit().putString("lib", if (txt == "null") "{}" else txt).putLong("at", System.currentTimeMillis()).apply()
-            if (changed) { quickToWatch(ctx); libraryToWatch(ctx) }
-            changed
-        } catch (e: Exception) { false }
     }
 
     /** A short list for the watch's Quick add: your favorites first, then recent foods. */

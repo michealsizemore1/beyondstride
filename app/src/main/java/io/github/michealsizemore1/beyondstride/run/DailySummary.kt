@@ -89,7 +89,7 @@ object DailySummary {
 
     /** Posts today's and yesterday's summaries when they changed (at most every 10 minutes). Call off the main thread. */
     fun publish(ctx: Context, force: Boolean = false) {
-        if (!Standalone.on(ctx) || !NutritionSync.ready(ctx)) return
+        if (!NutritionSync.ready(ctx)) return
         val pr = p(ctx); val now = System.currentTimeMillis()
         // Day summaries every 10 minutes; activities and plan days whenever they change.
         val days = DayStress.takeStepsChanged(ctx) or (force || !pr.getBoolean("backHrv", false) || now - pr.getLong("at", 0L) >= 10 * 60_000L)

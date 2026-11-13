@@ -1,9 +1,6 @@
 package io.github.michealsizemore1.beyondstride.run
 
 import android.content.Context
-import android.content.Intent
-import android.net.Uri
-import android.util.Base64
 import io.github.michealsizemore1.beyondstride.RunMath
 import org.json.JSONArray
 import org.json.JSONObject
@@ -153,71 +150,28 @@ object CommandCenter {
         }
     }
 
-    /** Send runs automatically (through the cloud) — on unless turned off in Settings, and needs the LiveTrack database. */
-    fun autoOn(ctx: Context) = Standalone.on(ctx) || (ctx.getSharedPreferences("runsettings", 0).getBoolean("ccAuto", true) && NutritionSync.ready(ctx))
+    /** Finished runs go into Activities automatically. */
+    fun autoOn(@Suppress("UNUSED_PARAMETER") ctx: Context) = true
 
-    /**
-     * Puts each run in the cloud (<db>/nutrition/<key>/runs/<start>); the Command Center adds them to Activities the next
-     * time it's open (and every minute while it is), then clears them. Returns how many were sent. Call off the main thread.
-     */
+    /** Puts each run into BeyondStride's own Activities (once). Returns how many were added. Call off the main thread. */
     fun upload(ctx: Context, starts: List<Long>): Int {
-        if (Standalone.on(ctx)) {
-            // Stand-alone: the run goes straight into BeyondStride's own Activities (once).
-            var n = 0
-            starts.forEach { s ->
-                try {
-                    PhoneRuns.read(ctx, s)?.let { if (!RunWeather.has(it)) try { RunWeather.fill(ctx, s) } catch (e: Exception) { } }
-                    val run = PhoneRuns.read(ctx, s) ?: return@forEach
-                    val act = activity(ctx, run)
-                    if (ActivityStore.list(ctx).none { ActivityStore.idOf(it) == ActivityStore.idStr(act.opt("id")) }) ActivityStore.save(ctx, act)
-                    PhoneRuns.setUploadedToCommandCenter(ctx, s); n++
-                } catch (e: Exception) { }
-            }
-            if (n > 0) PhoneStatus.push(ctx)
-            return n
-        }
-        if (!NutritionSync.ready(ctx)) return 0
         var n = 0
         starts.forEach { s ->
             try {
                 PhoneRuns.read(ctx, s)?.let { if (!RunWeather.has(it)) try { RunWeather.fill(ctx, s) } catch (e: Exception) { } }
                 val run = PhoneRuns.read(ctx, s) ?: return@forEach
-                val body = activity(ctx, run).toString()
-                val url = Live.db(ctx) + "/nutrition/" + NutritionSync.key(ctx) + "/runs/" + s + ".json"
-                val c = (java.net.URL(url).openConnection() as java.net.HttpURLConnection).apply {
-                    requestMethod = "PUT"; doOutput = true; connectTimeout = 12_000; readTimeout = 15_000
-                    setRequestProperty("Content-Type", "application/json")
-                }
-                c.outputStream.use { it.write(body.toByteArray()) }
-                if (c.responseCode in 200..299) { PhoneRuns.setUploadedToCommandCenter(ctx, s); n++ }
+                val act = activity(ctx, run)
+                if (ActivityStore.list(ctx).none { ActivityStore.idOf(it) == ActivityStore.idStr(act.opt("id")) }) ActivityStore.save(ctx, act)
+                PhoneRuns.setUploadedToCommandCenter(ctx, s); n++
             } catch (e: Exception) { }
         }
         if (n > 0) PhoneStatus.push(ctx)
         return n
     }
 
-    /** Opens the Command Center with these runs; it adds them to Activities and syncs. */
+    /** Adds these runs to Activities (with a short message). */
     fun send(ctx: Context, starts: List<Long>) {
-        if (Standalone.on(ctx)) {
-            Thread { val n = upload(ctx, starts)
-                android.os.Handler(android.os.Looper.getMainLooper()).post { android.widget.Toast.makeText(ctx, if (n > 0) "Added $n run${if (n == 1) "" else "s"} to Activities" else "Already in Activities", android.widget.Toast.LENGTH_SHORT).show() } }.start()
-            return
-        }
-        // Fill in weather/AQI first for any run that doesn't have it yet (quick lookup), then open.
-        Thread {
-            starts.forEach { s -> PhoneRuns.read(ctx, s)?.let { if (!RunWeather.has(it)) try { RunWeather.fill(ctx, s) } catch (e: Exception) { } } }
-            android.os.Handler(android.os.Looper.getMainLooper()).post { open(ctx, starts) }
-        }.start()
-    }
-
-    private fun open(ctx: Context, starts: List<Long>) {
-        val arr = JSONArray()
-        starts.forEach { s -> PhoneRuns.read(ctx, s)?.let { arr.put(activity(ctx, it)) } }
-        if (arr.length() == 0) return
-        val b64 = Base64.encodeToString(arr.toString().toByteArray(), Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING)
-        val url = RunSettings.ccUrl(ctx).substringBefore('#') + "#watchruns=" + b64
-        ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-        starts.forEach { PhoneRuns.setSentToCommandCenter(ctx, it) }
-        PhoneStatus.push(ctx)
+        Thread { val n = upload(ctx, starts)
+            android.os.Handler(android.os.Looper.getMainLooper()).post { android.widget.Toast.makeText(ctx, if (n > 0) "Added $n run${if (n == 1) "" else "s"} to Activities" else "Already in Activities", android.widget.Toast.LENGTH_SHORT).show() } }.start()
     }
 }

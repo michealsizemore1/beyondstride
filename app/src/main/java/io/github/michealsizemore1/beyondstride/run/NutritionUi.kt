@@ -24,7 +24,6 @@ object NutritionUi {
         val nd = if (big) NutriDay.day(ctx) else N.today(NutritionStore.days(ctx))
         when {
             !NutritionSync.ready(ctx) -> col.addView(RunUi.text(ctx, "Set up LiveTrack first — nutrition is shared through the same database.", RunUi.MUTED, 12f))
-            NutritionSync.lastError(ctx) == "rules" -> col.addView(RunUi.text(ctx, "Update your Firebase rules to share nutrition (Settings → LiveTrack → copy rules).", 0xFFF2C94C.toInt(), 12f))
         }
         if (nd == null || nd.count == 0) col.addView(RunUi.text(ctx, if (!big || NutriDay.isToday()) "No food logged today yet" else "No food logged this day", RunUi.MUTED, 13f))
         else {
@@ -319,7 +318,7 @@ object NutritionUi {
         box.addView(android.widget.TextView(ctx).apply { text = "Post-run weight (lb)"; setPadding(0, dp(8), 0, 0) })
         val post = field("e.g. 171.2", today?.postWeight ?: 0.0); box.addView(post)
         box.addView(android.widget.TextView(ctx).apply {
-            text = (if (Standalone.on(ctx)) "" else "Also goes to the Command Center (its Wellness weight fields). ") + "Sweat rate uses pre-run → post-run (or wake-up → post-run when there's no pre-run weight), plus sports drinks logged. Drinks are in Liquids on the Nutrition tab."; textSize = 12f; setPadding(0, dp(8), 0, 0)
+            text = "Sweat rate uses pre-run → post-run (or wake-up → post-run when there's no pre-run weight), plus sports drinks logged. Drinks are in Liquids on the Nutrition tab."; textSize = 12f; setPadding(0, dp(8), 0, 0)
         })
         android.app.AlertDialog.Builder(ctx).setTitle("Weight · " + if (NutriDay.isToday()) "today" else java.time.LocalDate.parse(NutriDay.date()).format(java.time.format.DateTimeFormatter.ofPattern("EEE, MMM d", Locale.US))).setView(ScrollView(ctx).apply { addView(box) })
             .setPositiveButton("Save") { _, _ ->

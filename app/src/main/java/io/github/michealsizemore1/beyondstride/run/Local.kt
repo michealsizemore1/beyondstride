@@ -16,7 +16,6 @@ import org.json.JSONObject
 object Local {
     /** Folds every waiting change into BeyondStride's own data. */
     fun commit(ctx: Context) {
-        if (!Standalone.on(ctx)) return
         var changed = false
         synchronized(Hydration) {
             val ch = Hydration.changes(ctx)
@@ -115,7 +114,6 @@ object Local {
 
     /** Background upkeep (hourly worker and when the app opens): Health Connect import and the cloud copy. Call off the main thread. */
     fun upkeep(ctx: Context, hourly: Boolean = false) {
-        if (!Standalone.on(ctx)) return
         val p = ctx.getSharedPreferences("standalone", 0); val now = System.currentTimeMillis()
         if (ActivityImport.enabled(ctx) && (hourly || now - p.getLong("hcAt", 0L) > 60 * 60_000L)) {
             p.edit().putLong("hcAt", now).apply()
@@ -134,42 +132,5 @@ object Local {
         try { if (hourly) { TodayWeather.fetch(ctx); ActivityStore.watchSummary(ctx)?.let { io.github.michealsizemore1.beyondstride.NutritionStore.setActs(ctx, it) } } } catch (e: Exception) { }
         try { DailySummary.publish(ctx, force = sleepNew) } catch (e: Exception) { }
         if (now - p.getLong("cloudTry", 0L) > 3 * 60_000L || hourly) { p.edit().putLong("cloudTry", now).apply(); try { CloudCopy.sync(ctx) } catch (e: Exception) { } }
-    }
-
-    // ── The switch ──
-    @Volatile var progress = ""
-
-    /**
-     * Cut-over: reads everything one last time from the Command Center (nothing there is changed or removed),
-     * keeps it as BeyondStride's own data, switches stand-alone on and makes the first cloud copy.
-     * Returns a summary. Call off the main thread.
-     */
-    fun cutOver(ctx: Context, onProgress: () -> Unit = {}): String {
-        fun step(s: String) { progress = s; onProgress() }
-        if (NutritionSync.ready(ctx) && !Standalone.on(ctx)) {
-            step("Sending changes still waiting…"); HydrationSync.flush(ctx)
-            step("Reading nutrition…"); NutritionSync.fetch(ctx)
-            step("Reading every older nutrition day…"); NutriDay.fetchAll(ctx) { step("Reading older days… ${NutriDay.loaded} added") }
-            step("Reading activities…"); ActivityStore.refresh(ctx)
-            step("Reading the food database…"); FoodLibrary.refresh(ctx, force = true)
-            step("Reading training plans…"); PlanStore.refresh(ctx)
-        }
-        step("Saving it as BeyondStride's own…")
-        PlanStore.snapshot(ctx)
-        CalorieTargets.keep(ctx)
-        // Recent days (with anything still waiting on top) join the history, so one place holds every day.
-        NutriDay.putAll(ctx, Hydration.overlay(ctx, NutritionStore.days(ctx)))
-        // Activities (their chips are worked out here from now on).
-        val acts = ActivityStore.rawJson(ctx)
-        if (acts.length() == 0) acts.put("list", JSONArray())
-        ActivityStore.setRaw(ctx, acts)
-        Standalone.set(ctx, true)
-        step("Folding in changes still waiting…"); commit(ctx); refreshDays(ctx)
-        step("Making the first cloud copy…")
-        val cloud = CloudCopy.ready(ctx) && CloudCopy.sync(ctx, force = true)
-        val n = NutriDay.historyCount(ctx); val a = ActivityStore.list(ctx).size
-        val pl = PlanStore.data(ctx).let { listOf("current", "upcoming").count { k -> it.has(k) } + (it.optJSONArray("archived")?.length() ?: 0) }
-        progress = ""
-        return "Stand-alone now · $n nutrition days · $a activities · $pl plans" + if (cloud) " · cloud copy made" else if (CloudCopy.ready(ctx)) " · cloud copy will retry" else ""
     }
 }

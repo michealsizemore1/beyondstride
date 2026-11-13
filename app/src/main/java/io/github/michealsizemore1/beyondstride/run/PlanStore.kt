@@ -4,8 +4,6 @@ import android.content.Context
 import io.github.michealsizemore1.beyondstride.Hydration
 import org.json.JSONArray
 import org.json.JSONObject
-import java.net.HttpURLConnection
-import java.net.URL
 
 /**
  * Training plans shared by the Command Center (<db>/nutrition/<key>/plans): the active plan with each day's workout,
@@ -16,71 +14,20 @@ object PlanStore {
     private fun p(ctx: Context) = ctx.getSharedPreferences("plans", 0)
     private fun raw(ctx: Context): JSONObject = try { JSONObject(p(ctx).getString("data", "{}")) } catch (e: Exception) { JSONObject() }
 
-    fun pending(ctx: Context) = Hydration.changes(ctx).filter { it.f == "planAction" }.sortedBy { it.at }
 
     private fun keyOf(which: String) = if (which == "upcoming") "upcoming" else "current"
     private fun today() = java.time.LocalDate.now().toString()
     private fun archDate() = java.time.LocalDate.now().format(java.time.format.DateTimeFormatter.ofPattern("MMM d, yyyy", java.util.Locale.US))
 
-    /** The plans as shown: the Command Center's copy with changes made here (not yet applied there) on top. */
-    fun data(ctx: Context): JSONObject {
-        if (Standalone.on(ctx)) return localView(ctx)
-        val o = raw(ctx)
-        val arch = o.optJSONArray("archived") ?: JSONArray().also { o.put("archived", it) }
-        fun archive(plan: JSONObject, from: String) {
-            val a = JSONObject(plan.toString()).put("archivedAt", archDate()).put("archivedFrom", from); a.remove("days")
-            val n = JSONArray().put(a); for (i in 0 until arch.length()) n.put(arch.get(i)); o.put("archived", n)
-        }
-        pending(ctx).forEach { c ->
-            val x = try { JSONObject(c.x ?: "{}") } catch (e: Exception) { return@forEach }
-            val k = keyOf(x.optString("which"))
-            val archNow = o.optJSONArray("archived") ?: JSONArray()
-            when (x.optString("action")) {
-                "delete" -> o.remove(k)
-                "archive" -> o.optJSONObject(k)?.let { archive(it, k); o.remove(k) }
-                "activate" -> o.optJSONObject("upcoming")?.let { up -> o.optJSONObject("current")?.let { archive(it, "current") }; o.put("current", up); o.remove("upcoming") }
-                "setText" -> o.optJSONObject(k)?.let {
-                // Keep the last few versions so an AI change can be undone.
-                val prev = it.optJSONArray("prevTexts") ?: JSONArray(); val n = JSONArray().put(JSONObject().put("text", it.optString("text")).put("at", archDate()))
-                for (i in 0 until Math.min(4, prev.length())) n.put(prev.get(i)); it.put("prevTexts", n)
-                it.put("text", x.optString("text")).put("display", x.optString("text")); if (x.optBoolean("adjusted")) it.put("adjustedAt", archDate()) }
-                "deleteArchived", "restore" -> {
-                    val n = JSONArray(); var hit: JSONObject? = null
-                    for (i in 0 until archNow.length()) { val a = archNow.optJSONObject(i) ?: continue
-                        if (hit == null && a.optString("archivedAt") == x.optString("archivedAt") && a.optString("text").take(200) == x.optString("head")) hit = a else n.put(a) }
-                    o.put("archived", n)
-                    if (x.optString("action") == "restore") hit?.let { o.put(if (it.optString("archivedFrom") == "upcoming") "upcoming" else "current", it) }
-                }
-                "collapse" -> o.put("collapsed", x.optBoolean("on"))
-                "startDate" -> o.optJSONObject("current")?.put("startDate", x.optString("date"))
-                "raceDate" -> o.optJSONObject("current")?.let { it.put("raceDate", x.optString("date")).put("race", x.optString("date")) }
-            }
-        }
-        return o
-    }
+    /** The plans (kept and worked out here). */
+    fun data(ctx: Context): JSONObject = localView(ctx)
 
-    fun action(ctx: Context, x: JSONObject) {
-        if (Standalone.on(ctx)) { localDo(ctx, x); return }
-        Hydration.queue(ctx, "planAction", x)
-        Thread { HydrationSync.flush(ctx.applicationContext) }.start()
-    }
+    fun action(ctx: Context, x: JSONObject) = localDo(ctx, x)
 
     fun fetchedAt(ctx: Context) = p(ctx).getLong("at", 0L)
 
-    /** Reads the Command Center's plans. Call off the main thread (after ActivityStore.refresh, which reconciles). */
-    fun refresh(ctx: Context): Boolean {
-        if (Standalone.on(ctx) || !NutritionSync.ready(ctx)) return false
-        return try {
-            val c = (URL(Live.db(ctx) + "/nutrition/" + NutritionSync.key(ctx) + "/plans.json").openConnection() as HttpURLConnection)
-                .apply { connectTimeout = 12_000; readTimeout = 25_000 }
-            if (c.responseCode != 200) return false
-            val txt = c.inputStream.bufferedReader().readText()
-            if (txt == "null" || txt.isBlank()) return false
-            val changed = txt != p(ctx).getString("data", "")
-            p(ctx).edit().putString("data", txt).putLong("at", System.currentTimeMillis()).apply()
-            changed
-        } catch (e: Exception) { false }
-    }
+    /** Nothing to read any more (the plans live here); kept for the screens that call it. */
+    @Suppress("UNUSED_PARAMETER") fun refresh(ctx: Context): Boolean = false
 
     /** Today's workout text from the active plan, or null when the card is hidden (no plan / before its start). */
     fun workoutFor(plan: JSONObject, date: String): String =
@@ -110,7 +57,7 @@ object PlanStore {
         if (days.length() > 0) Thread { try { WorkoutStore.importPlan(app, days) } catch (e: Exception) { } }.start()
     }
     /** Called when the app opens: catches up Watch Workouts if the plan changed (or a new day started). */
-    fun syncWatchIfNeeded(ctx: Context) { if (Standalone.on(ctx)) syncWatch(ctx, local(ctx)) }
+    fun syncWatchIfNeeded(ctx: Context) { syncWatch(ctx, local(ctx)) }
     fun localJson(ctx: Context): JSONObject = local(ctx)
     /** The Command Center's last copy of the plans (kept from before the switch). */
     fun ccCopy(ctx: Context): JSONObject = raw(ctx)
@@ -125,14 +72,6 @@ object PlanStore {
         return out
     }
     fun setLocalJson(ctx: Context, o: JSONObject) = saveLocal(ctx, o)
-
-    /** At cut-over: the Command Center's last copy (with anything still pending) becomes BeyondStride's own. */
-    fun snapshot(ctx: Context) {
-        val o = JSONObject(dataShared(ctx).toString())
-        listOf("current", "upcoming").forEach { k -> o.optJSONObject(k)?.let { pl -> pl.remove("days"); if (pl.optJSONObject("schedule")?.length() ?: 0 == 0) PlanEngine.rebuild(pl) } }
-        saveLocal(ctx, o)
-    }
-    private fun dataShared(ctx: Context): JSONObject { val on = Standalone.on(ctx); return if (!on) data(ctx) else raw(ctx) }
 
     @Volatile private var daysKey = ""; @Volatile private var daysCache: JSONObject? = null
     @Volatile private var viewKey = ""; @Volatile private var viewCache: JSONObject? = null
@@ -169,7 +108,6 @@ object PlanStore {
 
     /** After Max / Resting HR change: plans that have a TRAINING ZONES block get it updated (stand-alone). */
     @Synchronized fun refreshZones(ctx: Context) {
-        if (!Standalone.on(ctx)) return
         val o = local(ctx); val st = ActivityStore.settings(ctx); var changed = false
         val max = st.optDouble("maxHr", 0.0).takeIf { it > 0 } ?: 174.0; val rest = st.optDouble("restHr", 0.0).takeIf { it > 0 } ?: 55.0
         listOf("current", "upcoming").forEach { k -> o.optJSONObject(k)?.let { pl ->

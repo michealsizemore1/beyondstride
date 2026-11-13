@@ -83,7 +83,6 @@ object PlanAdjust {
 
     /** Pending suggestions (not yet accepted or declined). */
     fun suggestions(ctx: Context): List<JSONObject> {
-        if (!Standalone.on(ctx)) return emptyList()
         val plan = PlanStore.data(ctx).optJSONObject("current") ?: return emptyList()
         val days = plan.optJSONObject("days") ?: return emptyList()
         val st = store(ctx, plan); val decided = items(st)

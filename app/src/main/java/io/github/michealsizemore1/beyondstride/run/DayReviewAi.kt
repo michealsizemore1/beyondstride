@@ -36,7 +36,7 @@ object DayReviewAi {
 
     /** Writes today's review when it's due and not done yet (from report time − 5 min until midnight). Call off the main thread. */
     fun maybeRun(ctx: Context, force: Boolean = false) {
-        if (!EveningReport.enabled(ctx) || !AiFood.hasKey(ctx) || !Standalone.on(ctx) || !NutritionSync.ready(ctx)) return
+        if (!EveningReport.enabled(ctx) || !AiFood.hasKey(ctx) || !NutritionSync.ready(ctx)) return
         val today = Readiness.today(); if (doneFor(ctx) == today) return
         val t = java.time.LocalTime.now(); val mins = t.hour * 60 + t.minute
         if (!force && mins < EveningReport.time(ctx) - 5 && !EveningReport.early(ctx)) return

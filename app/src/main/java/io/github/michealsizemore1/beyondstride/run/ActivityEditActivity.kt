@@ -79,7 +79,6 @@ class ActivityEditActivity : Activity() {
         input("temp", "Temp (°F)", "e.g. 68", num, v("temp"))
         input("humidity", "Humidity (%)", "e.g. 55", num, v("humidity"))
         input("aqi", "AQI (Air Quality)", "e.g. 42", InputType.TYPE_CLASS_NUMBER, v("aqi"))
-        input("execScore", "Execution Score (0-100)", "0-100", num, v("execScore"))
         input("routeUrl", "Run Map / Route Link", "Garmin, Strava, Google Maps, etc.", InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI, v("routeUrl"))
         label("Source")
         val sources = (listOf("watch") + (if (source != "watch") listOf(source) else emptyList()))
@@ -121,9 +120,9 @@ class ActivityEditActivity : Activity() {
             CalorieTargets.weight(io.github.michealsizemore1.beyondstride.NutritionStore.days(this))).toDouble()
         put("calories", cal); put("elevGain", f("elevGain").toDoubleOrNull() ?: 0.0); put("temp", f("temp"))
         put("humidity", (f("humidity").toDoubleOrNull() ?: 0.0).coerceIn(0.0, 100.0)); put("aqi", (f("aqi").toIntOrNull() ?: 0).coerceIn(0, 500))
-        put("execScore", f("execScore").toDoubleOrNull() ?: 0.0); put("routeUrl", route); put("notes", f("notes")); put("injuryReport", f("injuryReport"))
+        put("execScore", orig?.optDouble("execScore", 0.0) ?: 0.0); put("routeUrl", route); put("notes", f("notes")); put("injuryReport", f("injuryReport"))
         ActivityStore.save(this, act, clear)
-        Toast.makeText(this, if (Standalone.on(this)) "Saved" else "Saved — also goes to the Command Center", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, "Saved", Toast.LENGTH_SHORT).show()
         finish()
     }
 
