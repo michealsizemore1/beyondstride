@@ -9,25 +9,12 @@ import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-/** 🌙 Evening report (about 11 PM): how today went and what tomorrow looks like. */
+/**
+ * How today went and what tomorrow looks like (training, food, fluids, Body Battery, sleep, tomorrow). The evening
+ * report notification was removed (Nov 2026); this now only feeds the phone's backup Daily AI Review.
+ */
 object EveningReport {
     private val S = ActivityStore
-    private fun p(ctx: Context) = ctx.getSharedPreferences("evening", 0)
-    fun enabled(ctx: Context) = p(ctx).getBoolean("on", true)
-    fun setEnabled(ctx: Context, v: Boolean) = p(ctx).edit().putBoolean("on", v).apply()
-    fun time(ctx: Context) = p(ctx).getInt("time", 23 * 60)
-    /** From the report time on (11 PM), until midnight. */
-    fun ready(ctx: Context) = enabled(ctx) && (java.time.LocalTime.now().let { it.hour * 60 + it.minute } >= time(ctx) || early(ctx))
-    /** Going to bed early: tonight's report now (and no second one at 11 PM). */
-    fun early(ctx: Context) = p(ctx).getString("early", "") == Readiness.today()
-    fun getEarly(ctx: Context) {
-        p(ctx).edit().putString("early", Readiness.today()).putString("sent", Readiness.today()).apply()
-        try { ActivityStore.watchSummary(ctx)?.let { io.github.michealsizemore1.beyondstride.NutritionStore.setActs(ctx, it) } } catch (e: Exception) { }
-        // Tell the Command Center now, so its Day Review is filled before you go to bed.
-        val app = ctx.applicationContext; Thread { try { DailySummary.publish(app, force = true) } catch (e: Exception) { }; try { DayReviewAi.maybeRun(app, force = true) } catch (e: Exception) { }; try { WeeklyRunWrap.maybeAuto(app) } catch (e: Exception) { } }.start()
-    }
-    fun setTime(ctx: Context, m: Int) { p(ctx).edit().putInt("time", m).putString("sent", "").apply()
-        try { androidx.work.WorkManager.getInstance(ctx).cancelUniqueWork("dayReviewAi") } catch (e: Exception) { }; DayReviewAi.schedule(ctx) }
 
     private const val GREEN = 0xFF5FD38D.toInt(); private const val YELLOW = 0xFFF2C94C.toInt(); private const val RED = 0xFFFF8A80.toInt(); private const val GREY = 0xFF9AA5A0.toInt()
     private fun f1(d: Double) = if (d == Math.floor(d)) d.toLong().toString() else String.format(Locale.US, "%.1f", d)
@@ -102,17 +89,5 @@ object EveningReport {
         val headline = listOfNotNull(adh?.status?.takeIf { acts.isNotEmpty() }, nd?.takeIf { it.target > 0 }?.let { "${kc(it.cal)}/${kc(it.target)} kcal" }, "Battery ${bb.now}",
             if (tt.isNotEmpty()) "Tomorrow: " + (Insights.headLine(tt) ?: tt).trim().substringAfter(": ").take(40) else null).joinToString(" · ")
         return MorningReport.Report(today, headline, sec, advice)
-    }
-
-    /** Once a day at the set time (11 PM). */
-    fun maybeNotify(ctx: Context, notify: (String, String) -> Unit) {
-        if (!enabled(ctx)) return
-        val pr = p(ctx); val today = Readiness.today(); if (pr.getString("sent", "") == today) return
-        val now = LocalTime.now(); val mins = now.hour * 60 + now.minute
-        if (mins < time(ctx) - 10) return
-        try { TodayWeather.fetch(ctx) } catch (e: Exception) { }
-        val r = build(ctx)
-        pr.edit().putString("sent", today).apply()
-        notify("🌙 Evening report", r.headline + "\n" + r.advice)
     }
 }

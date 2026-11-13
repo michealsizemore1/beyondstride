@@ -55,7 +55,7 @@ object WeeklyRunWrap {
     fun maybeAuto(ctx: Context, force: Boolean = false) {
         if (!AiFood.hasKey(ctx)) return
         val today = LocalDate.now(); val t = java.time.LocalTime.now(); val mins = t.hour * 60 + t.minute
-        val sundayDue = today.dayOfWeek == java.time.DayOfWeek.SUNDAY && (force || mins >= EveningReport.time(ctx) - 5 || EveningReport.early(ctx))
+        val sundayDue = today.dayOfWeek == java.time.DayOfWeek.SUNDAY && (force || mins >= DayReviewAi.REVIEW_AT)
         val weeks = listOfNotNull(if (sundayDue) monday(today).toString() else null, monday(today).minusWeeks(1).toString())
         val notes = S.weekNotes(ctx); val pr = p(ctx)
         for (w in weeks) {

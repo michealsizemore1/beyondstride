@@ -186,7 +186,6 @@ object ActivityStore {
             o.put("face", face)
         } catch (e: Exception) { }
         // Same as the phone's Today screen: evening report, Body Battery, weather and My notes.
-        try { if (EveningReport.ready(ctx)) o.put("evening", MorningReport.json(EveningReport.build(ctx))) } catch (e: Exception) { }
         try { val b = BodyBattery.today(ctx)
             o.put("battery", JSONObject().put("date", today.toString()).put("now", b.now).put("label", b.label).put("color", b.color).put("wake", b.wake).put("bed", b.bedtime)
                 .put("drained", b.activity + b.daily).put("watch", b.fromWatch).put("notes", org.json.JSONArray(b.notes))

@@ -283,21 +283,6 @@ open class RunsActivity : Activity() {
         // 🔋 Body Battery data (shown in the "This morning" card below).
         if (System.currentTimeMillis() - DayStress.lastRead(this) > 15 * 60_000L) { val app = applicationContext
             Thread { try { DayStress.sync(app) } catch (e: Exception) { }; try { DailySummary.publish(app) } catch (e: Exception) { }; runOnUiThread { if (!isFinishing && System.currentTimeMillis() - DayStress.lastRead(app) < 60_000L) render() } }.start() }
-        // 🌙 Evening report (from 11 pm).
-        if (EveningReport.ready(this)) col.addView(RunUi.card(this).apply {
-            background = RunUi.rounded(0xFF26264A.toInt(), dp(14).toFloat())
-            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dp(8) }
-            addView(RunUi.text(ctx, "🌙 Evening report ▸", Color.WHITE, 16f, true))
-            addView(RunUi.text(ctx, "How today went, what's left to eat and drink, and tomorrow's plan", RunUi.MUTED, 12f))
-            setOnClickListener { startActivity(Intent(ctx, EveningReportActivity::class.java)) }
-        })
-        else if (EveningReport.enabled(this) && java.time.LocalTime.now().hour >= 17) col.addView(RunUi.card(this).apply {
-            background = RunUi.rounded(0xFF1E1E38.toInt(), dp(14).toFloat())
-            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dp(8) }
-            addView(RunUi.text(ctx, "🌙 Going to bed early? Get tonight's report now ▸", Color.WHITE, 14f, true))
-            addView(RunUi.text(ctx, "Sends it to your watch too, and skips the 11 PM one", RunUi.MUTED, 12f))
-            setOnClickListener { val app = applicationContext; Thread { EveningReport.getEarly(app) }.start(); startActivity(Intent(ctx, EveningReportActivity::class.java)) }
-        })
         // ☀️ This morning: the morning report (until noon), readiness and Body Battery in one card.
         col.addView(RunUi.card(this).apply {
             layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { bottomMargin = dp(8) }

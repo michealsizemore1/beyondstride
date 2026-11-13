@@ -270,10 +270,6 @@ class RunSettingsActivity : Activity() {
             " if you skip them): readiness, today's workout, weather, fuel, weight, week so far", MorningReport.enabled(this)) { MorningReport.setEnabled(ctx, it) }
         col.addView(RunUi.text(this, "Morning report time: change ›", RunUi.ACCENT, 13f, true).apply { setPadding(dp(4), dp(2), 0, dp(6))
             setOnClickListener { val m = MorningReport.time(ctx); android.app.TimePickerDialog(ctx, { _, h, mi -> MorningReport.setTime(ctx, h * 60 + mi); render() }, m / 60, m % 60, false).show() } })
-        switch("🌙 Evening report", "At " + java.time.LocalTime.of(EveningReport.time(this) / 60, EveningReport.time(this) % 60).format(java.time.format.DateTimeFormatter.ofPattern("h:mm a", java.util.Locale.US)) +
-            ": today's training, food and fluids vs target, Body Battery, bedtime and tomorrow's workout", EveningReport.enabled(this)) { EveningReport.setEnabled(ctx, it); Reminders.scheduleEvening(ctx, replace = true) }
-        col.addView(RunUi.text(this, "Evening report time: change ›", RunUi.ACCENT, 13f, true).apply { setPadding(dp(4), dp(2), 0, dp(6))
-            setOnClickListener { val m = EveningReport.time(ctx); android.app.TimePickerDialog(ctx, { _, h, mi -> EveningReport.setTime(ctx, h * 60 + mi); Reminders.scheduleEvening(ctx, replace = true); render() }, m / 60, m % 60, false).show() } })
         switch("⚖️ Weigh-in before a run", "15 minutes before your usual run time (" + java.time.LocalTime.of(Reminders.preTime(this) / 60, Reminders.preTime(this) % 60).format(java.time.format.DateTimeFormatter.ofPattern("h:mm a", java.util.Locale.US)) +
             "), on days with a planned run you haven't done yet — skipped if a pre-run weight is in", Reminders.preOn(this)) { Reminders.setPre(ctx, it) }
         col.addView(RunUi.text(this, "Usual run time: change ›", RunUi.ACCENT, 13f, true).apply { setPadding(dp(4), dp(2), 0, dp(6))
@@ -283,8 +279,6 @@ class RunSettingsActivity : Activity() {
             setOnClickListener { val app = applicationContext; Thread { try { TodayWeather.fetch(app); ActivityStore.watchSummary(app)?.let { io.github.michealsizemore1.beyondstride.NutritionStore.setActs(app, it) }
                 io.github.michealsizemore1.beyondstride.NutritionStore.save(app, io.github.michealsizemore1.beyondstride.NutritionStore.days(app)) } catch (e: Exception) { } }.start()
                 android.widget.Toast.makeText(ctx, "Sent — reopen BeyondStride on the watch", android.widget.Toast.LENGTH_LONG).show() } })
-        col.addView(RunUi.text(this, "Open the evening report ›", RunUi.ACCENT, 13f, true).apply { setPadding(dp(4), 0, 0, dp(6))
-            setOnClickListener { startActivity(android.content.Intent(ctx, EveningReportActivity::class.java)) } })
         col.addView(RunUi.text(this, "Open the morning report ›", RunUi.ACCENT, 13f, true).apply { setPadding(dp(4), 0, 0, dp(6))
             setOnClickListener { startActivity(Intent(ctx, MorningReportActivity::class.java)) } })
         Reminders.KINDS.forEach { (k, label) -> switch(label, when (k) {

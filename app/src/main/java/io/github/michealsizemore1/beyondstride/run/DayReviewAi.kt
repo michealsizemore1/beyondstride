@@ -9,7 +9,7 @@ import java.net.URL
 import java.time.LocalDateTime
 
 /**
- * 🌙 Backup Day Review: 5 minutes before the Evening Report (or right away when tonight's report is asked for early),
+ * 🌙 Backup Day Review: at 10:55 PM,
  * the phone writes the day's review (Wins / What to Improve / Focus / Lessons) with your AI key from today's training,
  * food, sleep and recovery, and puts it in the cloud. The Command Center fills its Daily AI Review from it whenever the
  * review is still empty — even if the Command Center wasn't open that night. (Your Command Center journal and tasks
@@ -17,12 +17,13 @@ import java.time.LocalDateTime
  */
 object DayReviewAi {
     private fun p(ctx: Context) = ctx.getSharedPreferences("dayreviewai", 0)
+    /** When the Daily (and Sunday's weekly) reviews are written: 10:55 PM. */
+    const val REVIEW_AT = 22 * 60 + 55
     fun doneFor(ctx: Context) = p(ctx).getString("done", "") ?: ""
 
     /** Books tonight's run (report time − 5 min). Safe to call often. */
     fun schedule(ctx: Context) {
-        if (!EveningReport.enabled(ctx)) return
-        val now = LocalDateTime.now(); val m = EveningReport.time(ctx) - 5
+        val now = LocalDateTime.now(); val m = REVIEW_AT
         var at = now.toLocalDate().atTime(m / 60, m % 60)
         if (!at.isAfter(now)) at = at.plusDays(1)
         try { androidx.work.WorkManager.getInstance(ctx).enqueueUniqueWork("dayReviewAi", androidx.work.ExistingWorkPolicy.KEEP,
@@ -36,10 +37,10 @@ object DayReviewAi {
 
     /** Writes today's review when it's due and not done yet (from report time − 5 min until midnight). Call off the main thread. */
     fun maybeRun(ctx: Context, force: Boolean = false) {
-        if (!EveningReport.enabled(ctx) || !AiFood.hasKey(ctx) || !NutritionSync.ready(ctx)) return
+        if (!AiFood.hasKey(ctx) || !NutritionSync.ready(ctx)) return
         val today = Readiness.today(); if (doneFor(ctx) == today) return
         val t = java.time.LocalTime.now(); val mins = t.hour * 60 + t.minute
-        if (!force && mins < EveningReport.time(ctx) - 5 && !EveningReport.early(ctx)) return
+        if (!force && mins < REVIEW_AT) return
         run(ctx, today)
     }
 
@@ -60,7 +61,7 @@ object DayReviewAi {
             "- wins: 1-3 specific achievements or positive moments from today\n- improve: 1-3 constructive, realistic improvements\n" +
             "- focus: 1-2 specific priorities for tomorrow\n- lessons: 1-3 concise takeaways from today\n" +
             "Use short bullet-style lines inside each string. Do not invent events. Use numbers exactly as written; HRV in ms is not a readiness score.\n" +
-            "This is a reflective record of the day, kept for later. The Evening Report below was already shown to the user tonight, so do NOT repeat its to-dos: " +
+            "This is a reflective record of the day, kept for later. Do NOT include tonight's to-dos: " +
             "no lights-out / bedtime times, no bedtime or recovery snack, no drinking before bed, no laying out gear. Focus for tomorrow is about the day itself " +
             "(training, eating habits), not tonight. Prefer patterns and lessons over restating numbers.\n\n" +
             "TODAY (BeyondStride):\n$day\n\nEVENING REPORT (already seen — don't repeat):\n$evening"

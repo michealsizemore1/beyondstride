@@ -38,27 +38,10 @@ object Reminders {
             WorkManager.getInstance(ctx).enqueueUniquePeriodicWork("reminders", ExistingPeriodicWorkPolicy.KEEP,
                 PeriodicWorkRequestBuilder<Work>(1, TimeUnit.HOURS).build())
         } catch (e: Exception) { }
-        scheduleEvening(ctx)
+        // The evening report was removed: drop its waiting job (from older versions).
+        try { WorkManager.getInstance(ctx).cancelUniqueWork("evening") } catch (e: Exception) { }
     }
 
-    /** 🌙 Evening report: one job timed for the set time (11:30 PM); the hourly check keeps it booked. */
-    fun scheduleEvening(ctx: Context, replace: Boolean = false) {
-        if (!EveningReport.enabled(ctx)) { try { WorkManager.getInstance(ctx).cancelUniqueWork("evening") } catch (e: Exception) { }; return }
-        val m = EveningReport.time(ctx); val now = java.time.LocalDateTime.now()
-        // The time changed (e.g. 11:30 → 11 PM): rebook the waiting job.
-        val ep = ctx.getSharedPreferences("evening", 0)
-        if (ep.getInt("bookedFor", -1) != m) { ep.edit().putInt("bookedFor", m).apply(); if (!replace) { scheduleEvening(ctx, replace = true); return } }
-        var at = now.toLocalDate().atTime(m / 60, m % 60)
-        val sent = ctx.getSharedPreferences("evening", 0).getString("sent", "") == java.time.LocalDate.now().toString()
-        if (!at.isAfter(now)) at = if (sent) at.plusDays(1) else now.plusMinutes(1)
-        val delay = java.time.Duration.between(now, at).toMillis()
-        try { WorkManager.getInstance(ctx).enqueueUniqueWork("evening", if (replace) androidx.work.ExistingWorkPolicy.REPLACE else androidx.work.ExistingWorkPolicy.KEEP,
-            androidx.work.OneTimeWorkRequestBuilder<EveningWork>().setInitialDelay(delay, TimeUnit.MILLISECONDS).build()) } catch (e: Exception) { }
-    }
-    class EveningWork(c: Context, w: WorkerParameters) : Worker(c, w) {
-        override fun doWork(): Result { evening(applicationContext); return Result.success() }
-    }
-    // ── ⚖️ Weigh in after a run ──
     fun weighOn(ctx: Context) = ctx.getSharedPreferences("evening", 0).getBoolean("weighOn", true)
     fun setWeighOn(ctx: Context, v: Boolean) = ctx.getSharedPreferences("evening", 0).edit().putBoolean("weighOn", v).apply()
     /** A run just came in: remind to weigh in 5 minutes later (unless a post-run weight is in by then, e.g. from the Withings scale). */
@@ -106,9 +89,6 @@ object Reminders {
         notify(ctx, 962, "⚖️ Check your weight", "Step on the scale now for your post-run weight — it gives your sweat rate and how much to drink to rehydrate.", io.github.michealsizemore1.beyondstride.run.NutritionActivity::class.java)
     }
 
-    fun evening(ctx: Context) { try { EveningReport.maybeNotify(ctx) { t, x -> notify(ctx, 961, t, x, EveningReportActivity::class.java)
-        // The watch gets the report too.
-        try { ActivityStore.watchSummary(ctx)?.let { io.github.michealsizemore1.beyondstride.NutritionStore.setActs(ctx, it) } } catch (e: Exception) { } } } catch (e: Exception) { } }
 
     class Work(c: Context, w: WorkerParameters) : Worker(c, w) {
         override fun doWork(): Result { try { check(applicationContext) } catch (e: Exception) { }; return Result.success() }
@@ -150,7 +130,6 @@ object Reminders {
         try { DayReviewAi.maybeRun(ctx); DayReviewAi.schedule(ctx) } catch (e: Exception) { }
         try { WeeklyRunWrap.maybeAuto(ctx) } catch (e: Exception) { }   // 📝 Weekly Run Notes on Sunday night   // 🌙 backup Day Review for the Command Center   // 🌙 nightly backup (catches up if a night was missed)
         morning(ctx)
-        evening(ctx); scheduleEvening(ctx)
         try { schedulePre(ctx) } catch (e: Exception) { }
         val d = Nutrition.today(NutritionStore.days(ctx))
 

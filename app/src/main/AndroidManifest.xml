@@ -110,11 +110,6 @@
             android:windowSoftInputMode="adjustResize"
             android:taskAffinity="io.github.michealsizemore1.beyondstride.running" />
         <activity
-            android:name=".run.EveningReportActivity"
-            android:exported="false"
-            android:label="Evening report"
-            android:taskAffinity="io.github.michealsizemore1.beyondstride.running" />
-        <activity
             android:name=".run.MorningReportActivity"
             android:exported="false"
             android:label="Morning report"

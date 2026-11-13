@@ -1168,10 +1168,6 @@ class RunActivity : Activity() {
         }
         // When the phone last sent this (helps tell if the watch is getting updates).
         acts.optLong("at").takeIf { it > 0 }?.let { at -> col.addView(label("From phone " + java.text.SimpleDateFormat("h:mm a", java.util.Locale.US).format(java.util.Date(at)), C.MUTED, 8f).apply { setPadding(0, dp(6), 0, 0) }) }
-        acts.optJSONObject("evening")?.takeIf { it.optString("date") == today && java.time.LocalTime.now().hour >= 17 }?.let { m ->
-            card(0xFF26264A.toInt()) { addView(label("🌙 Evening report ▸", Color.WHITE, 12f, true)); addView(label(m.optString("headline"), C.MUTED, 9f))
-                setOnClickListener { showReport("evening", "🌙 Evening", 0xFF26264A.toInt()) } }
-        }
     }
     private fun curveBars(b: org.json.JSONObject, hDp: Int): LinearLayout = LinearLayout(this).apply {
         orientation = LinearLayout.HORIZONTAL; gravity = Gravity.BOTTOM; setPadding(0, dp(4), 0, 0)
