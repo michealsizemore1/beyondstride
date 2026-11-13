@@ -15,7 +15,8 @@ import java.time.ZoneId
 
 /**
  * 🩺 Blood pressure from a cuff or watch that writes to Health Connect (Withings, Omron Connect, Samsung Health…).
- * Each day's readings are averaged (sys/dia) with the pulse the device saved at the same moment, and sent with the day
+ * Each day's readings are averaged (sys/dia) — in a back-to-back set, the first one is left out — with the pulse the device
+ * saved at the same moment, and sent with the day
  * summary — the Command Center fills BP and Pulse in its Wellness section (a value you typed there is never replaced).
  */
 object BpImport {
@@ -44,17 +45,24 @@ object BpImport {
         val hrs = try { runBlocking { client.readRecords(ReadRecordsRequest(HeartRateRecord::class, range, pageSize = 5000)).records } } catch (e: Exception) { emptyList() }
         val m = try { JSONObject(pr.getString("days", "{}") ?: "{}") } catch (e: Exception) { JSONObject() }
         val before = m.toString()
-        bps.groupBy { it.time.atZone(zone).toLocalDate().toString() }.forEach { (date, list) ->
-            val sys = list.map { it.systolic.inMillimetersOfMercury }.filter { it in 60.0..260.0 }
-            val dia = list.map { it.diastolic.inMillimetersOfMercury }.filter { it in 30.0..160.0 }
-            if (sys.isEmpty() || dia.isEmpty()) return@forEach
+        bps.groupBy { it.time.atZone(zone).toLocalDate().toString() }.forEach { (date, all) ->
+            // Readings taken back-to-back (within 10 minutes) are one sitting. In a sitting of 2 or more, the first reading is
+            // dropped (it usually reads high) and the rest are averaged — the way doctors ask you to measure at home.
+            val ok = all.filter { it.systolic.inMillimetersOfMercury in 60.0..260.0 && it.diastolic.inMillimetersOfMercury in 30.0..160.0 }.sortedBy { it.time }
+            val sittings = ArrayList<MutableList<BloodPressureRecord>>()
+            ok.forEach { r -> val cur = sittings.lastOrNull(); if (cur != null && r.time.epochSecond - cur.last().time.epochSecond <= 600) cur += r else sittings += mutableListOf(r) }
+            val list = sittings.flatMap { if (it.size >= 2) it.drop(1) else it }
+            if (list.isEmpty()) return@forEach
+            val sys = list.map { it.systolic.inMillimetersOfMercury }
+            val dia = list.map { it.diastolic.inMillimetersOfMercury }
             val pulses = list.mapNotNull { b -> hrs.filter { it.metadata.dataOrigin.packageName == b.metadata.dataOrigin.packageName }
                 .flatMap { it.samples }.filter { Math.abs(it.time.epochSecond - b.time.epochSecond) <= 120 }.minByOrNull { Math.abs(it.time.epochSecond - b.time.epochSecond) }?.beatsPerMinute }
             m.put(date, JSONObject().put("bp", "${Math.round(sys.average())}/${Math.round(dia.average())}").put("pulse", if (pulses.isNotEmpty()) Math.round(pulses.average()).toInt() else 0)
-                .put("n", list.size).put("apps", list.map { it.metadata.dataOrigin.packageName.substringAfterLast('.') }.distinct().joinToString(", ")))
+                .put("n", list.size).put("taken", ok.size).put("apps", list.map { it.metadata.dataOrigin.packageName.substringAfterLast('.') }.distinct().joinToString(", ")))
         }
         val cut = LocalDate.now().minusDays(60).toString(); m.keys().asSequence().toList().filter { it < cut }.forEach { m.remove(it) }
-        val latest = m.keys().asSequence().toList().maxOrNull()?.let { k -> m.optJSONObject(k)?.let { "$k: ${it.optString("bp")}" + (if (it.optInt("pulse") > 0) " · pulse ${it.optInt("pulse")}" else "") + " (from ${it.optString("apps")})" } }
+        val latest = m.keys().asSequence().toList().maxOrNull()?.let { k -> m.optJSONObject(k)?.let { "$k: ${it.optString("bp")}" + (if (it.optInt("pulse") > 0) " · pulse ${it.optInt("pulse")}" else "") +
+            (if (it.optInt("taken") > it.optInt("n")) " (avg of ${it.optInt("n")} — first of each set left out)" else "") + " (from ${it.optString("apps")})" } }
         pr.edit().putString("days", m.toString()).putString("info", "Last checked " + java.text.SimpleDateFormat("MMM d, h:mm a", java.util.Locale.US).format(java.util.Date()) + " · " +
             (latest ?: if (err.isNotEmpty()) "couldn't read Health Connect — ${err.take(120)}" else "no blood pressure in Health Connect in the last $days days")).apply()
         return m.toString() != before

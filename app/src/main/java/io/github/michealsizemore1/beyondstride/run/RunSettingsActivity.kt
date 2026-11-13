@@ -519,7 +519,7 @@ class RunSettingsActivity : Activity() {
                     if (v) Thread { val g = BpImport.granted(applicationContext); runOnUiThread { if (!g) askHealth(BpImport.PERMS) else syncBp() } }.start() }
             })
             addView(RunUi.text(ctx, "Your cuff's app (Withings, Omron Connect, Samsung Health…) must share Blood pressure with Health Connect. " +
-                "Each day's readings are averaged and fill BP and Pulse in the Command Center's Wellness section (a value you typed there is never replaced). " +
+                "Readings taken back-to-back count as one set: the first one (usually high) is left out and the rest are averaged. They fill BP and Pulse in the Command Center's Wellness section (a value you typed there is never replaced). " +
                 "Checks when you open the app and about every 15 minutes.", RunUi.MUTED, 12f))
             BpImport.lastInfo(ctx).takeIf { it.isNotBlank() }?.let { addView(RunUi.text(ctx, it, RunUi.DIM, 12f).apply { setPadding(0, dp(4), 0, 0) }) }
             if (BpImport.enabled(ctx)) addView(RunUi.button(ctx, "Check blood pressure now", RunUi.CARD, Color.WHITE) {
