@@ -454,7 +454,7 @@ class RunSettingsActivity : Activity() {
         col.addView(RunUi.card(this).apply {
             addView(RunUi.text(ctx, "Each day's runs, training plan, sleep / HRV / readiness and nutrition are posted as a short summary that the Command Center's " +
                 "AI Fill Day Review and AI Fill Review read. One way only — nothing comes back into BeyondStride.", RunUi.MUTED, 12f))
-            if (on && CloudCopy.ready(ctx)) addView(RunUi.button(ctx, "Link the Command Center review", RunUi.CARD, Color.WHITE) {
+            if (CloudCopy.ready(ctx)) addView(RunUi.button(ctx, "Link the Command Center review", RunUi.CARD, Color.WHITE) {
                 Thread { try { DailySummary.publish(applicationContext, force = true) } catch (e: Exception) { } }.start()
                 val url = android.net.Uri.parse(RunSettings.ccUrl(ctx).substringBefore("#") + "#app=bs" + NutritionSync.linkPart(ctx))
                 try { startActivity(Intent(Intent.ACTION_VIEW, url)) } catch (e: Exception) { Toast.makeText(ctx, "Couldn't open the Command Center", Toast.LENGTH_LONG).show() }
