@@ -73,7 +73,27 @@ object DayStress {
         for (h in 0 until 24) arr.put(JSONObject().put("hr", if (hrN[h] > 0) hrSum[h] / hrN[h] else 0.0).put("min", if (hrN[h] > 0) hrMin[h] else 0)
             .put("n", hrN[h]).put("steps", steps[h]).put("hrv", if (hrvN[h] > 0) hrvSum[h] / hrvN[h] else 0.0))
         pr.edit().putString("day", day.toString()).putString("hours", arr.toString()).apply()
+        if (STEPS in g) try { syncSteps(ctx, client, zone, day) } catch (e: Exception) { }
     }
+
+    /**
+     * Step totals per day, the way Samsung Health counts them (Health Connect merges phone + watch so steps aren't counted twice).
+     * Today's is refreshed with each read; yesterday's is read once more after midnight so its last steps are included.
+     */
+    private fun syncSteps(ctx: Context, client: HealthConnectClient, zone: ZoneId, day: LocalDate) {
+        val pr = p(ctx)
+        val m = try { JSONObject(pr.getString("stepsByDay", "{}") ?: "{}") } catch (e: Exception) { JSONObject() }
+        fun total(from: java.time.Instant, to: java.time.Instant): Long? = runBlocking {
+            client.aggregate(androidx.health.connect.client.request.AggregateRequest(setOf(StepsRecord.COUNT_TOTAL), TimeRangeFilter.between(from, to)))[StepsRecord.COUNT_TOTAL] }
+        total(day.atStartOfDay(zone).toInstant(), java.time.Instant.now())?.let { m.put(day.toString(), it) }
+        val y = day.minusDays(1).toString()
+        if (pr.getString("stepsFinal", "") != y) total(day.minusDays(1).atStartOfDay(zone).toInstant(), day.atStartOfDay(zone).toInstant())?.let { m.put(y, it); pr.edit().putString("stepsFinal", y).apply() }
+        // Keep about two months.
+        val cut = day.minusDays(60).toString(); m.keys().asSequence().toList().filter { it < cut }.forEach { m.remove(it) }
+        pr.edit().putString("stepsByDay", m.toString()).apply()
+    }
+    /** Samsung step count for a day (null if not read). */
+    fun steps(ctx: Context, date: String): Long? = try { JSONObject(p(ctx).getString("stepsByDay", "{}") ?: "{}").optLong(date, -1L).takeIf { it >= 0 } } catch (e: Exception) { null }
 
     /** Today's hours, or null when nothing has been read today. */
     fun hours(ctx: Context): List<Hour>? {
