@@ -10,7 +10,8 @@ import java.time.LocalTime
  * 🔋 Body Battery (like Garmin's): 0–100 energy reserve.
  *  • Charges overnight — how long you slept, how calm your sleeping heart was, and this morning's HRV and resting HR
  *    vs your normal (or the readiness score when there's no check).
- *  • Drains through the day — a little every waking hour, plus each workout by how long and how hard it was (heart rate).
+ *  • Drains through the day — each waking hour by how far your heart rate sits above your normal awake level (not your
+ *    lying-down resting HR), a little for steps, plus each workout by how long and how hard it was.
  * It's an estimate from the data BeyondStride has (no all-day stress tracking), so treat it as a guide.
  */
 object BodyBattery {
@@ -74,13 +75,13 @@ object BodyBattery {
     }
 
     private fun endOfDay(ctx: Context, date: String, depth: Int = 0): Int {
-        val key = "end_$date"
+        val key = "end2_$date"
         if (date < Readiness.today()) p(ctx).getInt(key, -1).takeIf { it >= 0 }?.let { return it }
         val carry = if (depth < 6) endOfDay(ctx, LocalDate.parse(date).minusDays(1).toString(), depth + 1) else 20
         val (wake, _) = wakeValue(ctx, date, carry)
         val (act, _) = activityDrain(ctx, date)
         val awakeH = 16.0
-        val v = Math.round(clamp(wake - act - awakeH * 3.0, 5.0, 100.0)).toInt()
+        val v = Math.round(clamp(wake - act - awakeH * 2.0, 5.0, 100.0)).toInt()
         if (date < Readiness.today()) p(ctx).edit().putInt(key, v).apply()
         return v
     }
@@ -99,7 +100,11 @@ object BodyBattery {
         val hrvBase = ReadinessSync.checks(ctx).filter { it.day <= date }.takeLast(14).map { it.rmssd }.takeIf { it.size >= 3 }?.average()
         val hours = DayStress.hours(ctx)
 
-        // Hour by hour from wake-up: watch data when there is some, otherwise ~3 an hour.
+        // Your normal awake heart rate (sitting / moving around), not the lying-down morning number: a typical awake hour
+        // sits well above resting HR, so comparing against resting HR made every ordinary hour look like stress.
+        val awakeBase = awakeBaseline(ctx, date, hours, wm / 60, now.hour, rest, max)
+
+        // Hour by hour from wake-up: watch data when there is some, otherwise ~2 an hour.
         var level = wake.toDouble(); var stressD = 0.0; var rechargeU = 0.0; var dailyD = 0.0; var stepsT = 0
         val curve = ArrayList<Pair<Int, Int>>(); curve += (wm / 60) to wake
         val exHours = ArrayList<Int>()
@@ -107,13 +112,16 @@ object BodyBattery {
         for (h in wm / 60..now.hour) {
             val frac = when { h == wm / 60 && h == now.hour -> (nowMin - wm) / 60.0; h == wm / 60 -> 1 - (wm % 60) / 60.0; h == now.hour -> now.minute / 60.0; else -> 1.0 }.coerceIn(0.0, 1.0)
             val x = hours?.getOrNull(h)
-            if (x == null || x.n == 0) { drains[h] = 3.0 * frac; continue }
+            if (x == null || x.n == 0) { drains[h] = 2.0 * frac; continue }
             stepsT += x.steps
-            val elev = x.hr - rest
             if (x.hr >= rest + 0.45 * (max - rest)) { exHours += h; continue }   // a workout hour: its drain comes from the workout below
-            var d = when { elev <= 4 -> -2.0; elev <= 10 -> 1.0; elev <= 18 -> 3.0; elev <= 28 -> 5.0; else -> 7.0 }
-            if (x.hrv > 0 && hrvBase != null && hrvBase > 0) d += when { x.hrv < hrvBase * 0.7 -> 1.5; x.hrv > hrvBase * 1.1 -> -1.0; else -> 0.0 }
-            d += x.steps / 1000.0 * 0.7
+            // Above your normal awake heart rate = stress / effort; at or below it = calm (slow recharge).
+            val elev = x.hr - awakeBase
+            var d = when { elev <= -3 -> -1.0; elev <= 4 -> 1.0; elev <= 10 -> 2.0; elev <= 18 -> 3.0; else -> 4.5 }
+            if (x.hrv > 0 && hrvBase != null && hrvBase > 0) d += when { x.hrv < hrvBase * 0.6 -> 0.8; x.hrv > hrvBase * 1.1 -> -0.5; else -> 0.0 }
+            // Walking costs a little (its heart rate is already counted above).
+            d += x.steps / 1000.0 * 0.3
+            d = Math.min(d, 5.0)
             d *= frac
             if (d < 0) rechargeU += -d else stressD += d
             drains[h] = d
@@ -124,7 +132,7 @@ object BodyBattery {
         dailyD = (0 until 24).sumOf { if (it in exHours) 0.0 else drains[it] } - (if (exHours.isEmpty()) act.toDouble() else 0.0)
         val v = Math.round(level).toInt()
         val toBed = Math.max(0.0, (23 * 60 + 59 - nowMin) / 60.0)
-        val bed = Math.round(clamp(v - toBed * (if (hours != null) 2.5 else 3.0), 5.0, 100.0)).toInt()
+        val bed = Math.round(clamp(v - toBed * (if (hours != null) 1.5 else 2.0), 5.0, 100.0)).toInt()
         val (label, color) = when { v >= 76 -> "High" to GREEN; v >= 51 -> "Good" to TEAL; v >= 26 -> "Medium" to YELLOW; v >= 11 -> "Low" to ORANGE; else -> "Very low" to RED }
         val notes = ArrayList<String>()
         notes += "+$charged overnight → woke at $wake"
@@ -141,6 +149,18 @@ object BodyBattery {
         }
         return Result(v, wake, charged, act, Math.round(Math.max(0.0, dailyD)).toInt(), bed, label, color, notes, curve, hours != null,
             Math.round(stressD).toInt(), Math.round(rechargeU).toInt(), stepsT)
+    }
+
+    /**
+     * Your normal awake heart rate: the lower-quarter hour of today's awake, non-workout hours, averaged with the last
+     * week's (so one stressful day still shows as stress). Never below resting + 8.
+     */
+    private fun awakeBaseline(ctx: Context, date: String, hours: List<DayStress.Hour>?, from: Int, to: Int, rest: Double, max: Double): Double {
+        val pr = p(ctx)
+        val today = hours?.let { hs -> (from..to).mapNotNull { hs.getOrNull(it) }.filter { it.n > 0 && it.hr > 0 && it.hr < rest + 0.45 * (max - rest) }.map { it.hr }.sorted() }
+        if (today != null && today.size >= 3) pr.edit().putFloat("awake_$date", today[(today.size - 1) / 4].toFloat()).apply()
+        val week = (0..7).mapNotNull { pr.getFloat("awake_" + LocalDate.parse(date).minusDays(it.toLong()), -1f).takeIf { v -> v > 0 }?.toDouble() }
+        return Math.max(rest + 8, if (week.isNotEmpty()) week.average() else rest + 14)
     }
 
     /** Wake-up values for the last [n] days (oldest first) for the little chart. */
