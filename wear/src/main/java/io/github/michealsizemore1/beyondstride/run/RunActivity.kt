@@ -93,6 +93,8 @@ class RunActivity : Activity() {
         root = FrameLayout(this).apply { setBackgroundColor(C.BG) }
         setContentView(root)
         Speaker.init(this)
+        // 👣 Steps for the watch face (starts again at midnight).
+        if (!DaySteps.granted(this)) requestPermissions(arrayOf(Manifest.permission.ACTIVITY_RECOGNITION), 12) else DaySteps.start(this)
         if (android.os.Build.VERSION.SDK_INT >= 33) {
             onBackInvokedDispatcher.registerOnBackInvokedCallback(android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT) {
                 logKey("bottom button (back) · screen=$screen")
@@ -224,6 +226,7 @@ class RunActivity : Activity() {
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == 12) { DaySteps.start(this); return }
         if (requestCode == 7) {   // texting permission for LiveTrack
             if (grantResults.firstOrNull() != android.content.pm.PackageManager.PERMISSION_GRANTED)
                 flash("Watch can't text — your phone will still send texts")

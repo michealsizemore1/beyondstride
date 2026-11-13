@@ -102,7 +102,7 @@ object FaceData {
     private fun trim(d: Double) = if (d == Math.floor(d)) d.toInt().toString() else String.format(Locale.US, "%.1f", d)
 
     val SERVICES = listOf(BatteryComplication::class.java, WeatherComplication::class.java, CaloriesComplication::class.java, ProteinComplication::class.java,
-        FluidsComplication::class.java, CarbsComplication::class.java, FatComplication::class.java, ReadinessComplication::class.java, WorkoutComplication::class.java, WeekMilesComplication::class.java)
+        FluidsComplication::class.java, CarbsComplication::class.java, FatComplication::class.java, ReadinessComplication::class.java, WorkoutComplication::class.java, WeekMilesComplication::class.java, StepsComplication::class.java)
     /** New data from the phone: every face showing these refreshes. */
     fun refresh(ctx: Context) = SERVICES.forEach { c -> try { ComplicationDataSourceUpdateRequester.create(ctx, ComponentName(ctx, c)).requestUpdateAll() } catch (e: Exception) { } }
 }
