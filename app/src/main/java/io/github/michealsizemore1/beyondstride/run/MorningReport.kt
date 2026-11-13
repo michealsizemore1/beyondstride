@@ -157,26 +157,38 @@ object MorningReport {
     fun json(r: Report): JSONObject = JSONObject().put("date", r.date).put("headline", r.headline).put("advice", r.advice).put("sections", JSONArray().apply {
         r.sections.forEach { s -> put(JSONObject().put("icon", s.icon).put("title", s.title).put("main", s.main).put("color", s.color).put("lines", JSONArray(s.lines))) } })
 
+    /** Latest the report waits for last night's sleep (11:30 AM). */
+    private const val SLEEP_DEADLINE = 11 * 60 + 30
+
     /**
-     * Sends the notification once a day, complete: right after the morning check (HRV) and the weigh-in are both in —
-     * or 15 minutes after the check if the scale is slow — and at the set time at the latest on a morning you skip the check.
+     * Sends the notification once a day, complete: only after last night's sleep has arrived from Samsung Health, then
+     * right after the morning check (HRV) and the weigh-in are both in — or 15 minutes after the check if the scale is
+     * slow — and at the set time at the latest on a morning you skip the check. If the sleep still isn't in by 11:30 AM
+     * it goes without it (and says so). While it waits it checks again about every 15 minutes.
      */
     fun maybeNotify(ctx: Context, notify: (String, String) -> Unit) {
         if (!enabled(ctx)) return
         val pr = p(ctx); val today = Readiness.today(); if (pr.getString("sent", "") == today) return
         val now = java.time.LocalTime.now(); val mins = now.hour * 60 + now.minute
         if (mins < 4 * 60 || mins > 13 * 60) return
+        // Last night's sleep must be in first (Samsung Health can reach Health Connect an hour or more after you wake):
+        // look again now if it isn't, and send it to the Command Center the moment it arrives.
+        fun sleepIn() = ReadinessSync.nights(ctx).any { it.day == today && it.minutes > 0 }
+        if (!sleepIn() && SleepData.granted(ctx)) try { SleepData.refresh(ctx, 3); if (sleepIn()) DailySummary.publish(ctx, force = true) } catch (e: Exception) { }
+        val sleep = sleepIn()
         val chk = ReadinessSync.checks(ctx).lastOrNull { it.day == today }
         val weighed = (NutriDay.day(ctx, today)?.weight ?: 0.0) > 0
         val ready = when {
+            !sleep -> mins >= SLEEP_DEADLINE   // still no sleep by 11:30 AM: send without it
             chk != null && weighed -> true
             chk != null -> System.currentTimeMillis() - (if (chk.at > 0) chk.at else pr.getLong("chkSeen_$today", System.currentTimeMillis().also { pr.edit().putLong("chkSeen_$today", it).apply() })) >= 15 * 60_000L
             else -> mins >= time(ctx)
         }
-        if (!ready) return
+        if (!ready) { if (mins < SLEEP_DEADLINE) Reminders.morningLater(ctx); return }   // check again in a little while
         fetchWeather(ctx)
         val r = build(ctx)
         pr.edit().putString("sent", today).apply()
-        notify("☀️ Morning report", r.headline + "\n" + r.advice)
+        try { DailySummary.publish(ctx, force = true) } catch (e: Exception) { }   // the Command Center gets the same complete morning
+        notify("☀️ Morning report", r.headline + "\n" + r.advice + if (!sleep) "\n(Last night's sleep hadn't reached Health Connect yet.)" else "")
     }
 }
