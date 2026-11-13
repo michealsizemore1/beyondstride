@@ -50,8 +50,11 @@ object DayReviewAi {
             "Return ONLY one valid JSON object with exactly these four string keys:\n{\"wins\":\"\",\"improve\":\"\",\"focus\":\"\",\"lessons\":\"\"}\n\n" +
             "- wins: 1-3 specific achievements or positive moments from today\n- improve: 1-3 constructive, realistic improvements\n" +
             "- focus: 1-2 specific priorities for tomorrow\n- lessons: 1-3 concise takeaways from today\n" +
-            "Use short bullet-style lines inside each string. Do not invent events. Use numbers exactly as written; HRV in ms is not a readiness score.\n\n" +
-            "TODAY (BeyondStride):\n$day\n\nEVENING REPORT:\n$evening"
+            "Use short bullet-style lines inside each string. Do not invent events. Use numbers exactly as written; HRV in ms is not a readiness score.\n" +
+            "This is a reflective record of the day, kept for later. The Evening Report below was already shown to the user tonight, so do NOT repeat its to-dos: " +
+            "no lights-out / bedtime times, no bedtime or recovery snack, no drinking before bed, no laying out gear. Focus for tomorrow is about the day itself " +
+            "(training, eating habits), not tonight. Prefer patterns and lessons over restating numbers.\n\n" +
+            "TODAY (BeyondStride):\n$day\n\nEVENING REPORT (already seen — don't repeat):\n$evening"
         val text = AiFood.askChat(ctx, "You write short, specific, encouraging daily reviews for a runner.", JSONArray().put(JSONObject().put("role", "user").put("content", prompt)), 1500)
         val s = text.trim().removePrefix("```json").removePrefix("```").removeSuffix("```").let { val a = it.indexOf('{'); val b = it.lastIndexOf('}'); if (a >= 0 && b > a) it.substring(a, b + 1) else it }
         val j = JSONObject(s)
