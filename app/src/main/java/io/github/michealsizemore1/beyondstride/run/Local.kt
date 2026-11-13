@@ -125,6 +125,7 @@ object Local {
         try { PlanStore.syncWatchIfNeeded(ctx) } catch (e: Exception) { }
         Reminders.morning(ctx)
         if (WeightImport.enabled(ctx) && (hourly || now - p.getLong("wtAt", 0L) > 15 * 60_000L)) { p.edit().putLong("wtAt", now).apply(); try { WeightImport.sync(ctx) } catch (e: Exception) { } }
+        if (BpImport.enabled(ctx) && (hourly || now - p.getLong("bpAt", 0L) > 15 * 60_000L)) { p.edit().putLong("bpAt", now).apply(); try { if (BpImport.sync(ctx)) DailySummary.publish(ctx, force = true) } catch (e: Exception) { } }
         var sleepNew = false
         // Last night's sleep from Samsung Health (it can reach Health Connect hours after you wake), every 30 minutes in the background too.
         try { if (now - io.github.michealsizemore1.beyondstride.ReadinessSync.nightsAt(ctx) > 30 * 60_000L && SleepData.granted(ctx)) { SleepData.refresh(ctx, 7); sleepNew = true } } catch (e: Exception) { }

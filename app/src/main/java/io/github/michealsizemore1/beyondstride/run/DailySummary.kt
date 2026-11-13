@@ -67,6 +67,8 @@ object DailySummary {
         ReadinessSync.nights(ctx).lastOrNull { it.day == date }?.takeIf { it.minutes > 0 }?.let { w.put("sleep", "${it.minutes / 60}:${String.format("%02d", it.minutes % 60)}") }
         ReadinessSync.checks(ctx).lastOrNull { it.day == date }?.takeIf { it.hr > 0 }?.let { w.put("restHr", it.hr) }
         ReadinessSync.nights(ctx).lastOrNull { it.day == date }?.takeIf { it.sleepHr > 0 }?.let { w.put("sleepHr", it.sleepHr) }
+        // Blood pressure + pulse from the cuff (Health Connect).
+        BpImport.day(ctx, date)?.let { (bp, pulse, _) -> w.put("bp", bp); if (pulse > 0) w.put("pulse", pulse) }
         // Steps (Samsung Health, via Health Connect).
         DayStress.steps(ctx, date)?.takeIf { it > 0 }?.let { w.put("steps", it) }
         // HRV: the morning check (Polar H10), ms.

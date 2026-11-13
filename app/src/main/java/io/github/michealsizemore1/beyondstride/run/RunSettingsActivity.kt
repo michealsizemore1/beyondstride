@@ -509,6 +509,23 @@ class RunSettingsActivity : Activity() {
                 Thread { val g = WeightImport.granted(applicationContext); runOnUiThread { if (!g) askHealth(WeightImport.PERMS) else syncWeights() } }.start()
             }.apply { layoutParams = lp(10) })
         })
+        // Blood pressure cuff (Health Connect).
+        col.addView(RunUi.text(this, "🩺 Blood pressure (Health Connect)", Color.WHITE, 15f, true).apply { setPadding(0, dp(14), 0, 0) })
+        col.addView(RunUi.card(this).apply {
+            addView(Switch(ctx).apply {
+                text = "Send blood pressure to the Command Center"; setTextColor(Color.WHITE); textSize = 15f
+                isChecked = BpImport.enabled(ctx)
+                setOnCheckedChangeListener { _, v -> BpImport.setEnabled(ctx, v)
+                    if (v) Thread { val g = BpImport.granted(applicationContext); runOnUiThread { if (!g) askHealth(BpImport.PERMS) else syncBp() } }.start() }
+            })
+            addView(RunUi.text(ctx, "Your cuff's app (Withings, Omron Connect, Samsung Health…) must share Blood pressure with Health Connect. " +
+                "Each day's readings are averaged and fill BP and Pulse in the Command Center's Wellness section (a value you typed there is never replaced). " +
+                "Checks when you open the app and about every 15 minutes.", RunUi.MUTED, 12f))
+            BpImport.lastInfo(ctx).takeIf { it.isNotBlank() }?.let { addView(RunUi.text(ctx, it, RunUi.DIM, 12f).apply { setPadding(0, dp(4), 0, 0) }) }
+            if (BpImport.enabled(ctx)) addView(RunUi.button(ctx, "Check blood pressure now", RunUi.CARD, Color.WHITE) {
+                Thread { val g = BpImport.granted(applicationContext); runOnUiThread { if (!g) askHealth(BpImport.PERMS) else syncBp() } }.start()
+            }.apply { layoutParams = lp(10) })
+        })
         // Health Connect import.
         col.addView(RunUi.text(this, "⤓ Import workouts from Health Connect", Color.WHITE, 15f, true).apply { setPadding(0, dp(14), 0, 0) })
         col.addView(RunUi.card(this).apply {
@@ -532,14 +549,21 @@ class RunSettingsActivity : Activity() {
         })
     }
 
+    private fun syncBp() {
+        val app = applicationContext
+        Toast.makeText(this, "Checking Health Connect…", Toast.LENGTH_SHORT).show()
+        Thread { try { BpImport.sync(app, 14); DailySummary.publish(app, force = true) } catch (e: Exception) { }
+            runOnUiThread { if (!isFinishing) { Toast.makeText(this, BpImport.lastInfo(app).substringAfter(" · ").ifBlank { "Done" }, Toast.LENGTH_LONG).show(); render() } } }.start()
+    }
     private fun syncWeights() {
         val app = applicationContext
         Thread { val n = try { WeightImport.sync(app, 7) } catch (e: Exception) { 0 }
             runOnUiThread { Toast.makeText(this, if (n > 0) "Filled $n weight${if (n == 1) "" else "s"} from the scale" else WeightImport.lastInfo(app).ifEmpty { "Nothing new from the scale" }, Toast.LENGTH_LONG).show(); render() } }.start()
     }
     private fun askHealth(p: Set<String>) {
-        if (android.os.Build.VERSION.SDK_INT >= 34) { requestPermissions(p.toTypedArray(), 84); return }
-        try { @Suppress("DEPRECATION") startActivityForResult(androidx.health.connect.client.PermissionController.createRequestPermissionResultContract().createIntent(this, p), 84) }
+        val code = if (p == BpImport.PERMS) 85 else 84
+        if (android.os.Build.VERSION.SDK_INT >= 34) { requestPermissions(p.toTypedArray(), code); return }
+        try { @Suppress("DEPRECATION") startActivityForResult(androidx.health.connect.client.PermissionController.createRequestPermissionResultContract().createIntent(this, p), code) }
         catch (e: Exception) { Toast.makeText(this, "Install or update Health Connect from the Play Store, then try again", Toast.LENGTH_LONG).show() }
     }
 
@@ -552,6 +576,7 @@ class RunSettingsActivity : Activity() {
     }
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == 85) { Thread { val g = BpImport.granted(applicationContext); runOnUiThread { if (g) syncBp() else Toast.makeText(this, "Blood pressure access wasn't allowed — turn it on in Settings → Apps → BeyondStride → Permissions → Health Connect", Toast.LENGTH_LONG).show() } }.start(); return }
         if (requestCode == 84) { if (WeightImport.granted(applicationContext)) syncWeights() else Toast.makeText(this, "Weight access wasn't allowed — turn it on in Settings → Apps → BeyondStride → Permissions → Health Connect", Toast.LENGTH_LONG).show(); return }
         if (requestCode != 83) return
         val app = applicationContext
