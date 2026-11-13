@@ -88,7 +88,7 @@ object DailySummary {
         if (!Standalone.on(ctx) || !NutritionSync.ready(ctx)) return
         val pr = p(ctx); val now = System.currentTimeMillis()
         // Day summaries every 10 minutes; activities and plan days whenever they change.
-        val days = force || !pr.getBoolean("backHrv", false) || now - pr.getLong("at", 0L) >= 10 * 60_000L
+        val days = DayStress.takeStepsChanged(ctx) or (force || !pr.getBoolean("backHrv", false) || now - pr.getLong("at", 0L) >= 10 * 60_000L)
         if (days) pr.edit().putLong("at", now).apply()
         val base = Live.db(ctx) + "/nutrition/" + NutritionSync.key(ctx) + "/beyondstride/daily/"
         // The first time (again when new numbers were added, like HRV): the last 4 months, so Weekly / Monthly tables have every day.

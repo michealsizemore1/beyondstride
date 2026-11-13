@@ -37,7 +37,8 @@ object DayStress {
     fun sync(ctx: Context, force: Boolean = false) {
         val pr = p(ctx); val now = System.currentTimeMillis()
         if (!force && now - pr.getLong("at", 0L) < 15 * 60_000L) return
-        val g = granted(ctx); if (HR !in g) return
+        val g = granted(ctx)
+        if (HR !in g) { if (STEPS in g) try { pr.edit().putLong("at", now).apply(); syncSteps(ctx, HealthConnectClient.getOrCreate(ctx), ZoneId.systemDefault(), LocalDate.now()) } catch (e: Exception) { }; return }
         pr.edit().putLong("at", now).apply()
         val zone = ZoneId.systemDefault(); val day = LocalDate.now()
         val start = day.atStartOfDay(zone).toInstant(); val end = java.time.Instant.now()
@@ -85,13 +86,15 @@ object DayStress {
         val m = try { JSONObject(pr.getString("stepsByDay", "{}") ?: "{}") } catch (e: Exception) { JSONObject() }
         fun total(from: java.time.Instant, to: java.time.Instant): Long? = runBlocking {
             client.aggregate(androidx.health.connect.client.request.AggregateRequest(setOf(StepsRecord.COUNT_TOTAL), TimeRangeFilter.between(from, to)))[StepsRecord.COUNT_TOTAL] }
-        total(day.atStartOfDay(zone).toInstant(), java.time.Instant.now())?.let { m.put(day.toString(), it) }
+        total(day.atStartOfDay(zone).toInstant(), java.time.Instant.now())?.let { if (m.optLong(day.toString(), -1L) != it) pr.edit().putBoolean("stepsDirty", true).apply(); m.put(day.toString(), it) }
         val y = day.minusDays(1).toString()
         if (pr.getString("stepsFinal", "") != y) total(day.minusDays(1).atStartOfDay(zone).toInstant(), day.atStartOfDay(zone).toInstant())?.let { m.put(y, it); pr.edit().putString("stepsFinal", y).apply() }
         // Keep about two months.
         val cut = day.minusDays(60).toString(); m.keys().asSequence().toList().filter { it < cut }.forEach { m.remove(it) }
         pr.edit().putString("stepsByDay", m.toString()).apply()
     }
+    /** True once after the step count changed (so the day summary goes to the Command Center straight away). */
+    fun takeStepsChanged(ctx: Context): Boolean { val pr = p(ctx); val v = pr.getBoolean("stepsDirty", false); if (v) pr.edit().putBoolean("stepsDirty", false).apply(); return v }
     /** Samsung step count for a day (null if not read). */
     fun steps(ctx: Context, date: String): Long? = try { JSONObject(p(ctx).getString("stepsByDay", "{}") ?: "{}").optLong(date, -1L).takeIf { it >= 0 } } catch (e: Exception) { null }
 

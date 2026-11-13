@@ -142,7 +142,7 @@ open class RunsActivity : Activity() {
         if (requestCode == 86) dayPermsDone()
     }
     private fun dayPermsDone() { val app = applicationContext
-        Thread { try { DayStress.sync(app, force = true) } catch (e: Exception) { }; runOnUiThread { if (!isFinishing) render() } }.start() }
+        Thread { try { DayStress.sync(app, force = true) } catch (e: Exception) { }; try { DailySummary.publish(app) } catch (e: Exception) { }; runOnUiThread { if (!isFinishing) render() } }.start() }
 
     private fun askDayPerms() {
         val perms = (DayStress.PERMS + "android.permission.health.READ_HEALTH_DATA_IN_BACKGROUND").toTypedArray()
@@ -289,7 +289,7 @@ open class RunsActivity : Activity() {
         // 🔋 Body Battery.
         try { col.addView(bodyBatteryCard()) } catch (e: Exception) { }
         if (System.currentTimeMillis() - DayStress.lastRead(this) > 15 * 60_000L) { val app = applicationContext
-            Thread { try { DayStress.sync(app) } catch (e: Exception) { }; runOnUiThread { if (!isFinishing && System.currentTimeMillis() - DayStress.lastRead(app) < 60_000L) render() } }.start() }
+            Thread { try { DayStress.sync(app) } catch (e: Exception) { }; try { DailySummary.publish(app) } catch (e: Exception) { }; runOnUiThread { if (!isFinishing && System.currentTimeMillis() - DayStress.lastRead(app) < 60_000L) render() } }.start() }
         // 🌙 Evening report (from 11 pm).
         if (EveningReport.ready(this)) col.addView(RunUi.card(this).apply {
             background = RunUi.rounded(0xFF26264A.toInt(), dp(14).toFloat())
