@@ -280,8 +280,7 @@ open class RunsActivity : Activity() {
             setOnClickListener { refresh(true) }
             if (TodayWeather.stale(ctx)) refresh(false)
         })
-        // 🔋 Body Battery.
-        try { col.addView(bodyBatteryCard()) } catch (e: Exception) { }
+        // 🔋 Body Battery data (shown in the "This morning" card below).
         if (System.currentTimeMillis() - DayStress.lastRead(this) > 15 * 60_000L) { val app = applicationContext
             Thread { try { DayStress.sync(app) } catch (e: Exception) { }; try { DailySummary.publish(app) } catch (e: Exception) { }; runOnUiThread { if (!isFinishing && System.currentTimeMillis() - DayStress.lastRead(app) < 60_000L) render() } }.start() }
         // 🌙 Evening report (from 11 pm).
@@ -299,15 +298,14 @@ open class RunsActivity : Activity() {
             addView(RunUi.text(ctx, "Sends it to your watch too, and skips the 11 PM one", RunUi.MUTED, 12f))
             setOnClickListener { val app = applicationContext; Thread { EveningReport.getEarly(app) }.start(); startActivity(Intent(ctx, EveningReportActivity::class.java)) }
         })
-        // ☀️ Morning report (until noon).
-        if (java.time.LocalTime.now().hour < 12 && MorningReport.enabled(this)) col.addView(RunUi.card(this).apply {
-            background = RunUi.rounded(0xFF243B2E.toInt(), dp(14).toFloat())
-            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dp(8) }
-            addView(RunUi.text(ctx, "☀️ Morning report ▸", Color.WHITE, 16f, true))
-            addView(RunUi.text(ctx, "Sleep, readiness, today's workout, weather, fuel, weight and your week — on one screen", RunUi.MUTED, 12f))
-            setOnClickListener { startActivity(Intent(ctx, MorningReportActivity::class.java)) }
-        })
+        // ☀️ This morning: the morning report (until noon), readiness and Body Battery in one card.
         col.addView(RunUi.card(this).apply {
+            layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { bottomMargin = dp(8) }
+            addView(RunUi.text(ctx, "☀️ This morning", Color.WHITE, 16f, true).apply { setPadding(0, 0, 0, dp(6)) })
+            if (java.time.LocalTime.now().hour < 12 && MorningReport.enabled(ctx)) {
+                addView(RunUi.text(ctx, "Morning report ▸  sleep, readiness, workout, weather, fuel, weight and your week", RunUi.ACCENT, 13f, true).apply {
+                    setPadding(0, 0, 0, dp(6)); setOnClickListener { startActivity(Intent(ctx, MorningReportActivity::class.java)) } })
+            }
             addView(LinearLayout(ctx).apply {
                 orientation = LinearLayout.VERTICAL
                 if (rd == null) addView(RunUi.text(ctx, "Readiness: do the 2½-min morning check on the watch ▸", RunUi.ACCENT, 15f, true))
@@ -321,7 +319,12 @@ open class RunsActivity : Activity() {
                 }
                 setOnClickListener { startActivity(Intent(ctx, ReadinessActivity::class.java)) }
             })
-            addView(divider())
+            // 🔋 Body Battery (the same card as before, inside this one).
+            try { val bb = bodyBatteryCard(); bb.background = null; bb.setPadding(0, 0, 0, 0)
+                bb.layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT); addView(divider()); addView(bb) } catch (e: Exception) { }
+        })
+        // Today's workout.
+        col.addView(RunUi.card(this).apply {
             addView(LinearLayout(ctx).apply {
                 orientation = LinearLayout.VERTICAL
                 addView(RunUi.text(ctx, todayW?.optString("name") ?: "No workout planned", Color.WHITE, 17f, true))

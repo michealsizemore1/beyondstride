@@ -8,7 +8,8 @@ import java.time.LocalTime
 
 /**
  * 🔋 Body Battery (like Garmin's): 0–100 energy reserve.
- *  • Charges overnight — how long you slept, how calm your sleeping heart was, and this morning's HRV and resting HR
+ *  • Charges overnight — how long you slept, how calm your sleeping heart was, and this morning's HRV (Polar H10 morning
+ *    check — the only HRV used; the watch's daytime HRV isn't mixed in) and resting HR
  *    vs your normal (or the readiness score when there's no check).
  *  • Drains through the day — each waking hour by how far your heart rate sits above your normal awake level (not your
  *    lying-down resting HR), a little for steps, plus each workout by how long and how hard it was.
@@ -97,7 +98,6 @@ object BodyBattery {
         val max = st.optDouble("maxHr", 0.0).takeIf { it > 0 } ?: 174.0
         val rest = ReadinessSync.checks(ctx).lastOrNull { it.day == date }?.hr?.takeIf { it > 0 }?.toDouble()
             ?: st.optDouble("restHr", 0.0).takeIf { it > 0 } ?: 55.0
-        val hrvBase = ReadinessSync.checks(ctx).filter { it.day <= date }.takeLast(14).map { it.rmssd }.takeIf { it.size >= 3 }?.average()
         val hours = DayStress.hours(ctx)
 
         // Your normal awake heart rate (sitting / moving around), not the lying-down morning number: a typical awake hour
@@ -118,7 +118,6 @@ object BodyBattery {
             // Above your normal awake heart rate = stress / effort; at or below it = calm (slow recharge).
             val elev = x.hr - awakeBase
             var d = when { elev <= -3 -> -1.0; elev <= 4 -> 1.0; elev <= 10 -> 2.0; elev <= 18 -> 3.0; else -> 4.5 }
-            if (x.hrv > 0 && hrvBase != null && hrvBase > 0) d += when { x.hrv < hrvBase * 0.6 -> 0.8; x.hrv > hrvBase * 1.1 -> -0.5; else -> 0.0 }
             // Walking costs a little (its heart rate is already counted above).
             d += x.steps / 1000.0 * 0.3
             d = Math.min(d, 5.0)
