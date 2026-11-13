@@ -42,8 +42,16 @@ object DayReviewAi {
         run(ctx, today)
     }
 
+    /** Tonight's to-dos belong to the Evening Report, not the review. */
+    private val TONIGHT = Regex("lights?[- ]?out|bed ?time|before bed|go(ing)? to bed|to bed early|bedtime snack|recovery snack|evening snack|lay out (your )?gear|sleep tonight", RegexOption.IGNORE_CASE)
+    /** Drops review lines about tonight; in a mixed line, cuts the tonight part off. */
+    private fun clean(t: String) = t.lines().mapNotNull { l ->
+        if (!TONIGHT.containsMatchIn(l)) l else l.split(Regex("\\s*[—–;]\\s*|,\\s+")).filterNot { TONIGHT.containsMatchIn(it) }.joinToString(", ").trim()
+            .takeIf { it.trimStart('•', '-', ' ').length > 25 }
+    }.filter { it.isNotBlank() }.joinToString("\n").trim()
+
     private fun run(ctx: Context, date: String) {
-        val day = try { DailySummary.build(ctx, date).optString("text") } catch (e: Exception) { "" }
+        val day = try { DailySummary.build(ctx, date).optString("text").lines().filterNot { TONIGHT.containsMatchIn(it) }.joinToString("\n") } catch (e: Exception) { "" }
         val evening = try { EveningReport.build(ctx).let { r -> r.headline + "\n" + r.sections.joinToString("\n") { s -> "${s.title}: ${s.main}" + (if (s.lines.isNotEmpty()) " — " + s.lines.joinToString("; ") else "") } + "\nAdvice: " + r.advice } } catch (e: Exception) { "" }
         if (day.isBlank() && evening.isBlank()) return
         val prompt = "You are completing a personal daily review for $date. Use only the training / nutrition / recovery data below from the BeyondStride app. " +
@@ -58,8 +66,8 @@ object DayReviewAi {
         val text = AiFood.askChat(ctx, "You write short, specific, encouraging daily reviews for a runner.", JSONArray().put(JSONObject().put("role", "user").put("content", prompt)), 1500)
         val s = text.trim().removePrefix("```json").removePrefix("```").removeSuffix("```").let { val a = it.indexOf('{'); val b = it.lastIndexOf('}'); if (a >= 0 && b > a) it.substring(a, b + 1) else it }
         val j = JSONObject(s)
-        val out = JSONObject().put("wins", j.optString("wins")).put("improve", j.optString("improve")).put("focus", j.optString("focus"))
-            .put("lessons", j.optString("lessons")).put("at", System.currentTimeMillis()).put("source", "BeyondStride")
+        val out = JSONObject().put("wins", clean(j.optString("wins"))).put("improve", clean(j.optString("improve"))).put("focus", clean(j.optString("focus")))
+            .put("lessons", clean(j.optString("lessons"))).put("at", System.currentTimeMillis()).put("source", "BeyondStride")
         val c = (URL(Live.db(ctx) + "/nutrition/" + NutritionSync.key(ctx) + "/beyondstride/review/$date.json").openConnection() as HttpURLConnection).apply {
             requestMethod = "PUT"; doOutput = true; connectTimeout = 15_000; readTimeout = 20_000; setRequestProperty("Content-Type", "application/json") }
         c.outputStream.use { it.write(out.toString().toByteArray()) }
