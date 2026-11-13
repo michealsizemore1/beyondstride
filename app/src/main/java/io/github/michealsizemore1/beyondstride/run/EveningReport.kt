@@ -24,9 +24,10 @@ object EveningReport {
         p(ctx).edit().putString("early", Readiness.today()).putString("sent", Readiness.today()).apply()
         try { ActivityStore.watchSummary(ctx)?.let { io.github.michealsizemore1.beyondstride.NutritionStore.setActs(ctx, it) } } catch (e: Exception) { }
         // Tell the Command Center now, so its Day Review is filled before you go to bed.
-        val app = ctx.applicationContext; Thread { try { DailySummary.publish(app, force = true) } catch (e: Exception) { } }.start()
+        val app = ctx.applicationContext; Thread { try { DailySummary.publish(app, force = true) } catch (e: Exception) { }; try { DayReviewAi.maybeRun(app, force = true) } catch (e: Exception) { } }.start()
     }
-    fun setTime(ctx: Context, m: Int) = p(ctx).edit().putInt("time", m).putString("sent", "").apply()
+    fun setTime(ctx: Context, m: Int) { p(ctx).edit().putInt("time", m).putString("sent", "").apply()
+        try { androidx.work.WorkManager.getInstance(ctx).cancelUniqueWork("dayReviewAi") } catch (e: Exception) { }; DayReviewAi.schedule(ctx) }
 
     private const val GREEN = 0xFF5FD38D.toInt(); private const val YELLOW = 0xFFF2C94C.toInt(); private const val RED = 0xFFFF8A80.toInt(); private const val GREY = 0xFF9AA5A0.toInt()
     private fun f1(d: Double) = if (d == Math.floor(d)) d.toLong().toString() else String.format(Locale.US, "%.1f", d)
