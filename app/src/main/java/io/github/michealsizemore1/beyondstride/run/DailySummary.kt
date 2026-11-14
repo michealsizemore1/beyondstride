@@ -94,11 +94,13 @@ object DailySummary {
         if (!NutritionSync.ready(ctx)) return
         val pr = p(ctx); val now = System.currentTimeMillis()
         // Day summaries every 10 minutes; activities and plan days whenever they change.
-        val days = DayStress.takeStepsChanged(ctx) or (force || !pr.getBoolean("backHrv", false) || now - pr.getLong("at", 0L) >= 10 * 60_000L)
+        val days = DayStress.takeStepsChanged(ctx) or (force || !pr.getBoolean("backSleep", false) || now - pr.getLong("at", 0L) >= 10 * 60_000L)
         if (days) pr.edit().putLong("at", now).apply()
         val base = Live.db(ctx) + "/nutrition/" + NutritionSync.key(ctx) + "/beyondstride/daily/"
         // The first time (again when new numbers were added, like HRV): the last 4 months, so Weekly / Monthly tables have every day.
-        val back = if (!days) -1L else if (pr.getBoolean("backHrv", false)) 1L else 120L
+        val back = if (!days) -1L else if (pr.getBoolean("backSleep", false)) 1L else 120L
+        // First time with sleep stages: read the last 45 nights' stages so the Command Center's Deep / REM / Sleep Score fill in.
+        if (back > 1) try { if (SleepData.granted(ctx)) SleepData.refresh(ctx, 45) } catch (e: Exception) { }
         (back downTo 0L).map { LocalDate.now().minusDays(it).toString() }.forEach { d ->
             try {
                 val o = build(ctx, d); val sig = (o.optString("text") + o.optJSONObject("wellness") + o.optJSONObject("nutrition")).hashCode()
@@ -109,7 +111,7 @@ object DailySummary {
                 if (c.responseCode in 200..299) pr.edit().putInt("sig_$d", sig).apply()
             } catch (e: Exception) { }
         }
-        if (days) pr.edit().putBoolean("backHrv", true).apply()
+        if (days) pr.edit().putBoolean("backSleep", true).apply()
         // Activities (the last 400 days) for the Command Center's Weekly / Monthly / Yearly fitness and goals.
         try {
             val from = LocalDate.now().minusDays(400).toString()
