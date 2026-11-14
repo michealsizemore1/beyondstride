@@ -44,7 +44,12 @@ object BpImport {
         val hrs = try { runBlocking { client.readRecords(ReadRecordsRequest(HeartRateRecord::class, range, pageSize = 5000)).records } } catch (e: Exception) { emptyList() }
         val m = try { JSONObject(pr.getString("days", "{}") ?: "{}") } catch (e: Exception) { JSONObject() }
         val before = m.toString()
-        bps.groupBy { it.time.atZone(zone).toLocalDate().toString() }.forEach { (date, all) ->
+        // The reading's own local time (the offset the cuff's app saved), so a late-evening reading stays on its day.
+        fun local(r: BloodPressureRecord) = r.zoneOffset?.let { r.time.atOffset(it).toLocalDateTime() } ?: r.time.atZone(zone).toLocalDateTime()
+        // A reading stamped between midnight and 5 AM belongs to the evening before (you're asleep then — it's a late
+        // reading, or one the cuff's app saved with a shifted time), so it never fills the new day before you've measured.
+        fun day(r: BloodPressureRecord) = local(r).let { t -> (if (t.hour < 5) t.toLocalDate().minusDays(1) else t.toLocalDate()).toString() }
+        bps.groupBy { day(it) }.forEach { (date, all) ->
             // Readings taken back-to-back (within 10 minutes) are one set; the lowest reading of each set is the one used
             // (the first usually reads high). Two or more sets in a day are averaged.
             val ok = all.filter { it.systolic.inMillimetersOfMercury in 60.0..260.0 && it.diastolic.inMillimetersOfMercury in 30.0..160.0 }.sortedBy { it.time }
@@ -57,11 +62,15 @@ object BpImport {
             val pulses = list.mapNotNull { b -> hrs.filter { it.metadata.dataOrigin.packageName == b.metadata.dataOrigin.packageName }
                 .flatMap { it.samples }.filter { Math.abs(it.time.epochSecond - b.time.epochSecond) <= 120 }.minByOrNull { Math.abs(it.time.epochSecond - b.time.epochSecond) }?.beatsPerMinute }
             m.put(date, JSONObject().put("bp", "${Math.round(sys.average())}/${Math.round(dia.average())}").put("pulse", if (pulses.isNotEmpty()) Math.round(pulses.average()).toInt() else 0)
-                .put("n", list.size).put("taken", ok.size).put("apps", list.map { it.metadata.dataOrigin.packageName.substringAfterLast('.') }.distinct().joinToString(", ")))
+                .put("n", list.size).put("taken", ok.size)
+                .put("times", ok.joinToString(", ") { r -> local(r).toLocalTime().format(java.time.format.DateTimeFormatter.ofPattern("h:mm a", java.util.Locale.US)) + " " +
+                    Math.round(r.systolic.inMillimetersOfMercury) + "/" + Math.round(r.diastolic.inMillimetersOfMercury) })
+                .put("apps", list.map { it.metadata.dataOrigin.packageName.substringAfterLast('.') }.distinct().joinToString(", ")))
         }
         val cut = LocalDate.now().minusDays(60).toString(); m.keys().asSequence().toList().filter { it < cut }.forEach { m.remove(it) }
         val latest = m.keys().asSequence().toList().maxOrNull()?.let { k -> m.optJSONObject(k)?.let { "$k: ${it.optString("bp")}" + (if (it.optInt("pulse") > 0) " · pulse ${it.optInt("pulse")}" else "") +
-            (if (it.optInt("taken") > it.optInt("n")) " (lowest of ${it.optInt("taken")} readings)" else "") + " (from ${it.optString("apps")})" } }
+            (if (it.optInt("taken") > it.optInt("n")) " (lowest of ${it.optInt("taken")} readings)" else "") + " (from ${it.optString("apps")})" +
+            "\nReadings: ${it.optString("times")}" } }
         pr.edit().putString("days", m.toString()).putString("info", "Last checked " + java.text.SimpleDateFormat("MMM d, h:mm a", java.util.Locale.US).format(java.util.Date()) + " · " +
             (latest ?: if (err.isNotEmpty()) "couldn't read Health Connect — ${err.take(120)}" else "no blood pressure in Health Connect in the last $days days")).apply()
         return m.toString() != before
