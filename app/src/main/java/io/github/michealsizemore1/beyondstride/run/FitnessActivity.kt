@@ -143,6 +143,35 @@ class FitnessActivity : Activity() {
                     }
                     addView(RunUi.text(ctx, "Estimates from your logged training — not a medical assessment. 0.8–1.3 is the healthy range.", RunUi.DIM, 10f).apply { setPadding(0, dp(4), 0, 0) })
                 })
+                // 📈 Training Status · 💓 HRV Status · ⏱️ Recovery (Garmin / Coros style).
+                try {
+                    val C = io.github.michealsizemore1.beyondstride.Coaching
+                    val today = io.github.michealsizemore1.beyondstride.Readiness.today()
+                    val checks = io.github.michealsizemore1.beyondstride.ReadinessSync.checks(this)
+                    val hv = C.hrvStatus(checks, today)
+                    val (zn, zb) = io.github.michealsizemore1.beyondstride.Insights.z2Trend(all, hrMax, hrRest)
+                    val race = try { PlanStore.data(this).optJSONObject("current")?.let { PlanEngine.race(it) }?.takeIf { it.length == 10 } } catch (e: Exception) { null }
+                    val toRace = race?.let { java.time.temporal.ChronoUnit.DAYS.between(java.time.LocalDate.now(), java.time.LocalDate.parse(it)) }?.takeIf { it >= 0 }
+                    val ts = C.trainingStatus(ld.ratio, hv, zn, zb, toRace)
+                    val rdScore = try { io.github.michealsizemore1.beyondstride.Readiness.compute(checks, io.github.michealsizemore1.beyondstride.ReadinessSync.nights(this), all.take(120), today)?.score } catch (e: Exception) { null }
+                    val rc = C.recovery(all.take(20), rdScore)
+                    col.addView(RunUi.section(this, "TRAINING STATUS"))
+                    col.addView(RunUi.card(this).apply {
+                        addView(RunUi.text(ctx, "📈 " + ts.name, ts.color, 20f, true))
+                        addView(RunUi.text(ctx, ts.why, RunUi.MUTED, 12f).apply { setPadding(0, dp(2), 0, dp(8)) })
+                        addView(RunUi.text(ctx, "⏱️ " + C.recoveryText(rc), if (rc == null) 0xFF22C55E.toInt() else Color.WHITE, 14f, true))
+                        rc?.let { addView(RunUi.text(ctx, "Your last run needs about ${it.totalHours} h in all (bigger, harder runs take longer; a low readiness adds time). Easy running is fine while recovering.", RunUi.DIM, 11f)) }
+                        addView(RunUi.text(ctx, "💓 HRV Status: " + (hv?.status ?: "needs 3 morning checks this week"), hv?.color ?: RunUi.MUTED, 14f, true).apply { setPadding(0, dp(10), 0, 0) })
+                        hv?.let { h ->
+                            addView(RunUi.statGrid(ctx, listOfNotNull(
+                                Triple(String.format(java.util.Locale.US, "%.0f ms", h.avg7), "7-day average (${h.n7} checks)", h.color),
+                                if (h.lo > 0) Triple(String.format(java.util.Locale.US, "%.0f–%.0f", h.lo, h.hi), "your normal range (ms)", Color.WHITE) else null)))
+                            addView(RunUi.text(ctx, h.note, RunUi.MUTED, 12f).apply { setPadding(0, dp(4), 0, 0) })
+                        }
+                        addView(RunUi.text(ctx, "Training Status combines your 7-day load vs usual, HRV Status (Polar morning checks vs your last 2 months) and whether Zone 2 pace is getting faster." +
+                            (toRace?.let { " Race day in $it days." } ?: ""), RunUi.DIM, 10f).apply { setPadding(0, dp(6), 0, 0) })
+                    })
+                } catch (e: Exception) { }
                 // Zone 2 fitness: pace while HR is in Zone 2, run by run.
                 val z2 = all.mapNotNull { r -> io.github.michealsizemore1.beyondstride.Insights.zone2(r, hrMax, hrRest)?.let { r.optLong("start") to it } }.take(12)
                 if (z2.isNotEmpty()) {
@@ -233,7 +262,9 @@ class FitnessActivity : Activity() {
         run {
             val acts = ActivityStore.list(this)
             col.addView(RunUi.section(this, "RACE FITNESS & CONDITIONS"))
-            ActivityAnalysis(this, panels) { render() }.apply { racePredictor(col, acts); heatHumidity(col, acts) }
+            ActivityAnalysis(this, panels) { render() }.apply { racePredictor(col, acts) }
+            RacePacing.card(this, col, acts)
+            ActivityAnalysis(this, panels) { render() }.apply { heatHumidity(col, acts) }
             ZonesCard.build(this, col, panels) { render() }
         }
         setContentView(RunUi.tabbed(this, ScrollView(this).apply {

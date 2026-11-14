@@ -300,6 +300,10 @@ open class RunsActivity : Activity() {
                     addView(RunUi.text(ctx, rd.parts.filter { it.pts >= 0 }.joinToString(" · ") { "${it.name} ${it.value}" }, RunUi.MUTED, 12f))
                     addView(RunUi.text(ctx, rd.advice.substringBefore(". ") + ".", Color.WHITE, 13f).apply { setPadding(0, dp(4), 0, 0) })
                     Insights.recoveryWarning(ctx, rd)?.let { addView(RunUi.text(ctx, it, 0xFFF2C94C.toInt(), 12f, true).apply { setPadding(0, dp(4), 0, 0) }) }
+                    // ⏱️ Recovery time (Garmin-style): hours until ready for another hard run.
+                    try { val rc = io.github.michealsizemore1.beyondstride.Coaching.recovery(runs.take(20), rd.score)
+                        addView(RunUi.text(ctx, "⏱️ " + io.github.michealsizemore1.beyondstride.Coaching.recoveryText(rc), if (rc == null) 0xFF22C55E.toInt() else if (rc.hoursLeft > 36) 0xFFF97316.toInt() else Color.WHITE, 12f, true).apply { setPadding(0, dp(4), 0, 0) })
+                    } catch (e: Exception) { }
                     addView(RunUi.text(ctx, "Details, sleep, resting HR and critical power ▸", RunUi.ACCENT, 12f, true).apply { setPadding(0, dp(6), 0, 0) })
                 }
                 setOnClickListener { startActivity(Intent(ctx, ReadinessActivity::class.java)) }

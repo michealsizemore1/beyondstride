@@ -198,6 +198,16 @@ object CoachAi {
             }
         } catch (e: Exception) { }
         if ("recovery" in sc) try {
+            val C = io.github.michealsizemore1.beyondstride.Coaching
+            val runs = PhoneRuns.list(ctx).take(60).mapNotNull { PhoneRuns.read(it) }
+            val hv = C.hrvStatus(ReadinessSync.checks(ctx), today.toString())
+            val (zn, zb) = io.github.michealsizemore1.beyondstride.Insights.z2Trend(runs, RunSettings.hrMax(ctx), RunSettings.hrRest(ctx))
+            val ts = C.trainingStatus(io.github.michealsizemore1.beyondstride.Insights.load(runs).ratio, hv, zn, zb, null)
+            sb.append("\n## Training status (BeyondStride)\nTraining status: ${ts.name} — ${ts.why}\n")
+            hv?.let { sb.append(String.format(java.util.Locale.US, "HRV status: %s, 7-day avg %.0f ms", it.status, it.avg7) + (if (it.lo > 0) String.format(java.util.Locale.US, ", normal range %.0f–%.0f ms", it.lo, it.hi) else "") + "\n") }
+            sb.append("Recovery: " + C.recoveryText(C.recovery(runs.take(20), null)) + "\n")
+        } catch (e: Exception) { }
+        if ("recovery" in sc) try {
             sb.append("\n## Sleep & morning checks (21 days)\n")
             val from = today.minusDays(21).toString()
             val nights = ReadinessSync.nights(ctx).filter { it.day >= from }.associateBy { it.day }
