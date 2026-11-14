@@ -64,6 +64,25 @@ object TodayWeather {
     private fun r(d: Double) = Math.round(d).toString()
     private fun clock(iso: String) = try { java.time.LocalDateTime.parse(iso).format(java.time.format.DateTimeFormatter.ofPattern("h:mm a", Locale.US)) } catch (e: Exception) { "" }
 
+    /**
+     * The rain chance for the rest of today (this hour to midnight), not the whole day — plus when it gets there:
+     * (97, "after 11 PM"), (40, "now"), (0, null).
+     */
+    fun restOfDayRain(o: JSONObject?): Pair<Int, String?> {
+        val h = o?.optJSONObject("hourly"); val times = h?.optJSONArray("time"); val hp = h?.optJSONArray("precipitation_probability")
+        if (times == null || hp == null) return (o?.optJSONObject("daily")?.optJSONArray("precipitation_probability_max")?.optInt(0) ?: 0) to null
+        val now = java.time.LocalDateTime.now(); val nowKey = now.toString().take(13); val today = now.toLocalDate().toString()
+        val idx = (0 until times.length()).filter { val k = times.optString(it); k.take(13) >= nowKey && k.startsWith(today) }
+        if (idx.isEmpty()) return 0 to null
+        val peak = idx.maxOf { hp.optInt(it) }
+        if (peak < 20) return peak to null
+        // When it first gets close to the peak (within 10 points, or 60%+).
+        val first = idx.first { hp.optInt(it) >= minOf(peak - 10, 60) }
+        val at = try { java.time.LocalDateTime.parse(times.optString(first)) } catch (e: Exception) { return peak to null }
+        val whenTxt = if (first == idx.first()) "now" else "after " + at.format(java.time.format.DateTimeFormatter.ofPattern("h a", Locale.US))
+        return peak to whenTxt
+    }
+
     /** A small copy for the watch: now, today's high / low / rain and the next 6 hours. */
     fun watchJson(ctx: Context): JSONObject? {
         val o = try { JSONObject(p(ctx).getString("wx", "") ?: "") } catch (e: Exception) { return null }
@@ -72,7 +91,7 @@ object TodayWeather {
         val out = JSONObject().put("at", p(ctx).getLong("at", 0L)).put("place", p(ctx).getString("place", "Meridian")).put("icon", icon(code, cur.optInt("is_day", 1) == 1))
             .put("cond", word(code)).put("temp", r(t)).put("feels", r(fl)).put("dew", r(cur.optDouble("dew_point_2m"))).put("wind", r(cur.optDouble("wind_speed_10m")))
             .put("hi", d?.optJSONArray("temperature_2m_max")?.optDouble(0)?.let(::r) ?: "").put("lo", d?.optJSONArray("temperature_2m_min")?.optDouble(0)?.let(::r) ?: "")
-            .put("rain", d?.optJSONArray("precipitation_probability_max")?.optInt(0) ?: 0)
+            .apply { val (rn, wh) = restOfDayRain(o); put("rain", rn); put("rainWhen", wh ?: "") }
         val h = o.optJSONObject("hourly"); val times = h?.optJSONArray("time")
         if (h != null && times != null) {
             val nowKey = java.time.LocalDateTime.now().toString().take(13)
@@ -113,7 +132,7 @@ object TodayWeather {
         val wind = cur.optDouble("wind_speed_10m"); val gust = cur.optDouble("wind_gusts_10m")
         val d = o.optJSONObject("daily")
         val hi = d?.optJSONArray("temperature_2m_max")?.optDouble(0); val lo = d?.optJSONArray("temperature_2m_min")?.optDouble(0)
-        val rain = d?.optJSONArray("precipitation_probability_max")?.optInt(0) ?: 0
+        val (rain, rainWhen) = restOfDayRain(o)
         val place = p(ctx).getString("place", "Meridian")
 
         // Big line: icon · temp · place.
@@ -127,7 +146,9 @@ object TodayWeather {
                     if (Math.abs(fl - t) >= 3) "feels ${r(fl)}°" else null,
                     if (hi != null && lo != null) "H ${r(hi)}° · L ${r(lo)}°" else null).joinToString(" · "), RunUi.MUTED, 13f))
             }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
-            addView(RunUi.text(ctx, "☔ $rain%", if (rain >= 40) 0xFF7FB8FF.toInt() else RunUi.MUTED, 14f, true))
+            addView(LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.END
+                addView(RunUi.text(ctx, "☔ $rain%", if (rain >= 40) 0xFF7FB8FF.toInt() else RunUi.MUTED, 14f, true).apply { gravity = Gravity.END })
+                addView(RunUi.text(ctx, rainWhen ?: "rest of today", RunUi.MUTED, 10f).apply { gravity = Gravity.END }) })
         })
         // Details.
         card.addView(RunUi.text(ctx, "Wind ${r(wind)} mph" + (if (gust - wind >= 8) " (gusts ${r(gust)})" else "") +
@@ -164,7 +185,8 @@ object TodayWeather {
         val note = when {
             t >= 60 -> try { heat.pct(t, rh).takeIf { it >= 1 }?.let { "🏃 Heat now: ~${String.format(Locale.US, "%.1f", it)}% slower at the same effort" } } catch (e: Exception) { null }
             fl <= 25 -> "🏃 Cold — layer up, cover hands and ears"
-            rain >= 60 -> "🏃 Rain likely — pick your window or plan for wet roads"
+            rain >= 60 && rainWhen == "now" -> "🏃 Rain likely now — plan for wet roads"
+            rain >= 60 -> "🏃 Rain likely ${rainWhen ?: "later today"} — run before then or plan for wet roads"
             else -> null
         }
         note?.let { card.addView(RunUi.text(ctx, it, RunUi.ACCENT, 12f, true).apply { setPadding(0, dp(8), 0, 0) }) }

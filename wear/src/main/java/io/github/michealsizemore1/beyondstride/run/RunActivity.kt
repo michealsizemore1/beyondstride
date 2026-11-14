@@ -1152,10 +1152,10 @@ class RunActivity : Activity() {
         acts.optJSONObject("weather")?.takeIf { System.currentTimeMillis() - it.optLong("at") < 6 * 3600_000L }?.let { w ->
             card(C.CARD) {
                 addView(label("${w.optString("icon")} ${w.optString("temp")}°  ${w.optString("place")}", Color.WHITE, 13f, true))
-                addView(label(listOf(w.optString("cond"), "H ${w.optString("hi")}° L ${w.optString("lo")}°", "☔ ${w.optInt("rain")}%").filter { it.isNotBlank() }.joinToString(" · "), C.MUTED, 9f))
+                addView(label(listOf(w.optString("cond"), "H ${w.optString("hi")}° L ${w.optString("lo")}°", "☔ ${w.optInt("rain")}%" + w.optString("rainWhen").let { if (it.isNotBlank()) " $it" else "" }).filter { it.isNotBlank() }.joinToString(" · "), C.MUTED, 9f))
                 setOnClickListener { overlay { c -> c.addView(label("${w.optString("icon")} ${w.optString("temp")}°", Color.WHITE, 22f, true))
                     c.addView(label(w.optString("place") + " · " + w.optString("cond"), C.MUTED, 10f))
-                    c.addView(label("Feels ${w.optString("feels")}° · H ${w.optString("hi")}° L ${w.optString("lo")}° · ☔ ${w.optInt("rain")}%", Color.WHITE, 9f).apply { setPadding(0, dp(4), 0, 0) })
+                    c.addView(label("Feels ${w.optString("feels")}° · H ${w.optString("hi")}° L ${w.optString("lo")}° · ☔ ${w.optInt("rain")}%" + w.optString("rainWhen").let { if (it.isNotBlank()) " $it" else "" }, Color.WHITE, 9f).apply { setPadding(0, dp(4), 0, 0) })
                     c.addView(label("Wind ${w.optString("wind")} mph · Dew pt ${w.optString("dew")}°", Color.WHITE, 9f))
                     val nx = w.optJSONArray("next")
                     if (nx != null) c.addView(LinearLayout(context).apply { orientation = LinearLayout.HORIZONTAL; setPadding(0, dp(8), 0, 0)
