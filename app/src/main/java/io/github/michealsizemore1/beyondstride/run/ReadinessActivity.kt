@@ -113,6 +113,8 @@ object SleepData {
                 } catch (e: Exception) { 0 } else 0
                 val hrv = hrvRecs.filter { it.time >= first.minus(30, ChronoUnit.MINUTES) && it.time <= last.plus(30, ChronoUnit.MINUTES) }
                     .map { it.heartRateVariabilityMillis }.filter { it in 5.0..300.0 }
+                // 😴 Stages, bed / wake and BeyondStride's Sleep Score for this night.
+                try { SleepStages.record(ctx, day, main, minutes, hr, ReadinessSync.nights(ctx).filter { it.day < day }.takeLast(30).map { it.sleepHr }) } catch (e: Exception) { }
                 Readiness.Night(day, minutes, hr, hrv = if (hrv.isNotEmpty()) Math.round(hrv.average()).toInt() else 0)
             }.filter { it.minutes > 0 }
             ReadinessSync.setNights(ctx, nights)

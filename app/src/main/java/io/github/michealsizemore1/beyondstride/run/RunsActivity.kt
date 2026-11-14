@@ -304,6 +304,23 @@ open class RunsActivity : Activity() {
                 }
                 setOnClickListener { startActivity(Intent(ctx, ReadinessActivity::class.java)) }
             })
+            // 😴 Last night: time asleep, BeyondStride's Sleep Score, stages and bed / wake times.
+            val todayKey = R.today()
+            io.github.michealsizemore1.beyondstride.ReadinessSync.nights(ctx).lastOrNull { it.day == todayKey && it.minutes > 0 }?.let { n ->
+                addView(divider())
+                addView(LinearLayout(ctx).apply {
+                    orientation = LinearLayout.VERTICAL
+                    val st = SleepStages.get(ctx, todayKey)
+                    addView(LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL
+                        addView(RunUi.text(ctx, "😴 ${R.hmm(n.minutes)} asleep", Color.WHITE, 15f, true), LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
+                        st?.let { addView(RunUi.text(ctx, "Sleep score ${it.score} · ${it.label()}", SleepStages.color(it.score), 14f, true)) } })
+                    st?.let { addView(RunUi.text(ctx, SleepStages.line(it), RunUi.MUTED, 12f)) }
+                    if (n.sleepHr > 0) addView(RunUi.text(ctx, "Sleeping HR ${n.sleepHr}", RunUi.MUTED, 12f))
+                    setOnClickListener { android.app.AlertDialog.Builder(ctx).setTitle("😴 Sleep score").setMessage("BeyondStride's own score (Samsung keeps its score to itself).\n\n" +
+                        "Quality: deep sleep (full at 15%+ of the night), REM (full at 20%+), little time awake (full at 20 min or less) and a calm sleeping heart (at or below your 30-night average).\n\n" +
+                        "Amount: full credit from 7½ hours; less sleep scales it down (5½ hours counts about 55%).\n\n85+ Excellent · 70+ Good · 55+ Fair · below Poor").setPositiveButton("OK", null).show() }
+                })
+            }
             // 🔋 Body Battery (the same card as before, inside this one).
             try { val bb = bodyBatteryCard(); bb.background = null; bb.setPadding(0, 0, 0, 0)
                 bb.layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT); addView(divider()); addView(bb) } catch (e: Exception) { }

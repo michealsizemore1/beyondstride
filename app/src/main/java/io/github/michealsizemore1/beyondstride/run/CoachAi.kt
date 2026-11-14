@@ -22,7 +22,7 @@ object CoachAi {
         Scope("runs", "🏃 Runs I pick", "full details of the runs you select"),
         Scope("plan", "📅 Training plan", "this week, next week and race day"),
         Scope("history", "📈 Mileage history", "weekly miles, runs and long run for 16 weeks, plus recent runs"),
-        Scope("recovery", "😴 Sleep & HRV", "sleep, sleeping HR, morning HRV / resting HR and readiness, 21 days"),
+        Scope("recovery", "😴 Sleep & HRV", "sleep, stages (deep / REM / light / awake), sleep score, sleeping HR, morning HRV / resting HR and readiness, 21 days"),
         Scope("battery", "🔋 Body Battery", "today's level, what drained it and the last 7 mornings"),
         Scope("food", "🍽️ Nutrition", "calories, macros, fluids, food quality and low nutrients, 10 days"),
         Scope("weight", "⚖️ Weight", "wake-up and post-run weights, 30 days"),
@@ -141,7 +141,7 @@ object CoachAi {
         fun has(vararg w: String) = w.any { t.contains(it) }
         if (has("overtrain", "too much", "fatigue", "tired", "recover", "fitter", "fitness", "improv", "progress", "trend", "on track", "race", "ready", "injur", "load", "mileage", "week"))
             out += listOf("history", "recovery", "battery", "plan")
-        if (has("sleep", "hrv", "resting", "readiness")) out += "recovery"
+        if (has("sleep", "hrv", "resting", "readiness", "deep", "rem", "awake", "bedtime")) out += "recovery"
         if (has("food", "eat", "fuel", "nutrition", "calorie", "carb", "protein", "hydrat", "drink", "fluid")) out += "food"
         if (has("weight", "pounds", " lb")) out += "weight"
         if (has("weather", "heat", "hot", "humid", "cold", "dew")) out += "weather"
@@ -204,7 +204,8 @@ object CoachAi {
             val checks = ReadinessSync.checks(ctx).filter { it.day >= from }.associateBy { it.day }
             (nights.keys + checks.keys).toSortedSet().forEach { d ->
                 val n = nights[d]; val c = checks[d]
-                sb.append("$d: " + listOfNotNull(n?.takeIf { it.minutes > 0 }?.let { "sleep ${Readiness.hmm(it.minutes)}" }, n?.takeIf { it.sleepHr > 0 }?.let { "sleeping HR ${it.sleepHr}" },
+                val st = SleepStages.get(ctx, d)
+                sb.append("$d: " + listOfNotNull(n?.takeIf { it.minutes > 0 }?.let { "sleep ${Readiness.hmm(it.minutes)}" }, st?.let { "sleep score ${it.score}/100 · " + SleepStages.line(it) }, n?.takeIf { it.sleepHr > 0 }?.let { "sleeping HR ${it.sleepHr}" },
                     c?.let { "HRV ${Math.round(it.rmssd)} ms" }, c?.takeIf { it.hr > 0 }?.let { "resting HR ${it.hr}" },
                     c?.takeIf { it.legs >= 0 }?.let { "legs ${it.legs}/5" }, c?.takeIf { it.sleepFeel >= 0 }?.let { "sleep feel ${it.sleepFeel}/5" }).joinToString(" · ") + "\n")
             }

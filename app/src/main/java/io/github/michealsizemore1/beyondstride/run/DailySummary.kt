@@ -44,6 +44,7 @@ object DailySummary {
             PlanEngine.race(plan).takeIf { it.isNotEmpty() && it >= date }?.let { r -> lines += "Race day: $r (${java.time.temporal.ChronoUnit.DAYS.between(LocalDate.parse(date), LocalDate.parse(r))} days away)" } }
         // Recovery.
         ReadinessSync.nights(ctx).lastOrNull { it.day == date }?.let { n -> lines += "Sleep: ${Readiness.hmm(n.minutes)}" + (if (n.sleepHr > 0) " · sleeping HR ${n.sleepHr}" else "") }
+        SleepStages.get(ctx, date)?.let { d -> lines += "Sleep score ${d.score}/100 (${d.label()}, BeyondStride) · " + SleepStages.line(d) }
         ReadinessSync.checks(ctx).lastOrNull { it.day == date }?.let { c -> lines += "Morning check: HRV ${Math.round(c.rmssd)} ms · resting HR ${c.hr}" }
         if (date == Readiness.today()) Insights.readiness(ctx)?.let { r -> lines += "Readiness: ${r.score} (${r.label}) — ${r.advice.substringBefore(". ")}" }
         if (date == Readiness.today()) Insights.recoveryWarning(ctx)?.let { lines += "Recovery note: " + it.removePrefix("⚠️ ") }
@@ -67,6 +68,9 @@ object DailySummary {
         ReadinessSync.nights(ctx).lastOrNull { it.day == date }?.takeIf { it.minutes > 0 }?.let { w.put("sleep", "${it.minutes / 60}:${String.format("%02d", it.minutes % 60)}") }
         ReadinessSync.checks(ctx).lastOrNull { it.day == date }?.takeIf { it.hr > 0 }?.let { w.put("restHr", it.hr) }
         ReadinessSync.nights(ctx).lastOrNull { it.day == date }?.takeIf { it.sleepHr > 0 }?.let { w.put("sleepHr", it.sleepHr) }
+        // 😴 Sleep stages and BeyondStride's Sleep Score.
+        SleepStages.get(ctx, date)?.let { d -> w.put("sleepScore", d.score); if (d.stages) w.put("deep", d.deep).put("rem", d.rem).put("light", d.light); w.put("awake", d.awake)
+            if (d.bed > 0) w.put("bed", d.bedText()).put("wake", d.wakeText()) }
         // Blood pressure + pulse from the cuff (Health Connect).
         BpImport.day(ctx, date)?.let { (bp, pulse, _) -> w.put("bp", bp); if (pulse > 0) w.put("pulse", pulse) }
         // Steps (Samsung Health, via Health Connect).
