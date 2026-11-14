@@ -9,7 +9,7 @@ import java.net.URL
 import java.time.LocalDateTime
 
 /**
- * 🌙 Backup Day Review: at 10:55 PM,
+ * 🌙 Backup Day Review: at 11:50 PM,
  * the phone writes the day's review (Wins / What to Improve / Focus / Lessons) with your AI key from today's training,
  * food, sleep and recovery, and puts it in the cloud. The Command Center fills its Daily AI Review from it whenever the
  * review is still empty — even if the Command Center wasn't open that night. (Your Command Center journal and tasks
@@ -17,8 +17,8 @@ import java.time.LocalDateTime
  */
 object DayReviewAi {
     private fun p(ctx: Context) = ctx.getSharedPreferences("dayreviewai", 0)
-    /** When the Daily (and Sunday's weekly) reviews are written: 10:55 PM. */
-    const val REVIEW_AT = 22 * 60 + 55
+    /** When the Daily (and Sunday's weekly) reviews are written: 11:50 PM (catches almost the whole day). */
+    const val REVIEW_AT = 23 * 60 + 50
     fun doneFor(ctx: Context) = p(ctx).getString("done", "") ?: ""
 
     /** Books tonight's run (report time − 5 min). Safe to call often. */
