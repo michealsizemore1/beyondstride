@@ -72,7 +72,7 @@ object DailySummary {
         SleepStages.get(ctx, date)?.let { d -> w.put("sleepScore", d.score); if (d.stages) w.put("deep", d.deep).put("rem", d.rem).put("light", d.light); w.put("awake", d.awake)
             if (d.bed > 0) w.put("bed", d.bedText()).put("wake", d.wakeText()) }
         // Blood pressure + pulse from the cuff (Health Connect).
-        BpImport.day(ctx, date)?.let { (bp, pulse, _) -> w.put("bp", bp); if (pulse > 0) w.put("pulse", pulse) }
+        BpImport.day(ctx, date)?.let { (bp, pulse, n) -> w.put("bp", bp).put("bpN", n); if (pulse > 0) w.put("pulse", pulse) }
         // Steps (Samsung Health, via Health Connect).
         DayStress.steps(ctx, date)?.takeIf { it > 0 }?.let { w.put("steps", it) }
         // HRV: the morning check (Polar H10), ms.
