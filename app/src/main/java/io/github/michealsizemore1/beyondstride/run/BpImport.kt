@@ -15,7 +15,7 @@ import java.time.ZoneId
 
 /**
  * 🩺 Blood pressure from a cuff or watch that writes to Health Connect (Withings, Omron Connect, Samsung Health…).
- * The lowest reading of each back-to-back set (sys/dia, with the pulse the device saved at that moment) is sent with the day
+ * The average of the day's readings (sys/dia, with the pulse the device saved at each) is sent with the day
  * summary — the Command Center fills BP and Pulse in its Wellness section (a value you typed there is never replaced).
  */
 object BpImport {
@@ -50,12 +50,11 @@ object BpImport {
         // reading, or one the cuff's app saved with a shifted time), so it never fills the new day before you've measured.
         fun day(r: BloodPressureRecord) = local(r).let { t -> (if (t.hour < 5) t.toLocalDate().minusDays(1) else t.toLocalDate()).toString() }
         bps.groupBy { day(it) }.forEach { (date, all) ->
-            // Readings taken back-to-back (within 10 minutes) are one set; the lowest reading of each set is the one used
-            // (the first usually reads high). Two or more sets in a day are averaged.
+            // All of the day's readings are averaged — sys, dia and pulse (you take up to 3 in a row).
             val ok = all.filter { it.systolic.inMillimetersOfMercury in 60.0..260.0 && it.diastolic.inMillimetersOfMercury in 30.0..160.0 }.sortedBy { it.time }
             val sittings = ArrayList<MutableList<BloodPressureRecord>>()
             ok.forEach { r -> val cur = sittings.lastOrNull(); if (cur != null && r.time.epochSecond - cur.last().time.epochSecond <= 600) cur += r else sittings += mutableListOf(r) }
-            val list = sittings.map { set -> set.minWith(compareBy<BloodPressureRecord>({ it.systolic.inMillimetersOfMercury }, { it.diastolic.inMillimetersOfMercury })) }
+            val list = sittings.flatten()   // every reading of the day is averaged (usually a set of up to 3)
             if (list.isEmpty()) return@forEach
             val sys = list.map { it.systolic.inMillimetersOfMercury }
             val dia = list.map { it.diastolic.inMillimetersOfMercury }
@@ -69,7 +68,7 @@ object BpImport {
         }
         val cut = LocalDate.now().minusDays(60).toString(); m.keys().asSequence().toList().filter { it < cut }.forEach { m.remove(it) }
         val latest = m.keys().asSequence().toList().maxOrNull()?.let { k -> m.optJSONObject(k)?.let { "$k: ${it.optString("bp")}" + (if (it.optInt("pulse") > 0) " · pulse ${it.optInt("pulse")}" else "") +
-            (if (it.optInt("taken") > it.optInt("n")) " (lowest of ${it.optInt("taken")} readings)" else "") + " (from ${it.optString("apps")})" +
+            (if (it.optInt("n") > 1) " (average of ${it.optInt("n")} readings)" else "") + " (from ${it.optString("apps")})" +
             "\nReadings: ${it.optString("times")}" } }
         pr.edit().putString("days", m.toString()).putString("info", "Last checked " + java.text.SimpleDateFormat("MMM d, h:mm a", java.util.Locale.US).format(java.util.Date()) + " · " +
             (latest ?: if (err.isNotEmpty()) "couldn't read Health Connect — ${err.take(120)}" else "no blood pressure in Health Connect in the last $days days")).apply()
