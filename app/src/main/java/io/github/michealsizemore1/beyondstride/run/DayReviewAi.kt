@@ -23,6 +23,9 @@ object DayReviewAi {
 
     /** Books tonight's run (report time − 5 min). Safe to call often. */
     fun schedule(ctx: Context) {
+        // The time changed (10:55 → 11:50 PM): drop the job booked for the old time.
+        if (p(ctx).getInt("bookedFor", -1) != REVIEW_AT) { try { androidx.work.WorkManager.getInstance(ctx).cancelUniqueWork("dayReviewAi") } catch (e: Exception) { }
+            p(ctx).edit().putInt("bookedFor", REVIEW_AT).apply() }
         val now = LocalDateTime.now(); val m = REVIEW_AT
         var at = now.toLocalDate().atTime(m / 60, m % 60)
         if (!at.isAfter(now)) at = at.plusDays(1)
