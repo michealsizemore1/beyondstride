@@ -317,8 +317,7 @@ open class RunsActivity : Activity() {
                     st?.let { addView(RunUi.text(ctx, SleepStages.line(it), RunUi.MUTED, 12f)) }
                     if (n.sleepHr > 0) addView(RunUi.text(ctx, "Sleeping HR ${n.sleepHr}", RunUi.MUTED, 12f))
                     setOnClickListener { android.app.AlertDialog.Builder(ctx).setTitle("😴 Sleep score").setMessage("BeyondStride's own score (Samsung keeps its score to itself).\n\n" +
-                        "Quality: deep sleep (full at 15%+ of the night), REM (full at 20%+), little time awake (full at 20 min or less) and a calm sleeping heart (at or below your 30-night average).\n\n" +
-                        "Amount: full credit from 7½ hours; less sleep scales it down (5½ hours counts about 55%).\n\n85+ Excellent · 70+ Good · 55+ Fair · below Poor").setPositiveButton("OK", null).show() }
+                        "Half amount: full from 7½ hours asleep, zero at 4 hours.\n\nHalf quality: deep sleep (full at 15%+ of the night), REM (full at 20%+), little time awake (full at 30 min or less, none at 2 hours) and a calm sleeping heart (at or below your 30-night average).\n\n85+ Excellent · 70+ Good · 55+ Fair · below Poor").setPositiveButton("OK", null).show() }
                 })
             }
             // 🔋 Body Battery (the same card as before, inside this one).

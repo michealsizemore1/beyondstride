@@ -12,11 +12,11 @@ import java.util.Locale
  * 😴 The night in detail, from Samsung Health's sleep stages (via Health Connect): deep, light, REM and awake minutes,
  * bed and wake times — and BeyondStride's own Sleep Score (Samsung keeps its score to itself).
  *
- * Sleep Score (0–100) = sleep quality × how much of a full night you got:
+ * Sleep Score (0–100) = half amount + half quality (calibrated to sit close to Samsung's score):
+ *  • Amount (0–100): full from 7½ hours, zero at 4 hours.
  *  • Quality (0–100): deep sleep (25 — full at 15%+ of the night), REM (25 — full at 20%+), little time awake
- *    (30 — full at 20 min or less, none at 75+), and a calm sleeping heart (20 — at or below your 30-night average,
- *    none at 6+ bpm above). Without stages it's judged on the sleeping heart rate alone.
- *  • Amount: full credit from 7½ hours; scaled down below that (a 5½-hour night counts about 55%).
+ *    (30 — full at 30 min or less, none at 2 hours), and a calm sleeping heart (20 — at or below your 30-night average,
+ *    none at 6+ bpm above). Without stages it's judged on the sleeping heart rate and time awake.
  * 85+ Excellent · 70+ Good · 55+ Fair · below Poor.
  */
 object SleepStages {
@@ -62,12 +62,13 @@ object SleepStages {
         fun lin(v: Double, zero: Double, full: Double) = ((v - zero) / (full - zero)).coerceIn(0.0, 1.0)
         val hrAvg = hrHistory.filter { it > 0 }.takeIf { it.size >= 5 }?.average()
         val hrPts = if (sleepHr > 0 && hrAvg != null) 1 - lin(sleepHr - hrAvg, 0.0, 6.0) else 0.7
+        // Half amount, half quality (added, not multiplied — a short night isn't punished twice).
+        val amount = 100 * lin(minutes.toDouble(), 240.0, 450.0)
         val quality = if (hasStages) {
             val asleep = Math.max(1, minutes).toDouble()
-            25 * lin(deep / asleep, 0.05, 0.15) + 25 * lin(rem / asleep, 0.08, 0.20) + 30 * (1 - lin(awake.toDouble(), 20.0, 75.0)) + 20 * hrPts
-        } else 100 * (0.6 + 0.4 * hrPts) * (1 - 0.4 * lin(awake.toDouble(), 20.0, 90.0))
-        val amount = lin(minutes.toDouble(), 180.0, 450.0).coerceAtLeast(0.25)
-        return Math.round(quality * amount).toInt().coerceIn(0, 100)
+            25 * lin(deep / asleep, 0.05, 0.15) + 25 * lin(rem / asleep, 0.05, 0.20) + 30 * (1 - lin(awake.toDouble(), 30.0, 120.0)) + 20 * hrPts
+        } else 100 * (0.6 + 0.4 * hrPts) * (1 - 0.4 * lin(awake.toDouble(), 30.0, 120.0))
+        return Math.round(0.5 * amount + 0.5 * quality).toInt().coerceIn(0, 100)
     }
 
     /** "Deep 1h 2m · REM 1h 15m · Light 3h 1m · Awake 22m · 11:48 PM–6:05 AM". */
