@@ -79,11 +79,7 @@ class ActivitiesActivity : Activity() {
         watchWorkouts(col)
         uploadPlan(col)
         // 🏃 Activities: collapsed each time the screen opens, like the Command Center's Activities section.
-        col.addView(txt((if (logOpen) "▼" else "▶") + "  🏃 Activities" + (if (all.isNotEmpty()) "  (${all.size})" else ""), 0xFFE67E22.toInt(), 17f, true).apply {
-            background = RunUi.rounded(RunUi.CARD, dp(10).toFloat()); setPadding(dp(12), dp(12), dp(12), dp(12))
-            layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(16) }
-            setOnClickListener { logOpen = !logOpen; render() }
-        })
+        col.addView(RunUi.groupRow(this, "🏃", "Activities", if (all.isNotEmpty()) "${all.size}" else null, logOpen) { logOpen = !logOpen; render() })
         val logFrom = col.childCount
 
         // Buttons.
@@ -165,6 +161,7 @@ class ActivitiesActivity : Activity() {
         val keepY = scroller?.scrollY ?: 0
         val sv = ScrollView(this).apply { setBackgroundColor(RunUi.BG); addView(col, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT)) }
         scroller = sv
+        RunUi.styleGroups(col)
         setContentView(RunUi.tabbed(this, sv, RunUi.TAB_RUNS))
         if (keepY > 0) sv.post { sv.scrollTo(0, keepY) }
     }
@@ -623,9 +620,7 @@ class ActivitiesActivity : Activity() {
         val prefs = getSharedPreferences("activitiesUi", 0)
         val open = prefs.getBoolean("shoesOpen", false)
         val list = S.shoes(this)
-        col.addView(txt((if (open) "▼" else "▶") + "  👟 Shoe Tracker" + (if (list.isNotEmpty()) "  (${list.count { !it.optBoolean("retired") }} active)" else ""), 0xFFE67E22.toInt(), 15f, true).apply {
-            setPadding(dp(2), dp(16), 0, dp(4)); setOnClickListener { prefs.edit().putBoolean("shoesOpen", !open).apply(); render() }
-        })
+        col.addView(RunUi.groupRow(this, "👟", "Shoe Tracker", if (list.isNotEmpty()) "${list.count { !it.optBoolean("retired") }} active" else null, open) { prefs.edit().putBoolean("shoesOpen", !open).apply(); render() })
         if (!open) return
         col.addView(txt("+ Add Shoe", Color.WHITE, 13f, true).apply {
             background = RunUi.rounded(0xFFE67E22.toInt(), dp(8).toFloat()); setPadding(dp(12), dp(7), dp(12), dp(7))
@@ -725,18 +720,13 @@ class ActivitiesActivity : Activity() {
     private fun planCard(col: LinearLayout, plan: JSONObject, which: String) {
         val ctx = this
         val up = which == "upcoming"
+        // Collapsed each time the screen opens; tap the row to open it.
+        val key = "plan_$which"; val isOpen = key in panels
+        val m = listOfNotNull(plan.optInt("weeks").takeIf { it > 0 }?.let { "$it weeks" }, if (up) "starts " + fmtDate(plan.optString("startDate")) else null).joinToString(" · ")
+        col.addView(RunUi.groupRow(this, if (up) "📅" else "📋", if (up) "Upcoming Training Plan" else "Active Training Plan", m, isOpen) { if (isOpen) panels.remove(key) else panels.add(key); render() })
+        if (!isOpen) return
         col.addView(RunUi.card(this).apply {
-            layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(12) }
-            // Collapsed each time the screen opens; tap the title to open it.
-            val key = "plan_$which"; val isOpen = key in panels
-            addView(txt((if (isOpen) "▼  " else "▶  ") + (if (up) "📅 Upcoming Training Plan" else "📋 Active Training Plan"), 0xFFE67E22.toInt(), 16f, true).apply {
-                setOnClickListener { if (isOpen) panels.remove(key) else panels.add(key); render() } })
-            if (!isOpen) {
-                val m = listOfNotNull(plan.optString("type").ifEmpty { null }, plan.optInt("weeks").takeIf { it > 0 }?.let { "$it-week plan" },
-                    if (up) "Starts " + fmtDate(plan.optString("startDate")) else null).joinToString(" • ")
-                if (m.isNotEmpty()) addView(txt(m, RunUi.MUTED, 12f).apply { setPadding(0, dp(4), 0, 0) })
-                return@apply
-            }
+            layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(6) }
             // The buttons you use, in an even grid; the rest are under ⋯ More.
             fun row(vararg b: Triple<String, Pair<Int, Int>, () -> Unit>) = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL
                 layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(6) }
@@ -896,8 +886,7 @@ class ActivitiesActivity : Activity() {
         val ctx = this
         val prefs = getSharedPreferences("activitiesUi", 0)
         val open = prefs.getBoolean("uploadOpen", false)
-        col.addView(txt((if (open) "▼" else "▶") + "  📂 Upload Plan from Text File", 0xFFE67E22.toInt(), 15f, true).apply {
-            setPadding(dp(2), dp(16), 0, dp(4)); setOnClickListener { prefs.edit().putBoolean("uploadOpen", !open).apply(); render() } })
+        col.addView(RunUi.groupRow(this, "📂", "Upload Plan from Text File", null, open) { prefs.edit().putBoolean("uploadOpen", !open).apply(); render() })
         if (!open) return
         if (uploadStart.isEmpty()) uploadStart = java.time.LocalDate.now().toString()
         col.addView(RunUi.card(this).apply {
@@ -1029,8 +1018,7 @@ class ActivitiesActivity : Activity() {
         val ctx = this
         val prefs = getSharedPreferences("activitiesUi", 0)
         val open = prefs.getBoolean("archOpen", false)
-        col.addView(txt((if (open) "▼" else "▶") + "  💼 Archived Plans  (${arr.length()})", 0xFFE67E22.toInt(), 15f, true).apply {
-            setPadding(dp(2), dp(18), 0, dp(4)); setOnClickListener { prefs.edit().putBoolean("archOpen", !open).apply(); render() } })
+        col.addView(RunUi.groupRow(this, "💼", "Archived Plans", "${arr.length()}", open) { prefs.edit().putBoolean("archOpen", !open).apply(); render() })
         if (!open) return
         for (i in 0 until arr.length()) {
             val p = arr.optJSONObject(i) ?: continue
@@ -1063,8 +1051,7 @@ class ActivitiesActivity : Activity() {
     private fun weekNotes(col: LinearLayout) {
         val ctx = this
         val isOpen = "wrn" in panels
-        col.addView(txt((if (isOpen) "▼" else "▶") + "  📝 Weekly Run Notes", 0xFFE67E22.toInt(), 15f, true).apply {
-            setPadding(dp(2), dp(14), 0, dp(4)); setOnClickListener { if (isOpen) panels.remove("wrn") else panels.add("wrn"); render() } })
+        col.addView(RunUi.groupRow(this, "📝", "Weekly Run Notes", null, isOpen) { if (isOpen) panels.remove("wrn") else panels.add("wrn"); render() })
         if (!isOpen) return
         val week = wrnMonday().toString()
         val note = EditText(this).apply {
@@ -1213,8 +1200,7 @@ class ActivitiesActivity : Activity() {
         val plan = WorkoutStore.plan(this)
         val today = java.time.LocalDate.now()
         val next = (0 until 14).mapNotNull { i -> val d = today.plusDays(i.toLong()); plan.optJSONObject(d.toString())?.let { d to it } }
-        col.addView(txt((if (isOpen) "▼" else "▶") + "  ⌚ Watch Workouts" + (next.firstOrNull()?.let { (d, w) -> "  (" + (if (d == today) "today" else d.format(java.time.format.DateTimeFormatter.ofPattern("EEE", Locale.US))) + ": " + w.optString("name") + ")" } ?: ""),
-            0xFFE67E22.toInt(), 15f, true).apply { setPadding(dp(2), dp(16), 0, dp(4)); maxLines = 2; setOnClickListener { if (isOpen) panels.remove("watchW") else panels.add("watchW"); render() } })
+        col.addView(RunUi.groupRow(this, "⌚", "Watch Workouts", next.firstOrNull()?.let { (d, w) -> (if (d == today) "Today" else d.format(java.time.format.DateTimeFormatter.ofPattern("EEE", Locale.US))) + ": " + w.optString("name") }, isOpen) { if (isOpen) panels.remove("watchW") else panels.add("watchW"); render() })
         if (!isOpen) return
         col.addView(RunUi.card(this).apply {
             addView(txt("The guided workouts your watch runs (heart rate / pace / power steps). ⌚ Send to watch on the plan fills them in.", RunUi.MUTED, 11f))

@@ -262,11 +262,11 @@ class FitnessActivity : Activity() {
         run {
             val acts = ActivityStore.list(this)
             col.addView(RunUi.section(this, "RACE FITNESS & CONDITIONS"))
-            ActivityAnalysis(this, panels) { render() }.apply { racePredictor(col, acts) }
-            RacePacing.card(this, col, acts)
-            ActivityAnalysis(this, panels) { render() }.apply { heatHumidity(col, acts) }
+            ActivityAnalysis(this, panels) { render() }.apply { racePredictor(col, acts); heatHumidity(col, acts) }
             ZonesCard.build(this, col, panels) { render() }
+            RacePacing.card(this, col, acts)
         }
+        RunUi.styleGroups(col)
         setContentView(RunUi.tabbed(this, ScrollView(this).apply {
             setBackgroundColor(RunUi.BG)
             addView(col, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))

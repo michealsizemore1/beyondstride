@@ -28,8 +28,7 @@ object ZonesCard {
         val cp = st.optDouble("cp", 0.0).takeIf { it > 0 } ?: RunSettings.cp(ctx).toDouble()
         val res = Math.max(1.0, max - rest); val bnd = listOf(0.5, 0.6, 0.7, 0.8, 0.9).map { Math.round(rest + res * it).toInt() }
         val isOpen = "zones" in open
-        col.addView(txt((if (isOpen) "▼" else "▶") + "  🎯 Training Zones" + (if (!isOpen) "  (Z2 ${bnd[1]}–${bnd[2] - 1} bpm)" else ""), 0xFFE67E22.toInt(), 15f, true).apply {
-            setPadding(dp(2), dp(16), 0, dp(4)); setOnClickListener { if (isOpen) open.remove("zones") else open.add("zones"); redraw() } })
+        col.addView(RunUi.groupRow(ctx, "🎯", "Training Zones", "Z2 ${bnd[1]}–${bnd[2] - 1} bpm", isOpen) { if (isOpen) open.remove("zones") else open.add("zones"); redraw() })
         if (!isOpen) return
         fun setZone(key: String, v: Double) {
             if (v <= 0) return

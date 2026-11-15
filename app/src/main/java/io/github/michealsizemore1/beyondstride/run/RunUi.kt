@@ -47,6 +47,46 @@ object RunUi {
         layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(ctx, 10) }
     }
 
+    // ── Grouped list rows (Settings-style) for collapsible sections ──
+    const val GROUP_ROW = "groupRow"
+    /**
+     * One row: icon · white title · gray summary on the right · chevron (› closed, ⌄ open). Rows next to each other join
+     * into one rounded card with thin dividers — call [styleGroups] on the column once it's built.
+     */
+    fun groupRow(ctx: Context, icon: String, title: String, summary: String?, open: Boolean, onClick: () -> Unit) = LinearLayout(ctx).apply {
+        tag = GROUP_ROW; orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+        setPadding(dp(ctx, 14), dp(ctx, 13), dp(ctx, 12), dp(ctx, 13))
+        background = rounded(CARD, dp(ctx, 14).toFloat())
+        layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(ctx, 12) }
+        if (icon.isNotBlank()) addView(text(ctx, icon, Color.WHITE, 17f).apply { setPadding(0, 0, dp(ctx, 12), 0) })
+        addView(text(ctx, title, Color.WHITE, 15f, true).apply { maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
+        if (!summary.isNullOrBlank()) addView(text(ctx, summary, MUTED, 13f).apply { maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END; maxWidth = dp(ctx, 170); setPadding(dp(ctx, 8), 0, 0, 0) })
+        addView(text(ctx, "›", if (open) ACCENT else MUTED, 20f, true).apply { setPadding(dp(ctx, 10), 0, 0, dp(ctx, 2)); rotation = if (open) 90f else 0f })
+        isClickable = true; setOnClickListener { onClick() }
+    }
+    /** "📈 Charts  (26 weeks · 60 days)" → icon 📈, title Charts, summary "26 weeks · 60 days". */
+    fun groupRow(ctx: Context, label: String, open: Boolean, onClick: () -> Unit): LinearLayout {
+        val l = label.trim(); val sp = l.indexOf(' ')
+        val first = if (sp > 0) l.substring(0, sp) else ""
+        val hasIcon = first.isNotEmpty() && first.none { it.isLetterOrDigit() }
+        var rest = if (hasIcon) l.substring(sp + 1).trim() else l
+        var sum: String? = null
+        Regex("\\s*\\(([^()]*)\\)\\s*$").find(rest)?.let { m -> sum = m.groupValues[1]; rest = rest.substring(0, m.range.first).trim() }
+        return groupRow(ctx, if (hasIcon) first else "", rest, sum, open, onClick)
+    }
+    /** Joins neighboring group rows: square inner corners, 1 dp gap (a thin divider), rounded outer corners. */
+    fun styleGroups(col: android.view.ViewGroup) {
+        val n = col.childCount
+        for (i in 0 until n) {
+            val v = col.getChildAt(i); if (v.tag != GROUP_ROW) continue
+            val prev = i > 0 && col.getChildAt(i - 1).let { it.tag == GROUP_ROW && it.visibility == View.VISIBLE }
+            val next = i < n - 1 && col.getChildAt(i + 1).let { it.tag == GROUP_ROW && it.visibility == View.VISIBLE }
+            val r = dp(v.context, 14).toFloat(); val t = if (prev) 0f else r; val b = if (next) 0f else r
+            v.background = GradientDrawable().apply { setColor(CARD); cornerRadii = floatArrayOf(t, t, t, t, b, b, b, b) }
+            (v.layoutParams as? android.view.ViewGroup.MarginLayoutParams)?.let { it.topMargin = if (prev) dp(v.context, 1) else dp(v.context, 12); v.layoutParams = it }
+        }
+    }
+
     fun button(ctx: Context, label: String, color: Int, textColor: Int = Color.BLACK, onClick: () -> Unit) =
         text(ctx, label, textColor, 14f, true).apply {
             gravity = Gravity.CENTER

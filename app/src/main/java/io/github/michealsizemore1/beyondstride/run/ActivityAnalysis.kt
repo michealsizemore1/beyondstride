@@ -38,8 +38,7 @@ class ActivityAnalysis(private val act: Activity, private val open: MutableSet<S
     private fun head(t: String) = txt(t.uppercase(), RunUi.MUTED, 12f, true)
     private fun toggle(col: LinearLayout, key: String, title: String): Boolean {
         val isOpen = key in open
-        col.addView(txt((if (isOpen) "▼" else "▶") + "  " + title, ORANGE, 15f, true).apply {
-            setPadding(dp(2), dp(14), 0, dp(4)); setOnClickListener { if (isOpen) open.remove(key) else open.add(key); redraw() } })
+        col.addView(RunUi.groupRow(act, title, isOpen) { if (isOpen) open.remove(key) else open.add(key); redraw() })
         return isOpen
     }
     private fun grid(box: LinearLayout, cells: List<Triple<String, String, String?>>, extra: List<String?> = emptyList()) {
