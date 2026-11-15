@@ -40,6 +40,8 @@ object Nutrition {
         val notes: Map<String, String> = emptyMap(), val perfNote: String = "", val prerun: String = "",
         /** Weight right before the run (lb), for sweat rate on later-in-the-day runs. 0 when not entered. */
         val preWeight: Double = 0.0,
+        /** A second run that day: its pre-run and post-run weights (lb), 0 when not entered. */
+        val pre2Weight: Double = 0.0, val post2Weight: Double = 0.0,
     ) {
         /** The weight to compare the post-run weight with: pre-run if entered, otherwise wake-up. */
         val beforeRun get() = if (preWeight > 0) preWeight else weight
@@ -100,7 +102,8 @@ object Nutrition {
             o.optInt("water"), o.optInt("sportsOz"), o.optInt("otherOz"), o.optDouble("weight", 0.0), o.optDouble("postWeight", 0.0), foods, o.optBoolean("qrun"), o.optString("qhard"),
             o.optJSONObject("mt")?.optInt("prot") ?: 0, o.optJSONObject("mt")?.optInt("carbs") ?: 0, o.optJSONObject("mt")?.optInt("fat") ?: 0,
             o.optJSONObject("mt")?.optString("label") ?: "", o.optJSONObject("mt")?.optInt("cal") ?: 0,
-            o.optJSONObject("notes")?.let { n -> n.keys().asSequence().associateWith { n.optString(it) } } ?: emptyMap(), o.optString("perfNote"), o.optJSONObject("prerun")?.toString() ?: "", o.optDouble("preWeight", 0.0))
+            o.optJSONObject("notes")?.let { n -> n.keys().asSequence().associateWith { n.optString(it) } } ?: emptyMap(), o.optString("perfNote"), o.optJSONObject("prerun")?.toString() ?: "", o.optDouble("preWeight", 0.0),
+            o.optDouble("pre2Weight", 0.0), o.optDouble("post2Weight", 0.0))
     }
 
     /** Firebase's {"2026-11-06": {...}, ...} (or null) → days, oldest first. */
@@ -118,7 +121,7 @@ object Nutrition {
                 .put("items", JSONArray().apply { d.items.forEach { put(JSONObject().put("meal", it.meal).put("name", it.name).put("cal", it.cal).put("prot", it.prot).put("carbs", it.carbs).put("fat", it.fat)) } })
                 .put("microScore", d.microScore)
                 .put("foods", Food.listJson(d.foods))
-                .put("water", d.water).put("sportsOz", d.sportsOz).put("otherOz", d.otherOz).put("weight", d.weight).put("postWeight", d.postWeight).put("preWeight", d.preWeight).put("qrun", d.qRun).put("qhard", d.qHard)
+                .put("water", d.water).put("sportsOz", d.sportsOz).put("otherOz", d.otherOz).put("weight", d.weight).put("postWeight", d.postWeight).put("preWeight", d.preWeight).put("pre2Weight", d.pre2Weight).put("post2Weight", d.post2Weight).put("qrun", d.qRun).put("qhard", d.qHard)
                 .put("notes", JSONObject().apply { d.notes.forEach { (k, v) -> put(k, v) } }).put("perfNote", d.perfNote).apply { if (d.prerun.isNotEmpty()) put("prerun", JSONObject(d.prerun)) }
                 .put("mt", JSONObject().put("prot", d.mtProt).put("carbs", d.mtCarbs).put("fat", d.mtFat).put("label", d.mtLabel).put("cal", d.mtCal))
                 .put("micros", JSONArray().apply { d.micros.forEach { put(JSONObject().put("n", it.name).put("f", it.field).put("v", it.value).put("t", it.target).put("mx", it.max).put("u", it.unit)) } }))
@@ -138,8 +141,13 @@ object Nutrition {
      */
     data class Rehydrate(val lostLb: Double, val targetOz: Int, val hadOz: Int, val needOz: Int)
     fun rehydrate(d: Day?): Rehydrate? {
-        if (d == null || d.beforeRun <= 0 || d.postWeight <= 0 || d.postWeight >= d.beforeRun) return null
-        val lost = d.beforeRun - d.postWeight
+        if (d == null) return null
+        val lost1 = if (d.beforeRun > 0 && d.postWeight > 0 && d.postWeight < d.beforeRun) d.beforeRun - d.postWeight else 0.0
+        // Second run: its own pre-run → post-run (or the first run's post-run weight → its post-run when no pre-run 2).
+        val before2 = if (d.pre2Weight > 0) d.pre2Weight else d.postWeight
+        val lost2 = if (before2 > 0 && d.post2Weight > 0 && d.post2Weight < before2) before2 - d.post2Weight else 0.0
+        val lost = lost1 + lost2
+        if (lost <= 0) return null
         val target = (lost * 20).roundToInt()
         return Rehydrate(lost, target, d.waterOz, (target - d.waterOz).coerceAtLeast(0))
     }

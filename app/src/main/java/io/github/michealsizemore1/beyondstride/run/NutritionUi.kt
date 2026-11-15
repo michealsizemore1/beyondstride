@@ -54,7 +54,8 @@ object NutritionUi {
             })
         } catch (e: Exception) { }
         // Weigh-ins (Nutrition tab): tap to enter wake-up and post-run weight.
-        if (big) col.addView(RunUi.text(ctx, "⚖ Weight: wake-up ${io.github.michealsizemore1.beyondstride.Hydration.lb(nd?.weight ?: 0.0)}" + (if ((nd?.preWeight ?: 0.0) > 0) " · pre-run ${io.github.michealsizemore1.beyondstride.Hydration.lb(nd!!.preWeight)}" else "") + " · post-run ${io.github.michealsizemore1.beyondstride.Hydration.lb(nd?.postWeight ?: 0.0)} lb  ▸",
+        if (big) col.addView(RunUi.text(ctx, "⚖ Weight: wake-up ${io.github.michealsizemore1.beyondstride.Hydration.lb(nd?.weight ?: 0.0)}" + (if ((nd?.preWeight ?: 0.0) > 0) " · pre-run ${io.github.michealsizemore1.beyondstride.Hydration.lb(nd!!.preWeight)}" else "") + " · post-run ${io.github.michealsizemore1.beyondstride.Hydration.lb(nd?.postWeight ?: 0.0)} lb" +
+            (if ((nd?.pre2Weight ?: 0.0) > 0 || (nd?.post2Weight ?: 0.0) > 0) " · run 2: pre ${io.github.michealsizemore1.beyondstride.Hydration.lb(nd!!.pre2Weight)} → post ${io.github.michealsizemore1.beyondstride.Hydration.lb(nd.post2Weight)} lb" else "") + "  ▸",
             Color.WHITE, 13f, true).apply { setPadding(0, dp(6), 0, dp(2)); setOnClickListener { fluidDialog(act, refresh) } })
         fluids(act, col, nd, refresh, chips)
         if (withMicros && nd != null && nd.micros.isNotEmpty()) micros(act, col, nd)
@@ -315,8 +316,13 @@ object NutritionUi {
         val pre = field("e.g. 173.0", today?.preWeight ?: 0.0); box.addView(pre)
         box.addView(android.widget.TextView(ctx).apply { text = "Post-run weight (lb)"; setPadding(0, dp(8), 0, 0) })
         val post = field("e.g. 171.2", today?.postWeight ?: 0.0); box.addView(post)
+        box.addView(android.widget.TextView(ctx).apply { text = "🏃 Second run today"; setTextColor(RunUi.ACCENT); textSize = 14f; setTypeface(typeface, android.graphics.Typeface.BOLD); setPadding(0, dp(14), 0, 0) })
+        box.addView(android.widget.TextView(ctx).apply { text = "Run 2 · pre-run weight (lb)"; setPadding(0, dp(4), 0, 0) })
+        val pre2 = field("e.g. 172.8", today?.pre2Weight ?: 0.0); box.addView(pre2)
+        box.addView(android.widget.TextView(ctx).apply { text = "Run 2 · post-run weight (lb)"; setPadding(0, dp(8), 0, 0) })
+        val post2 = field("e.g. 171.6", today?.post2Weight ?: 0.0); box.addView(post2)
         box.addView(android.widget.TextView(ctx).apply {
-            text = "Sweat rate uses pre-run → post-run (or wake-up → post-run when there's no pre-run weight), plus sports drinks logged. Drinks are in Liquids on the Nutrition tab."; textSize = 12f; setPadding(0, dp(8), 0, 0)
+            text = "Sweat rate uses pre-run → post-run (or wake-up → post-run when there's no pre-run weight), plus sports drinks logged. Run 2 uses its own pre → post (or run 1's post-run weight when there's no run 2 pre-run). Rehydration adds both runs' losses. Drinks are in Liquids on the Nutrition tab."; textSize = 12f; setPadding(0, dp(8), 0, 0)
         })
         android.app.AlertDialog.Builder(ctx).setTitle("Weight · " + if (NutriDay.isToday()) "today" else java.time.LocalDate.parse(NutriDay.date()).format(java.time.format.DateTimeFormatter.ofPattern("EEE, MMM d", Locale.US))).setView(ScrollView(ctx).apply { addView(box) })
             .setPositiveButton("Save") { _, _ ->
@@ -325,6 +331,9 @@ object NutritionUi {
                 if (pr != (today?.preWeight ?: 0.0)) HydrationSync.change(ctx, "preWeight", value = pr)
                 if (w != (today?.weight ?: 0.0)) HydrationSync.change(ctx, "weight", value = w)
                 if (p != (today?.postWeight ?: 0.0)) HydrationSync.change(ctx, "postWeight", value = p)
+                val pr2 = num(pre2); val p2 = num(post2)
+                if (pr2 != (today?.pre2Weight ?: 0.0)) HydrationSync.change(ctx, "pre2Weight", value = pr2)
+                if (p2 != (today?.post2Weight ?: 0.0)) HydrationSync.change(ctx, "post2Weight", value = p2)
             }
             .setOnDismissListener { refresh() }
             .show()

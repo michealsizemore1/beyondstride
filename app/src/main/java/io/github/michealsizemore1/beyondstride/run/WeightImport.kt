@@ -52,10 +52,19 @@ object WeightImport {
         weights.groupBy { it.first.atZone(zone).toLocalDate().toString() }.forEach { (date, list) ->
             val day = NutriDay.day(ctx, date)
             val wake = list.firstOrNull { it.first.atZone(zone).hour < 12 }?.second?.let { r1(it) }
-            val post = list.firstOrNull { w -> ends.any { e -> !w.first.isBefore(e) && w.first.isBefore(e.plusSeconds(2 * 3600)) } }?.second?.let { r1(it) }
-            // Pre-run: the last weigh-in in the 2 hours before a run starts (and not after it ended).
             val wakeAt = list.firstOrNull { it.first.atZone(zone).hour < 12 }?.first
-            val pre = list.lastOrNull { w -> w.first != wakeAt && starts.any { st -> w.first.isBefore(st) && !w.first.isBefore(st.minusSeconds(2 * 3600)) } }?.second?.let { r1(it) }
+            // This day's runs in order (start, end); weigh-ins go with the run they're closest to.
+            val runs = starts.indices.map { starts[it] to ends.getOrElse(it) { starts[it] } }
+                .filter { it.first.atZone(zone).toLocalDate().toString() == date }.sortedBy { it.first }
+                .fold(ArrayList<Pair<Instant, Instant>>()) { acc, r -> if (acc.isEmpty() || r.first.isAfter(acc.last().second.plusSeconds(600)) && r.first.isAfter(acc.last().first.plusSeconds(900))) acc += r; acc }
+            fun postFor(i: Int): Double? { val (_, e) = runs.getOrNull(i) ?: return null; val next = runs.getOrNull(i + 1)?.first
+                return list.firstOrNull { w -> !w.first.isBefore(e) && w.first.isBefore(e.plusSeconds(2 * 3600)) && (next == null || w.first.isBefore(next)) }?.second?.let { r1(it) } }
+            fun preFor(i: Int): Double? { val (st, _) = runs.getOrNull(i) ?: return null; val prevEnd = runs.getOrNull(i - 1)?.second
+                return list.lastOrNull { w -> w.first != wakeAt && w.first.isBefore(st) && !w.first.isBefore(st.minusSeconds(2 * 3600)) && (prevEnd == null || w.first.isAfter(prevEnd.plusSeconds(60))) }?.second?.let { r1(it) } }
+            // Runs only known from the watch's own list fall back to the old matching (any run end that day).
+            val post = postFor(0) ?: list.firstOrNull { w -> ends.any { e -> !w.first.isBefore(e) && w.first.isBefore(e.plusSeconds(2 * 3600)) } }?.second?.let { r1(it) }
+            val pre = preFor(0)
+            val post2 = postFor(1); val pre2 = preFor(1)
             fun put(field: String, v: Double?, cur: Double) {
                 if (v == null) return
                 val mine = pr.getFloat("${field}_$date", -1f).toDouble()
@@ -67,6 +76,8 @@ object WeightImport {
             put("weight", wake, day?.weight ?: 0.0)
             if (post != null && post != wake) put("postWeight", post, day?.postWeight ?: 0.0)
             if (pre != null) put("preWeight", pre, day?.preWeight ?: 0.0)
+            if (post2 != null && post2 != post) put("post2Weight", post2, day?.post2Weight ?: 0.0)
+            if (pre2 != null && pre2 != post) put("pre2Weight", pre2, day?.pre2Weight ?: 0.0)
         }
         pr.edit().putString("info", "Last checked " + java.text.SimpleDateFormat("MMM d, h:mm a", java.util.Locale.US).format(java.util.Date()) +
             " · " + (weights.lastOrNull()?.let { "latest ${r1(it.second)} lb at " + java.time.format.DateTimeFormatter.ofPattern("EEE h:mm a", java.util.Locale.US).format(it.first.atZone(zone)) + " (from $apps)" } ?: if (err.isNotEmpty()) "couldn't read Health Connect — ${err.take(120)}" else "no weigh-ins in Health Connect in the last $days days")).apply()

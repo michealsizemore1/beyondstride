@@ -61,7 +61,8 @@ object DailySummary {
                 nd.micros.filter { it.status == "High" }.takeIf { it.isNotEmpty() }?.let { l -> lines += "Over limit: " + l.joinToString(", ") { "${it.name} ${Math.round(it.pct)}%" } }
             }
             lines += "Fluids: ${nd.waterOz} oz (water ${nd.water} · sports ${nd.sportsOz} · other ${nd.otherOz})"
-            if (nd.weight > 0) lines += "Weight: wake-up ${f1(nd.weight)} lb" + (if (nd.preWeight > 0) " · pre-run ${f1(nd.preWeight)} lb" else "") + (if (nd.postWeight > 0) " · post-run ${f1(nd.postWeight)} lb" else "")
+            if (nd.weight > 0) lines += "Weight: wake-up ${f1(nd.weight)} lb" + (if (nd.preWeight > 0) " · pre-run ${f1(nd.preWeight)} lb" else "") + (if (nd.postWeight > 0) " · post-run ${f1(nd.postWeight)} lb" else "") +
+                (if (nd.pre2Weight > 0) " · run 2 pre-run ${f1(nd.pre2Weight)} lb" else "") + (if (nd.post2Weight > 0) " · run 2 post-run ${f1(nd.post2Weight)} lb" else "")
         }
         // Numbers the Command Center's Wellness fields fill in (Sleep, Weight, Resting HR).
         val w = JSONObject()
