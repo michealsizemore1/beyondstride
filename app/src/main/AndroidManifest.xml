@@ -28,7 +28,7 @@
 
     <application
         android:allowBackup="true"
-        android:icon="@drawable/ic_launcher"
+        android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:theme="@android:style/Theme.Material.NoActionBar">
         <receiver android:name="io.github.michealsizemore1.beyondstride.UpdateReceiver" android:exported="false" />
@@ -36,8 +36,8 @@
         <activity
             android:name=".run.RunsActivity"
             android:exported="true"
-            android:icon="@drawable/ic_launcher"
-            android:roundIcon="@drawable/ic_launcher"
+            android:icon="@mipmap/ic_launcher"
+            android:roundIcon="@mipmap/ic_launcher"
             android:label="BeyondStride"
             android:launchMode="singleTask"
             android:taskAffinity="io.github.michealsizemore1.beyondstride.running">
