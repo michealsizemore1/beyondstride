@@ -160,11 +160,9 @@ object NutritionUi {
     private val folds = HashSet<String>()
     private fun fold(act: Activity, col: LinearLayout, title: String, build: (LinearLayout) -> Unit) {
         val ctx = act; fun dp(v: Int) = RunUi.dp(ctx, v)
-        val body = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL; visibility = if (title in folds) android.view.View.VISIBLE else android.view.View.GONE; setPadding(dp(4), 0, 0, dp(4)) }
-        val head = RunUi.text(ctx, (if (title in folds) "▾  " else "▸  ") + title, 0xFFCBD5E1.toInt(), 13f, true).apply { setPadding(0, dp(12), 0, dp(2)) }
-        head.setOnClickListener { val open = body.visibility != android.view.View.VISIBLE; body.visibility = if (open) android.view.View.VISIBLE else android.view.View.GONE
-            head.text = (if (open) "▾  " else "▸  ") + title; if (open) folds += title else folds -= title }
-        col.addView(head); build(body); col.addView(body)
+        val body = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(4), dp(4), 0, dp(4)) }
+        val head = RunUi.foldRow(ctx, "", title, null, body, title in folds, RunUi.NESTED) { o -> if (o) folds += title else folds -= title }
+        col.addView(head); build(body); col.addView(body); RunUi.styleGroups(col)
     }
 
     /** Change Ratio — that day only, like the Command Center (each 5–80%, total 100%). */

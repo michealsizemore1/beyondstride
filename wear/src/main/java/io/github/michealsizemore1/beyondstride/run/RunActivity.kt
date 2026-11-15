@@ -1804,7 +1804,9 @@ class RunActivity : Activity() {
             // Training plan — today (tap to open / close).
             a.optJSONObject("plan")?.let { p -> box {
                 background = rounded(0xFF2A2F5A.toInt(), 16)
-                addView(label((if (actPlanOpen) "▼ " else "▶ ") + "🏃 Plan · Week ${p.optInt("week")}, Day ${p.optInt("day")}", Color.WHITE, 11f, true))
+                addView(LinearLayout(this@RunActivity).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+                    addView(label("🏃 Plan · Week ${p.optInt("week")}, Day ${p.optInt("day")}", Color.WHITE, 11f, true), LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+                    addView(label("›", if (actPlanOpen) C.ACCENT else 0xCCFFFFFF.toInt(), 14f, true).apply { rotation = if (actPlanOpen) 90f else 0f; setPadding(dp(4), 0, dp(2), 0) }) })
                 p.optString("race").takeIf { it.isNotEmpty() }?.let { r -> try { val dd = java.time.temporal.ChronoUnit.DAYS.between(java.time.LocalDate.now(), java.time.LocalDate.parse(r)).toInt()
                     if (dd >= 0) addView(label(if (dd == 0) "🏁 Race day!" else "🏁 $dd days to race day", 0xCCFFFFFF.toInt(), 9f)) } catch (e: Exception) { } }
                 a.optJSONObject("insights")?.let { ins ->

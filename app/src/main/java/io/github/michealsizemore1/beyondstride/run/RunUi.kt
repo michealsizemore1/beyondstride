@@ -53,17 +53,40 @@ object RunUi {
      * One row: icon · white title · gray summary on the right · chevron (› closed, ⌄ open). Rows next to each other join
      * into one rounded card with thin dividers — call [styleGroups] on the column once it's built.
      */
-    fun groupRow(ctx: Context, icon: String, title: String, summary: String?, open: Boolean, onClick: () -> Unit) = LinearLayout(ctx).apply {
+    /** A grouped-list row; [bg] is its card color (lighter when it sits inside another card). */
+    class GroupRow(ctx: Context, val bg: Int) : LinearLayout(ctx) {
+        lateinit var chevron: TextView
+        var open = false; private set
+        fun setOpen(o: Boolean) { open = o; chevron.rotation = if (o) 90f else 0f; chevron.setTextColor(if (o) ACCENT else MUTED) }
+    }
+    const val NESTED = 0xFF26302C.toInt()
+    fun groupRow(ctx: Context, icon: String, title: String, summary: String?, open: Boolean, bg: Int = CARD, onClick: () -> Unit) = GroupRow(ctx, bg).apply {
         tag = GROUP_ROW; orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
         setPadding(dp(ctx, 14), dp(ctx, 13), dp(ctx, 12), dp(ctx, 13))
-        background = rounded(CARD, dp(ctx, 14).toFloat())
+        background = rounded(bg, dp(ctx, 14).toFloat())
         layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(ctx, 12) }
         if (icon.isNotBlank()) addView(text(ctx, icon, Color.WHITE, 17f).apply { setPadding(0, 0, dp(ctx, 12), 0) })
         addView(text(ctx, title, Color.WHITE, 15f, true).apply { maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
         if (!summary.isNullOrBlank()) addView(text(ctx, summary, MUTED, 13f).apply { maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END; maxWidth = dp(ctx, 170); setPadding(dp(ctx, 8), 0, 0, 0) })
-        addView(text(ctx, "›", if (open) ACCENT else MUTED, 20f, true).apply { setPadding(dp(ctx, 10), 0, 0, dp(ctx, 2)); rotation = if (open) 90f else 0f })
+        chevron = text(ctx, "›", MUTED, 20f, true).apply { setPadding(dp(ctx, 10), 0, dp(ctx, 4), dp(ctx, 2)) }
+        addView(chevron); setOpen(open)
         isClickable = true; setOnClickListener { onClick() }
     }
+    /**
+     * A row that opens / closes [body] in place (no screen redraw). Add the row, then [body], to the same column.
+     */
+    fun foldRow(ctx: Context, icon: String, title: String, summary: String?, body: View, open: Boolean, bg: Int = CARD, onToggle: (Boolean) -> Unit = {}): GroupRow {
+        body.visibility = if (open) View.VISIBLE else View.GONE
+        lateinit var row: GroupRow
+        row = groupRow(ctx, icon, title, summary, open, bg) {
+            val o = !row.open; row.setOpen(o); body.visibility = if (o) View.VISIBLE else View.GONE
+            (row.parent as? android.view.ViewGroup)?.let { styleGroups(it) }; onToggle(o)
+        }
+        return row
+    }
+    /** A small › that turns down when open — for cards that open and close in place. */
+    fun chevron(ctx: Context, open: Boolean) = text(ctx, "›", if (open) ACCENT else MUTED, 18f, true).apply { setPadding(dp(ctx, 8), 0, dp(ctx, 4), 0); rotation = if (open) 90f else 0f }
+    fun setChevron(v: TextView, open: Boolean) { v.rotation = if (open) 90f else 0f; v.setTextColor(if (open) ACCENT else MUTED) }
     /** "📈 Charts  (26 weeks · 60 days)" → icon 📈, title Charts, summary "26 weeks · 60 days". */
     fun groupRow(ctx: Context, label: String, open: Boolean, onClick: () -> Unit): LinearLayout {
         val l = label.trim(); val sp = l.indexOf(' ')
@@ -72,17 +95,19 @@ object RunUi {
         var rest = if (hasIcon) l.substring(sp + 1).trim() else l
         var sum: String? = null
         Regex("\\s*\\(([^()]*)\\)\\s*$").find(rest)?.let { m -> sum = m.groupValues[1]; rest = rest.substring(0, m.range.first).trim() }
-        return groupRow(ctx, if (hasIcon) first else "", rest, sum, open, onClick)
+        return groupRow(ctx, if (hasIcon) first else "", rest, sum, open, onClick = onClick)
     }
     /** Joins neighboring group rows: square inner corners, 1 dp gap (a thin divider), rounded outer corners. */
     fun styleGroups(col: android.view.ViewGroup) {
         val n = col.childCount
+        // Hidden (closed) bodies between two rows don't count — those rows still join.
+        fun neighbor(i: Int, step: Int): View? { var j = i + step; while (j in 0 until n) { val v = col.getChildAt(j); if (v.visibility != View.GONE) return v; j += step }; return null }
         for (i in 0 until n) {
-            val v = col.getChildAt(i); if (v.tag != GROUP_ROW) continue
-            val prev = i > 0 && col.getChildAt(i - 1).let { it.tag == GROUP_ROW && it.visibility == View.VISIBLE }
-            val next = i < n - 1 && col.getChildAt(i + 1).let { it.tag == GROUP_ROW && it.visibility == View.VISIBLE }
+            val v = col.getChildAt(i) as? GroupRow ?: continue
+            if (v.visibility == View.GONE) continue
+            val prev = neighbor(i, -1) is GroupRow; val next = neighbor(i, 1) is GroupRow
             val r = dp(v.context, 14).toFloat(); val t = if (prev) 0f else r; val b = if (next) 0f else r
-            v.background = GradientDrawable().apply { setColor(CARD); cornerRadii = floatArrayOf(t, t, t, t, b, b, b, b) }
+            v.background = GradientDrawable().apply { setColor(v.bg); cornerRadii = floatArrayOf(t, t, t, t, b, b, b, b) }
             (v.layoutParams as? android.view.ViewGroup.MarginLayoutParams)?.let { it.topMargin = if (prev) dp(v.context, 1) else dp(v.context, 12); v.layoutParams = it }
         }
     }

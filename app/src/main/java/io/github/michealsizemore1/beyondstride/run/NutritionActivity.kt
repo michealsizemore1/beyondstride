@@ -201,7 +201,7 @@ class NutritionActivity : Activity() {
                             background = RunUi.rounded(MEAL_COLOR[m] ?: 0xFF4B5563.toInt(), dp(10).toFloat()); setPadding(dp(12), dp(5), dp(12), dp(5))
                             setOnClickListener { startActivity(android.content.Intent(ctx, FoodAddActivity::class.java).putExtra("meal", m)) }
                         })
-                        val arrow = RunUi.text(ctx, if (open) "▾" else "▸", RunUi.MUTED, 14f).apply { setPadding(dp(8), 0, 0, 0) }
+                        val arrow = RunUi.chevron(ctx, open)
                         addView(arrow)
                         setOnLongClickListener {
                             if (mine.isEmpty()) return@setOnLongClickListener false
@@ -215,7 +215,7 @@ class NutritionActivity : Activity() {
                             val b = card.getChildAt(1)
                             val nowOpen = b.visibility != android.view.View.VISIBLE
                             b.visibility = if (nowOpen) android.view.View.VISIBLE else android.view.View.GONE
-                            arrow.text = if (nowOpen) "▾" else "▸"
+                            RunUi.setChevron(arrow, nowOpen)
                             openPrefs.edit().putBoolean("open_$m", nowOpen).apply()
                         }
                     })
@@ -363,18 +363,8 @@ class NutritionActivity : Activity() {
                             row.forEachIndexed { i, v -> addView(v, LinearLayout.LayoutParams(0, MATCH_PARENT, 1f).apply { if (i == 0) marginEnd = dp(8) }) }
                         })
                     }
-                    val head = RunUi.text(ctx, "", Color.WHITE, 14f, true).apply {
-                        background = RunUi.rounded(0xFF26302C.toInt(), dp(10).toFloat()); setPadding(dp(12), dp(9), dp(12), dp(9))
-                        layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(8) }
-                    }
-                    fun label() { head.text = "🧰 Database tools " + (if (tools.visibility == android.view.View.VISIBLE) "▾" else "▸") +
-                        (if (FoodTools.running) "  ${FoodTools.progress}" else if (stats.first > 0) "  (${stats.first} need enriching)" else "") }
-                    label()
-                    head.setOnClickListener {
-                        val open = tools.visibility != android.view.View.VISIBLE
-                        tools.visibility = if (open) android.view.View.VISIBLE else android.view.View.GONE
-                        prefs.edit().putBoolean("toolsOpen", open).apply(); label()
-                    }
+                    val toolsSum = if (FoodTools.running) FoodTools.progress else if (stats.first > 0) "${stats.first} need enriching" else null
+                    val head = RunUi.foldRow(ctx, "🧰", "Database tools", toolsSum, tools, tools.visibility == android.view.View.VISIBLE, RunUi.NESTED) { o -> prefs.edit().putBoolean("toolsOpen", o).apply() }
                     addView(head); addView(tools)
                 }
             }

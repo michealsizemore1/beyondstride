@@ -376,11 +376,11 @@ class ActivitiesActivity : Activity() {
                 background = RunUi.rounded(0xFF3B2A5E.toInt(), dp(6).toFloat()); setPadding(dp(8), dp(3), dp(8), dp(3))
                 setOnClickListener { startActivity(Intent(ctx, ActivityEditActivity::class.java).putExtra("id", id)) }
             })
-            val chev = txt(if (id in collapsed) "  ▶" else "  ▼", RunUi.MUTED, 12f)
+            val chev = RunUi.chevron(ctx, id !in collapsed)
             addView(chev)
             setOnClickListener {
                 val open = body.visibility != View.VISIBLE
-                body.visibility = if (open) View.VISIBLE else View.GONE; chev.text = if (open) "  ▼" else "  ▶"
+                body.visibility = if (open) View.VISIBLE else View.GONE; RunUi.setChevron(chev, open)
                 if (open) collapsed -= id else collapsed += id
             }
         })
@@ -769,8 +769,8 @@ class ActivitiesActivity : Activity() {
                 if (zs >= 0) {
                     var ze = ls.size; for (e in zs + 1 until ls.size) if (Regex("^\\s*=+\\s*$").matches(ls[e]) || PlanEngine.WEEK_HEAD.containsMatchIn(ls[e])) { ze = e; break }
                     val zKey = "zones_$which"; val zOpen = zKey in panels
-                    addView(txt((if (zOpen) "▼ " else "▶ ") + "🎯 Training zones in this plan", 0xFF5FD38D.toInt(), 13f, true).apply { setPadding(0, dp(4), 0, dp(4))
-                        setOnClickListener { if (zOpen) panels.remove(zKey) else panels.add(zKey); render() } })
+                    addView(RunUi.groupRow(ctx, "🎯", "Training zones in this plan", null, zOpen, RunUi.NESTED) { if (zOpen) panels.remove(zKey) else panels.add(zKey); render() }
+                        .apply { (layoutParams as LinearLayout.LayoutParams).apply { topMargin = dp(6); bottomMargin = dp(6) } })
                     if (zOpen) addView(txt(ls.subList(zs + 1, ze).joinToString("\n").trim(), Color.WHITE, 12f).apply {
                         background = RunUi.rounded(0xFF15302A.toInt(), dp(8).toFloat()); setPadding(dp(10), dp(8), dp(10), dp(8)); setTextIsSelectable(true) })
                 }
