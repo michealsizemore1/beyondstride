@@ -112,6 +112,33 @@ object Local {
         return changed
     }
 
+    /**
+     * 🔄 Sync everything now (the Today screen's sync button): Health Connect (weigh-ins, blood pressure, sleep, steps,
+     * heart rate, activities), food & fluids, weather, the watch and the cloud / Command Center — skipping the usual
+     * "only every 15–60 minutes" waits. Returns a short summary. Call off the main thread.
+     */
+    fun syncNow(ctx: Context): String {
+        val out = ArrayList<String>()
+        try { refreshDays(ctx) } catch (e: Exception) { }
+        try { if (ActivityImport.enabled(ctx)) ActivityImport.fromHealthConnect(ctx) } catch (e: Exception) { }
+        try { commit(ctx) } catch (e: Exception) { }
+        try { if (WeightImport.enabled(ctx)) { val n = WeightImport.sync(ctx); out += "⚖️ " + (if (n > 0) "weight updated · " else "") + WeightImport.lastInfo(ctx).substringAfter(" · ") } } catch (e: Exception) { }
+        try { if (BpImport.enabled(ctx) && BpImport.sync(ctx)) out += "🩺 blood pressure updated" } catch (e: Exception) { }
+        try { if (SleepData.granted(ctx)) SleepData.refresh(ctx, 7) } catch (e: Exception) { }
+        try { DayStress.sync(ctx, force = true) } catch (e: Exception) { }
+        try { DayStress.steps(ctx, Readiness.today())?.let { out += String.format(java.util.Locale.US, "👣 %,d steps", it) } } catch (e: Exception) { }
+        try { TodayWeather.fetch(ctx) } catch (e: Exception) { }
+        try { ActivityStore.watchSummary(ctx)?.let { NutritionStore.setActs(ctx, it) } } catch (e: Exception) { }
+        try { PlanStore.syncWatchIfNeeded(ctx) } catch (e: Exception) { }
+        try { PhoneStatus.push(ctx) } catch (e: Exception) { }
+        try { DailySummary.publish(ctx, force = true) } catch (e: Exception) { }
+        try { CloudCopy.sync(ctx) } catch (e: Exception) { }
+        val p = ctx.getSharedPreferences("standalone", 0); val now = System.currentTimeMillis()
+        p.edit().putLong("hcAt", now).putLong("wtAt", now).putLong("bpAt", now).putLong("cloudTry", now).putLong("syncNowAt", now).apply()
+        return out.joinToString("\n")
+    }
+    fun lastSyncNow(ctx: Context) = ctx.getSharedPreferences("standalone", 0).getLong("syncNowAt", 0L)
+
     /** Background upkeep (hourly worker and when the app opens): Health Connect import and the cloud copy. Call off the main thread. */
     fun upkeep(ctx: Context, hourly: Boolean = false) {
         val p = ctx.getSharedPreferences("standalone", 0); val now = System.currentTimeMillis()

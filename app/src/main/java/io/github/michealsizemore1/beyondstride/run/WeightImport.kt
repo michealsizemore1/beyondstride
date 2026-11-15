@@ -69,7 +69,7 @@ object WeightImport {
             if (pre != null) put("preWeight", pre, day?.preWeight ?: 0.0)
         }
         pr.edit().putString("info", "Last checked " + java.text.SimpleDateFormat("MMM d, h:mm a", java.util.Locale.US).format(java.util.Date()) +
-            " · " + (weights.lastOrNull()?.let { "latest ${r1(it.second)} lb (from $apps)" } ?: if (err.isNotEmpty()) "couldn't read Health Connect — ${err.take(120)}" else "no weigh-ins in Health Connect in the last $days days")).apply()
+            " · " + (weights.lastOrNull()?.let { "latest ${r1(it.second)} lb at " + java.time.format.DateTimeFormatter.ofPattern("EEE h:mm a", java.util.Locale.US).format(it.first.atZone(zone)) + " (from $apps)" } ?: if (err.isNotEmpty()) "couldn't read Health Connect — ${err.take(120)}" else "no weigh-ins in Health Connect in the last $days days")).apply()
         return filled
     }
 }

@@ -226,6 +226,22 @@ open class RunsActivity : Activity() {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             addView(RunUi.text(ctx, if (this@RunsActivity is AllRunsActivity) "Runs" else "BeyondStride", Color.WHITE, 28f, true), LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
+            // 🔄 Sync everything now (weigh-ins, BP, sleep, steps, food, watch, Command Center).
+            if (this@RunsActivity !is AllRunsActivity) addView(RunUi.button(ctx, "🔄", RunUi.CARD, Color.WHITE) {}.also { b ->
+                b.contentDescription = "Sync now"
+                b.setOnClickListener {
+                    b.isEnabled = false; b.text = "⏳"
+                    android.widget.Toast.makeText(ctx, "Syncing everything…", android.widget.Toast.LENGTH_SHORT).show()
+                    Thread {
+                        val msg = try { Local.syncNow(applicationContext) } catch (e: Exception) { "" }
+                        runOnUiThread {
+                            if (isFinishing) return@runOnUiThread
+                            android.widget.Toast.makeText(ctx, "✅ Synced" + if (msg.isNotBlank()) "\n$msg" else "", android.widget.Toast.LENGTH_LONG).show()
+                            render()
+                        }
+                    }.start()
+                }
+            }, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { marginEnd = dp(8) })
             addView(RunUi.button(ctx, "Settings", RunUi.CARD, Color.WHITE) {
                 startActivity(Intent(ctx, RunSettingsActivity::class.java))
             })
