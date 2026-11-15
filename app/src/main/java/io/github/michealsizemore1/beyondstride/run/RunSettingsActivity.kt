@@ -345,10 +345,10 @@ class RunSettingsActivity : Activity() {
         RunSettings.pushToWatch(this); page = null; render()
     }
 
-    private fun show(col: LinearLayout) = setContentView(ScrollView(this).apply {
+    private fun show(col: LinearLayout) = setContentView(RunUi.keepScroll(this, ScrollView(this).apply {
         setBackgroundColor(RunUi.BG)
         addView(col, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
-    })
+    }))
 
     /** The list of setting groups: icon · name · current value · ›  (like Gear Tracker II). */
     private fun renderList(col: LinearLayout) {

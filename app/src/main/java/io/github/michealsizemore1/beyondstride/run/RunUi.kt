@@ -124,7 +124,19 @@ object RunUi {
 
 
     /** Page content with the bottom tab bar (Today · Fitness · Plan · Runs). */
+    /**
+     * Keeps a screen where it was when it's redrawn (opening a section, ticking a box…): the new scroll view starts at the
+     * old one's position instead of jumping to the top. A new visit to the screen still starts at the top.
+     */
+    private val scrollers = java.util.WeakHashMap<android.app.Activity, android.widget.ScrollView>()
+    fun <T : View> keepScroll(act: android.app.Activity, v: T): T {
+        val sv = v as? android.widget.ScrollView ?: return v
+        val old = scrollers[act]; scrollers[act] = sv
+        if (old != null && old !== sv) { val y = old.scrollY; if (y > 0) { sv.scrollTo(0, y); sv.post { sv.scrollTo(0, y) } } }
+        return v
+    }
     fun tabbed(act: android.app.Activity, content: View, selected: Int): View {
+        keepScroll(act, content)
         val tabs = listOf<Triple<String, String, Class<*>?>>(
             Triple("Today", "☀", RunsActivity::class.java),
             Triple("Fitness", "♥", FitnessActivity::class.java),

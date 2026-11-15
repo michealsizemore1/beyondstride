@@ -235,6 +235,6 @@ class LiveTrackActivity : Activity() {
             col.addView(RunUi.text(this, "The link stays the same for every run, so people can bookmark it. It shows your current run, " +
                 "or your last one when you're not running.", RunUi.DIM, 12f).apply { setPadding(dp(4), dp(8), dp(4), 0) })
         }
-        setContentView(ScrollView(this).apply { setBackgroundColor(RunUi.BG); addView(col, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT)) })
+        setContentView(RunUi.keepScroll(this, ScrollView(this).apply { setBackgroundColor(RunUi.BG); addView(col, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT)) }))
     }
 }

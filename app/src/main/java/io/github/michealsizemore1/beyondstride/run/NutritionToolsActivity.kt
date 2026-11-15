@@ -34,7 +34,7 @@ class NutritionToolsActivity : Activity() {
     private fun render() {
         val col = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(16), dp(40), dp(16), dp(32)) }
         when (mode) { "target" -> target(col); else -> ideas(col) }
-        setContentView(ScrollView(this).apply { setBackgroundColor(RunUi.BG); addView(col, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT)) })
+        setContentView(RunUi.keepScroll(this, ScrollView(this).apply { setBackgroundColor(RunUi.BG); addView(col, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT)) }))
     }
 
     // ── Meal ideas ──

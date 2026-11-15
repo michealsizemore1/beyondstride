@@ -213,7 +213,7 @@ class TrailsActivity : Activity() {
             listBox = box; col.addView(box); fillList(box)
             if (trails != null) col.addView(RunUi.button(this, "Search again", RunUi.CARD, Color.WHITE) { start() }.apply { layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(14) } })
         }
-        setContentView(ScrollView(this).apply { setBackgroundColor(RunUi.BG); addView(col, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT)) })
+        setContentView(RunUi.keepScroll(this, ScrollView(this).apply { setBackgroundColor(RunUi.BG); addView(col, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT)) }))
     }
 
     private var listBox: LinearLayout? = null

@@ -22,6 +22,7 @@ import java.util.Locale
  * workouts with a pace target for every mile.
  */
 object RacePacing {
+    private var redraw: () -> Unit = {}
     private fun p(a: Activity) = a.getSharedPreferences("racepacing", 0)
     private val DISTS = listOf("Marathon" to 26.2188, "Half marathon" to 13.1094, "10K" to 6.21371, "5K" to 3.10686)
     private fun dp(a: Activity, v: Int) = RunUi.dp(a, v)
@@ -43,7 +44,8 @@ object RacePacing {
         return Coaching.riegel(bestP * bestD, bestD, miles).toInt()
     }
 
-    fun card(a: Activity, col: LinearLayout, acts: List<JSONObject>) {
+    fun card(a: Activity, col: LinearLayout, acts: List<JSONObject>, redraw: () -> Unit = { a.recreate() }) {
+        this.redraw = redraw
         val pr = p(a)
         val di = pr.getInt("dist", 0).coerceIn(0, DISTS.lastIndex); val (dName, miles) = DISTS[di]
         val est = estimate(acts, miles)
@@ -103,7 +105,7 @@ object RacePacing {
         val sec = parse(t)
         if (t.isNotBlank() && sec == null) { Toast.makeText(a, "Use h:mm:ss, like 3:59:00", Toast.LENGTH_LONG).show(); return }
         p(a).edit().putInt("dist", di).putInt("goal_$di", sec ?: 0).putString("strategy", strat).apply()
-        a.recreate()
+        redraw()
     }
     private fun editWeather(a: Activity) {
         val pr = p(a)
@@ -113,8 +115,8 @@ object RacePacing {
         box.addView(t); box.addView(h)
         box.addView(RunUi.text(a, "From the race-day forecast. The plan slows by the same heat & humidity rule as your watch's heat-adjusted pace.", Color.GRAY, 12f))
         AlertDialog.Builder(a).setTitle("Race-day weather").setView(box)
-            .setPositiveButton("Save") { _, _ -> pr.edit().putFloat("temp", t.text.toString().toFloatOrNull() ?: 0f).putFloat("hum", h.text.toString().toFloatOrNull() ?: 0f).apply(); a.recreate() }
-            .setNeutralButton("Clear") { _, _ -> pr.edit().remove("temp").remove("hum").apply(); a.recreate() }
+            .setPositiveButton("Save") { _, _ -> pr.edit().putFloat("temp", t.text.toString().toFloatOrNull() ?: 0f).putFloat("hum", h.text.toString().toFloatOrNull() ?: 0f).apply(); redraw() }
+            .setNeutralButton("Clear") { _, _ -> pr.edit().remove("temp").remove("hum").apply(); redraw() }
             .setNegativeButton("Cancel", null).show()
     }
 }

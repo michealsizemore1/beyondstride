@@ -358,10 +358,10 @@ class ReadinessActivity : Activity() {
         col.addView(RunUi.text(this, "Privacy: sleep and heart-rate data stay on your phone and watch. BeyondStride only reads them " +
             "to work out your readiness score; nothing is uploaded.", RunUi.DIM, 11f).apply { setPadding(dp(4), dp(16), dp(4), 0) })
 
-        setContentView(ScrollView(this).apply {
+        setContentView(RunUi.keepScroll(this, ScrollView(this).apply {
             setBackgroundColor(RunUi.BG)
             addView(col, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
-        })
+        }))
     }
 
     /** Hours + minutes pickers for one night's time asleep. */

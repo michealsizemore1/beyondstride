@@ -135,10 +135,10 @@ class WorkoutEditActivity : Activity() {
             }
         })
 
-        setContentView(ScrollView(this).apply {
+        setContentView(RunUi.keepScroll(this, ScrollView(this).apply {
             setBackgroundColor(RunUi.BG)
             addView(col, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
-        })
+        }))
     }
 
     private fun stepRow(arr: JSONArray, i: Int, mx: Double, rs: Double, cp: Int, indent: Boolean): View {

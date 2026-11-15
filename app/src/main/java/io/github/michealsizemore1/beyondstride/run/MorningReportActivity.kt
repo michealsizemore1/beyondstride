@@ -42,7 +42,7 @@ class MorningReportActivity : Activity() {
             col.addView(RunUi.button(this, "Start morning check", RunUi.ACCENT) { startActivity(Intent(ctx, ReadinessActivity::class.java)) }.apply {
                 layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(14) } })
         col.addView(RunUi.text(this, "Tap a card to open it. The notification comes once your morning check and weigh-in are done (or ${fmtTime(MorningReport.time(this))} if you skip them) — change it in Settings → Reminders.", RunUi.DIM, 11f).apply { setPadding(dp(4), dp(12), dp(4), 0) })
-        setContentView(ScrollView(this).apply { setBackgroundColor(RunUi.BG); addView(col) })
+        setContentView(RunUi.keepScroll(this, ScrollView(this).apply { setBackgroundColor(RunUi.BG); addView(col) }))
     }
     private fun fmtTime(m: Int) = java.time.LocalTime.of(m / 60, m % 60).format(DateTimeFormatter.ofPattern("h:mm a", Locale.US))
 }

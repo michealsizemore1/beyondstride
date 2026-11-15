@@ -125,10 +125,10 @@ class ScreensActivity : Activity() {
             setOnClickListener { screens = RunFields.defaults(); render() }
         })
 
-        setContentView(ScrollView(this).apply {
+        setContentView(RunUi.keepScroll(this, ScrollView(this).apply {
             setBackgroundColor(RunUi.BG)
             addView(col, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
-        })
+        }))
     }
 
     private fun pickMetric(fields: JSONArray, idx: Int) {
