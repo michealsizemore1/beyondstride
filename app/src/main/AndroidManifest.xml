@@ -195,6 +195,7 @@
                 <data android:scheme="wear" android:host="*" android:path="/trail" />
                 <data android:scheme="wear" android:host="*" android:path="/checks" />
                 <data android:scheme="wear" android:host="*" android:path="/nights" />
+                <data android:scheme="wear" android:host="*" android:path="/steps" />
                 <data android:scheme="wear" android:host="*" android:pathPrefix="/course/" />
             </intent-filter>
             <intent-filter>

@@ -95,8 +95,26 @@ object DayStress {
     }
     /** True once after the step count changed (so the day summary goes to the Command Center straight away). */
     fun takeStepsChanged(ctx: Context): Boolean { val pr = p(ctx); val v = pr.getBoolean("stepsDirty", false); if (v) pr.edit().putBoolean("stepsDirty", false).apply(); return v }
-    /** Samsung step count for a day (null if not read). */
-    fun steps(ctx: Context, date: String): Long? = try { JSONObject(p(ctx).getString("stepsByDay", "{}") ?: "{}").optLong(date, -1L).takeIf { it >= 0 } } catch (e: Exception) { null }
+    /**
+     * Steps for a day: the higher of Samsung Health's count (via Health Connect, which can lag hours behind) and the
+     * watch's own counter (sent every 250 steps). Null if neither has been read.
+     */
+    fun steps(ctx: Context, date: String): Long? {
+        val hc = try { JSONObject(p(ctx).getString("stepsByDay", "{}") ?: "{}").optLong(date, -1L) } catch (e: Exception) { -1L }
+        val w = try { JSONObject(p(ctx).getString("watchSteps", "{}") ?: "{}").optLong(date, -1L) } catch (e: Exception) { -1L }
+        return maxOf(hc, w).takeIf { it >= 0 }
+    }
+    /** The watch's count for [date]. True when it raised the day's steps (so the Command Center gets it now). */
+    fun watchSteps(ctx: Context, date: String, steps: Long): Boolean {
+        if (date.length != 10 || steps < 0) return false
+        val before = steps(ctx, date) ?: -1L
+        val pr = p(ctx); val m = try { JSONObject(pr.getString("watchSteps", "{}") ?: "{}") } catch (e: Exception) { JSONObject() }
+        if (steps <= m.optLong(date, -1L)) return false
+        m.put(date, steps)
+        val cut = LocalDate.parse(date).minusDays(60).toString(); m.keys().asSequence().toList().filter { it < cut }.forEach { m.remove(it) }
+        pr.edit().putString("watchSteps", m.toString()).apply()
+        return steps > before
+    }
 
     /** Today's hours, or null when nothing has been read today. */
     fun hours(ctx: Context): List<Hour>? {

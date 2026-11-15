@@ -184,6 +184,10 @@ class RunReceiverService : WearableListenerService() {
             try { WeightImport.takeIf { it.enabled(this) }?.sync(this) } catch (e: Exception) { }
             Reminders.morning(this); Reminders.morningLater(this)
         }
+        // The watch's own step count for today (the phone keeps the higher of it and Samsung Health's).
+        events.filter { it.type == DataEvent.TYPE_CHANGED && it.dataItem.uri.path == "/steps" }.forEach { e ->
+            val m = DataMapItem.fromDataItem(e.dataItem).dataMap
+            if (DayStress.watchSteps(this, m.getString("date") ?: "", m.getLong("steps"))) try { DailySummary.publish(this, force = true) } catch (x: Exception) { } }
         // Settings changed on the watch.
         events.filter { it.type == DataEvent.TYPE_CHANGED && it.dataItem.uri.path == io.github.michealsizemore1.beyondstride.SettingsSync.PATH }
             .forEach { io.github.michealsizemore1.beyondstride.SettingsSync.apply(this, "runsettings", "phone", DataMapItem.fromDataItem(it.dataItem).dataMap) }
