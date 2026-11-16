@@ -77,7 +77,7 @@ object Updater {
             }
             return
         }
-        status("Downloading build ${r.build}…")
+        status(if (act.packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_WATCH)) "Turning on Wi-Fi for a fast download…" else "Downloading build ${r.build}…")
         Thread {
             var last = -1
             val err = install(act, r, progress = { pct -> if (pct / 5 != last) { last = pct / 5; act.runOnUiThread { status("Downloading build ${r.build}… $pct%") } } })
@@ -113,8 +113,11 @@ object Updater {
      */
     fun install(ctx: Context, r: Release, progress: (Int) -> Unit = {}, pkg: String = ctx.packageName, minBytes: Long = 100_000): String? {
         val file = File(ctx.cacheDir, "update-${r.build}.apk")
+        // On the watch, ask for Wi-Fi while downloading: over the phone's Bluetooth link an 18 MB update crawls (minutes);
+        // on Wi-Fi it takes seconds. Falls back to the normal connection if Wi-Fi isn't available within ~12 s.
+        val wifi = if (ctx.packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_WATCH)) fastNetwork(ctx) else null
         try {
-            val c = (URL(r.url).openConnection() as HttpURLConnection).apply {
+            val c = ((wifi?.first?.openConnection(URL(r.url)) ?: URL(r.url).openConnection()) as HttpURLConnection).apply {
                 instanceFollowRedirects = true; connectTimeout = 15_000; readTimeout = 30_000
                 setRequestProperty("User-Agent", "BeyondStride-app")
             }
@@ -142,7 +145,23 @@ object Updater {
         } finally {
             // The installer has its own copy once committed.
             file.delete()
+            wifi?.second?.let { cb -> try { (ctx.getSystemService(Context.CONNECTIVITY_SERVICE) as android.net.ConnectivityManager).unregisterNetworkCallback(cb) } catch (e: Exception) { } }
         }
+    }
+
+    /** Asks Wear OS for Wi-Fi (it turns Wi-Fi on for us if it's off and a saved network is in range). Null if none within [waitMs]. */
+    private fun fastNetwork(ctx: Context, waitMs: Long = 12_000): Pair<android.net.Network, android.net.ConnectivityManager.NetworkCallback>? {
+        val cm = ctx.getSystemService(Context.CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
+        val latch = java.util.concurrent.CountDownLatch(1); var net: android.net.Network? = null
+        val cb = object : android.net.ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: android.net.Network) { net = network; latch.countDown() }
+        }
+        return try {
+            cm.requestNetwork(android.net.NetworkRequest.Builder().addTransportType(android.net.NetworkCapabilities.TRANSPORT_WIFI)
+                .addCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET).build(), cb)
+            latch.await(waitMs, java.util.concurrent.TimeUnit.MILLISECONDS)
+            net?.let { it to cb } ?: run { try { cm.unregisterNetworkCallback(cb) } catch (e: Exception) { }; null }
+        } catch (e: Exception) { try { cm.unregisterNetworkCallback(cb) } catch (e2: Exception) { }; null }
     }
 }
 
