@@ -128,11 +128,12 @@ object NutritionEngine {
     /** Keeps Healthy 7+ foods (quality ≥ 7, confidence not Low) up to date as foods are logged — captureHealthyFoods. */
     fun captureHealthy(ctx: Context, items: List<Food.Item>, runDay: Boolean, hard: String) {
         val list = FoodLibrary.healthyRaw(ctx).toMutableList(); var changed = false
-        items.forEach { f ->
-            if (f.name.isBlank()) return@forEach
+        items.forEach { f0 ->
+            if (f0.name.isBlank()) return@forEach
+            val f = FoodTools.applyFix(ctx, f0)
             val q = Food.quality(f, runDay, hard); val key = f.name.trim().lowercase()
             val idx = list.indexOfFirst { it.optString("name").trim().lowercase() == key }
-            if (q.score < 7 || q.confidencePct < 55) { if (idx >= 0) { list.removeAt(idx); changed = true }; return@forEach }
+            if (!FoodTools.healthyOk(ctx, f.name, q.score, q.confidencePct)) { if (idx >= 0) { list.removeAt(idx); changed = true }; return@forEach }
             val counts = JSONObject((if (idx >= 0) list[idx].optJSONObject("mealCounts") else null)?.toString() ?: "{}")
             counts.put(f.meal, counts.optInt(f.meal) + 1)
             val inf = Food.inferSources(f)

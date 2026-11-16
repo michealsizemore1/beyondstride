@@ -352,7 +352,11 @@ class NutritionActivity : Activity() {
                         "Fill in missing nutrients in your Food Database using AI (your Anthropic key on this phone). Runs one food at a time; restaurant foods are skipped."),
                         tile("↩️", "Undo All", "(${stats.second} foods)", 0xFFFDA4AF.toInt(), 0xFF3A2329.toInt(), "undo", "Remove every AI-estimated value from your Food Database. This can't be undone.")),
                     listOf(tile("↻", "Rescan Foods", "", 0xFFFDBA74.toInt(), 0xFF3A2A1A.toInt(), "rescan", "Re-check every saved Nutrition day and barcode picture for healthy foods."),
-                        tile("🧹", "Remove Dupes", "", 0xFFFDBA74.toInt(), 0xFF3A2A1A.toInt(), "dedupe", "Remove duplicate foods from your saved foods."))
+                        tile("🧹", "Remove Dupes", "", 0xFFFDBA74.toInt(), 0xFF3A2A1A.toInt(), "dedupe", "Remove duplicate foods from your saved foods.")),
+                    listOf(tile("🩺", "Check Every Food", if (FoodTools.lastCheck(ctx).isNotEmpty()) "(tap ⓘ below for last report)" else "AI review", 0xFF86EFAC.toInt(), 0xFF1E3A2A.toInt(), "check",
+                        "AI checks every food in your Food Database and every food you've logged: fixes impossible values, corrects numbers that are clearly wrong for the serving (only big mistakes — label and restaurant foods are trusted), " +
+                        "and decides which belong on Healthy 7+ (removing ones that shouldn't be there and adding healthy foods that were missed). Uses your Anthropic key; a few minutes for a big list. You can undo it."),
+                        tile("↩️", "Undo Check", if (FoodTools.canUndoCheck(ctx)) "" else "(nothing to undo)", 0xFFFDA4AF.toInt(), 0xFF3A2329.toInt(), "undocheck", "Put the Food Database and Healthy 7+ back the way they were before the last check."))
                 ).let { rows ->
                     // Folded into one line; tap to show the four tools.
                     val prefs = getSharedPreferences("foodlog", 0)
@@ -363,6 +367,8 @@ class NutritionActivity : Activity() {
                             row.forEachIndexed { i, v -> addView(v, LinearLayout.LayoutParams(0, MATCH_PARENT, 1f).apply { if (i == 0) marginEnd = dp(8) }) }
                         })
                     }
+                    FoodTools.lastCheck(ctx).takeIf { it.isNotEmpty() }?.let { rep -> tools.addView(RunUi.text(ctx, "ⓘ Last food check: " + rep.lineSequence().take(2).joinToString(" · ").take(120) + " ›", RunUi.ACCENT, 12f).apply {
+                        setPadding(dp(4), dp(10), dp(4), dp(2)); setOnClickListener { android.app.AlertDialog.Builder(ctx).setTitle("🩺 Last food check").setMessage(rep).setPositiveButton("OK", null).show() } }) }
                     val toolsSum = if (FoodTools.running) FoodTools.progress else if (stats.first > 0) "${stats.first} need enriching" else null
                     val head = RunUi.foldRow(ctx, "🧰", "Database tools", toolsSum, tools, tools.visibility == android.view.View.VISIBLE, RunUi.NESTED) { o -> prefs.edit().putBoolean("toolsOpen", o).apply() }
                     addView(head); addView(tools)
@@ -569,15 +575,17 @@ class NutritionActivity : Activity() {
     private fun runTool(action: String) {
         if (FoodTools.running) { android.widget.Toast.makeText(this, "Already running — ${FoodTools.progress}", android.widget.Toast.LENGTH_SHORT).show(); return }
         val app = applicationContext
-        android.widget.Toast.makeText(this, when (action) { "enrich" -> "Enriching — keep BeyondStride open"; "rescan" -> "Rescanning…"; else -> "Working…" }, android.widget.Toast.LENGTH_SHORT).show()
+        android.widget.Toast.makeText(this, when (action) { "enrich" -> "Enriching — keep BeyondStride open"; "rescan" -> "Rescanning…"; "check" -> "Checking every food — keep BeyondStride open"; else -> "Working…" }, android.widget.Toast.LENGTH_SHORT).show()
         Thread {
             val msg = try { when (action) {
                 "enrich" -> FoodTools.enrichAll(app) { runOnUiThread { if (!isFinishing) render() } }
                 "undo" -> FoodTools.undoAll(app)
                 "rescan" -> FoodTools.rescan(app)
+                "check" -> FoodTools.checkAll(app) { runOnUiThread { if (!isFinishing) render() } }
+                "undocheck" -> FoodTools.undoCheck(app)
                 else -> FoodTools.dedupe(app)
             } } catch (e: Exception) { "Something went wrong: ${e.message}" }
-            runOnUiThread { if (!isFinishing) { android.app.AlertDialog.Builder(this).setMessage(msg).setPositiveButton("OK", null).show(); render() } }
+            runOnUiThread { if (!isFinishing) { android.app.AlertDialog.Builder(this).setTitle(if (action == "check") "🩺 Food check" else null).setMessage(msg).setPositiveButton("OK", null).show(); render() } }
         }.start()
     }
 
