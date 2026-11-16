@@ -302,7 +302,8 @@ class NutritionActivity : Activity() {
                         "saved" -> r; else -> r.sortedByDescending { it.micros[dbSort] ?: 0.0 } }
                     if (r.isEmpty()) list.addView(RunUi.text(ctx, if (favs.isEmpty() && healthy.isEmpty()) "No saved foods yet — tap ⭐ on a food to add it." else "No match.", RunUi.MUTED, 12f).apply { setPadding(0, dp(8), 0, 0) })
                     r.take(200).forEach { f ->
-                        list.addView(dbRow(f.name, f.servingLabel + " · P ${(f.prot ?: 0.0).toInt()} · C ${(f.carbs ?: 0.0).toInt()} · F ${(f.fat ?: 0.0).toInt()} g", ((f.cal ?: 0.0) * f.servings).toInt(),
+                        // Per serving, like the P / C / F beside it (a Healthy 7+ food logged as 2 servings showed double calories).
+                        list.addView(dbRow(f.name, f.servingLabel + " · P ${(f.prot ?: 0.0).toInt()} · C ${(f.carbs ?: 0.0).toInt()} · F ${(f.fat ?: 0.0).toInt()} g", (f.cal ?: 0.0).toInt(),
                             delete = { FoodLibrary.delete(ctx, dbTab, f.name) }, image = FoodLibrary.imageFor(ctx, f)) {
                             FoodUi.confirmAdd(this@NutritionActivity, f, dbMeal) { render() }
                         })
@@ -351,8 +352,11 @@ class NutritionActivity : Activity() {
                     listOf(tile("🧪", "Enrich All", if (stats.first > 0) "(${stats.first} need it)" else "(all complete)", 0xFFA5B4FC.toInt(), 0xFF262A45.toInt(), "enrich",
                         "Fill in missing nutrients in your Food Database using AI (your Anthropic key on this phone). Runs one food at a time; restaurant foods are skipped."),
                         tile("↩️", "Undo All", "(${stats.second} foods)", 0xFFFDA4AF.toInt(), 0xFF3A2329.toInt(), "undo", "Remove every AI-estimated value from your Food Database. This can't be undone.")),
-                    listOf(tile("↻", "Rescan Foods", "", 0xFFFDBA74.toInt(), 0xFF3A2A1A.toInt(), "rescan", "Re-check every saved Nutrition day and barcode picture for healthy foods."),
-                        tile("🧹", "Remove Dupes", "", 0xFFFDBA74.toInt(), 0xFF3A2A1A.toInt(), "dedupe", "Remove duplicate foods from your saved foods.")),
+                    listOf(tile("📷", "Find Pictures", "", 0xFF93C5FD.toInt(), 0xFF1E2A3A.toInt(), "pics",
+                        "Finds a picture for every saved food that has none: the product photo from its barcode or a grocery search (Open Food Facts), or a Wikipedia picture for plain foods and restaurant dishes. AI plans each search (your key). Your own photos are never replaced."),
+                        tile("↻", "Rescan Foods", "", 0xFFFDBA74.toInt(), 0xFF3A2A1A.toInt(), "rescan", "Rebuild Healthy 7+ from every saved Nutrition day (and add barcode pictures).")),
+                    listOf(tile("🧹", "Remove Dupes", "", 0xFFFDBA74.toInt(), 0xFF3A2A1A.toInt(), "dedupe", "Remove duplicate foods from your saved foods."),
+                        android.view.View(ctx)),
                     listOf(tile("🩺", "Check Every Food", if (FoodTools.lastCheck(ctx).isNotEmpty()) "(tap ⓘ below for last report)" else "AI review", 0xFF86EFAC.toInt(), 0xFF1E3A2A.toInt(), "check",
                         "AI checks every food in your Food Database and every food you've logged: fixes impossible values, corrects numbers that are clearly wrong for the serving (only big mistakes — label and restaurant foods are trusted), " +
                         "and decides which belong on Healthy 7+ (removing ones that shouldn't be there and adding healthy foods that were missed). Uses your Anthropic key; a few minutes for a big list. You can undo it."),
@@ -575,7 +579,7 @@ class NutritionActivity : Activity() {
     private fun runTool(action: String) {
         if (FoodTools.running) { android.widget.Toast.makeText(this, "Already running — ${FoodTools.progress}", android.widget.Toast.LENGTH_SHORT).show(); return }
         val app = applicationContext
-        android.widget.Toast.makeText(this, when (action) { "enrich" -> "Enriching — keep BeyondStride open"; "rescan" -> "Rescanning…"; "check" -> "Checking every food — keep BeyondStride open"; else -> "Working…" }, android.widget.Toast.LENGTH_SHORT).show()
+        android.widget.Toast.makeText(this, when (action) { "enrich" -> "Enriching — keep BeyondStride open"; "rescan" -> "Rescanning…"; "check" -> "Checking every food — keep BeyondStride open"; "pics" -> "Finding pictures — keep BeyondStride open"; else -> "Working…" }, android.widget.Toast.LENGTH_SHORT).show()
         Thread {
             val msg = try { when (action) {
                 "enrich" -> FoodTools.enrichAll(app) { runOnUiThread { if (!isFinishing) render() } }
@@ -583,6 +587,7 @@ class NutritionActivity : Activity() {
                 "rescan" -> FoodTools.rescan(app)
                 "check" -> FoodTools.checkAll(app) { runOnUiThread { if (!isFinishing) render() } }
                 "undocheck" -> FoodTools.undoCheck(app)
+                "pics" -> FoodTools.findPictures(app) { runOnUiThread { if (!isFinishing) render() } }
                 else -> FoodTools.dedupe(app)
             } } catch (e: Exception) { "Something went wrong: ${e.message}" }
             runOnUiThread { if (!isFinishing) { android.app.AlertDialog.Builder(this).setTitle(if (action == "check") "🩺 Food check" else null).setMessage(msg).setPositiveButton("OK", null).show(); render() } }

@@ -137,6 +137,83 @@ object FoodTools {
         return "✓ Rescan complete: ${out.size} healthy food${if (out.size == 1) "" else "s"} found · $pics barcode picture${if (pics == 1) "" else "s"} added."
     }
 
+    // ── 📷 Find Pictures: a picture for every saved food that has none ──
+    private fun getJson(url: String): JSONObject? = try {
+        val c = (java.net.URL(url).openConnection() as java.net.HttpURLConnection).apply {
+            connectTimeout = 10_000; readTimeout = 15_000; setRequestProperty("User-Agent", "BeyondStride/1.0 (Android; personal food log)") }
+        if (c.responseCode != 200) null else JSONObject(c.inputStream.bufferedReader().readText())
+    } catch (e: Exception) { null }
+    private fun enc(s: String) = java.net.URLEncoder.encode(s, "UTF-8")
+    private fun offByBarcode(code: String): String = getJson("https://world.openfoodfacts.org/api/v2/product/$code.json?fields=image_front_small_url,image_front_url,image_url")
+        ?.optJSONObject("product")?.let { p -> p.optString("image_front_small_url").ifEmpty { p.optString("image_front_url").ifEmpty { p.optString("image_url") } } } ?: ""
+    private fun offBySearch(q: String): String {
+        val a = getJson("https://world.openfoodfacts.org/cgi/search.pl?search_terms=${enc(q)}&search_simple=1&action=process&json=1&page_size=5&fields=product_name,brands,image_front_small_url")
+            ?.optJSONArray("products") ?: return ""
+        val words = q.lowercase().split(Regex("[^a-z0-9]+")).filter { it.length > 2 }
+        // The first result whose name/brand shares most of the search words and has a picture.
+        return (0 until a.length()).mapNotNull { a.optJSONObject(it) }.filter { it.optString("image_front_small_url").isNotEmpty() }
+            .maxByOrNull { p -> val t = (p.optString("product_name") + " " + p.optString("brands")).lowercase(); words.count { t.contains(it) } }
+            ?.takeIf { p -> val t = (p.optString("product_name") + " " + p.optString("brands")).lowercase(); words.isEmpty() || words.count { t.contains(it) } * 2 >= words.size }
+            ?.optString("image_front_small_url") ?: ""
+    }
+    private fun wiki(title: String): String = getJson("https://en.wikipedia.org/api/rest_v1/page/summary/${enc(title.trim().replace(' ', '_')).replace("+", "_")}")
+        ?.let { o -> if (o.optString("type") == "disambiguation") "" else o.optJSONObject("thumbnail")?.optString("source") ?: "" } ?: ""
+
+    /**
+     * Finds a picture for every food in your Food Database, Healthy 7+ and saved meals that has none:
+     * barcode → the product photo (Open Food Facts); a packaged food by name → Open Food Facts search; a plain food
+     * (banana, baked potato, grilled chicken) or restaurant dish → its Wikipedia picture. AI (when your key is set) works out
+     * the best search for each food first. Your own photos are never replaced. Call off the main thread.
+     */
+    fun findPictures(ctx: Context, onProgress: () -> Unit): String {
+        running = true
+        try {
+            val lib = FoodLibrary.libJson(ctx)
+            val holders = ArrayList<JSONObject>()
+            listOf("favorites", "healthy").forEach { k -> list(lib.optJSONArray(k) ?: JSONArray()).forEach { holders += it } }
+            list(lib.optJSONArray("meals") ?: JSONArray()).forEach { m -> list(m.optJSONArray("items") ?: JSONArray()).forEach { holders += it } }
+            val missing = holders.filter { it.optString("image").isEmpty() && FoodLibrary.imageFor(ctx, Food.fromJson(it)).isEmpty() }
+            val names = missing.map { it.optString("name").trim() }.filter { it.isNotEmpty() }.distinctBy { it.lowercase() }
+            if (names.isEmpty()) return "Every saved food already has a picture."
+            // Plan each search (AI if available, else simple rules).
+            val plan = HashMap<String, JSONObject>()
+            if (AiFood.hasKey(ctx)) names.chunked(30).forEachIndexed { bi, batch ->
+                progress = "⏳ Planning picture searches ${bi * 30 + 1}–${bi * 30 + batch.size} of ${names.size}…"; onProgress()
+                try {
+                    val arr = JSONArray(); batch.forEachIndexed { i, n -> arr.put(JSONObject().put("n", i).put("name", n)) }
+                    val txt = AiFood.askText(ctx, "For each food name, say how to find a good photo of it. Return ONLY JSON: {\"foods\":[{\"n\":0,\"kind\":\"packaged|generic|restaurant\",\"search\":\"brand + product words for a grocery product search\",\"wiki\":\"the English Wikipedia article title that best shows this food, e.g. Baked potato, Banana, Greek yogurt, Chicken sandwich\"}]}. " +
+                        "packaged = a branded grocery product; generic = a plain food or home dish; restaurant = a menu item from a chain. Always give wiki.\n" + arr.toString(), 3000)
+                    val res = JSONObject(Regex("\\{[\\s\\S]*\\}").find(txt)?.value ?: "{}").optJSONArray("foods") ?: JSONArray()
+                    for (r in 0 until res.length()) { val o = res.optJSONObject(r) ?: continue; batch.getOrNull(o.optInt("n", -1))?.let { plan[it.lowercase()] = o } }
+                } catch (e: Exception) { }
+            }
+            val found = HashMap<String, String>()
+            names.forEachIndexed { i, n ->
+                progress = "⏳ Finding pictures ${i + 1}/${names.size}…"; if (i % 3 == 0) onProgress()
+                val key = n.lowercase(); val pl = plan[key]
+                val code = missing.firstOrNull { it.optString("name").trim().lowercase() == key }?.optString("barcode")?.replace(Regex("\\D"), "") ?: ""
+                val simple = n.replace(Regex("\\(.*?\\)"), "").replace(Regex("\\d+(\\.\\d+)?\\s*(g|oz|ml|cups?|tbsp|tsp|lb)\\b", RegexOption.IGNORE_CASE), "").trim()
+                var url = if (code.length >= 8) offByBarcode(code) else ""
+                val kind = pl?.optString("kind") ?: ""
+                if (url.isEmpty() && (kind == "packaged" || pl == null)) url = offBySearch(pl?.optString("search")?.ifBlank { null } ?: simple)
+                if (url.isEmpty()) url = wiki(pl?.optString("wiki")?.ifBlank { null } ?: simple)
+                if (url.isEmpty() && pl != null) url = wiki(simple)
+                if (url.isEmpty()) url = wiki(simple.split(Regex("\\s+")).takeLast(2).joinToString(" "))
+                if (url.isNotEmpty()) found[key] = url
+            }
+            // Save into every list that has the food.
+            var n = 0
+            listOf("favorites", "healthy").forEach { k -> list(lib.optJSONArray(k) ?: JSONArray()).forEach { f ->
+                if (f.optString("image").isEmpty()) found[f.optString("name").trim().lowercase()]?.let { f.put("image", it); n++ } } }
+            list(lib.optJSONArray("meals") ?: JSONArray()).forEach { m -> list(m.optJSONArray("items") ?: JSONArray()).forEach { f ->
+                if (f.optString("image").isEmpty()) found[f.optString("name").trim().lowercase()]?.let { f.put("image", it); n++ } } }
+            FoodLibrary.setLib(ctx, lib); FoodLibrary.libraryToWatch(ctx); FoodLibrary.quickToWatch(ctx)
+            val miss = names.filter { it.lowercase() !in found }
+            return "📷 Found pictures for ${found.size} of ${names.size} foods." +
+                (if (miss.isNotEmpty()) "\n\nNo picture found (tap the food's 📷 in a meal to take one):\n" + miss.take(25).joinToString("\n") { "• $it" } + (if (miss.size > 25) "\n…and ${miss.size - 25} more" else "") else "")
+        } finally { running = false; progress = "" }
+    }
+
     // ── 🩺 Check every food (AI review of every saved and logged food) ──
     private fun cp(ctx: Context) = ctx.getSharedPreferences("foodcheck", 0)
     private fun fixes(ctx: Context): JSONObject = try { JSONObject(cp(ctx).getString("fix", "{}")) } catch (e: Exception) { JSONObject() }
