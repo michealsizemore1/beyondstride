@@ -39,6 +39,14 @@ class ExecScoreTest {
         println("plan fallback: ${r?.score} ${r?.steps}")
         if (plan != null && Workouts.flatten(plan).any { it.optString("target") == "hr" }) { assertNotNull(r); assertTrue(r!!.score >= 90) }
     }
+    @Test fun oneStepStoppedEarlyStillScores() {
+        // "Long Run" = one 9-mile HR step; stopped after ~38 min (stepsDone 0, not completed), all in Zone 2.
+        val lr = Workouts.workout("Long Run", "", Workouts.step("run", "dist", 14484, "hr", 2))
+        val r0 = run({ 135 }, 2300, null, listOf(2300))
+        r0.put("workout", JSONObject().put("name", "Long Run").put("steps", lr.getJSONArray("steps")).put("completed", false).put("stepsDone", 0))
+        val r = ExecScore.compute(r0, null, 185.0, 43.5, 300)
+        assertNotNull(r); println("stopped early: ${r!!.score} ${r.steps}"); assertTrue(r.score >= 50)
+    }
     @Test fun noTargetsNoScore() {
         val free = Workouts.workout("Free", "", Workouts.step("run", "open", 0))
         assertNull(ExecScore.compute(run({ 140 }, 600, free, listOf(600)), null, 185.0, 43.5, 300))

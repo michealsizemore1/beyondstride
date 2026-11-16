@@ -66,6 +66,9 @@ object ExecScore {
         val bounds = ArrayList<IntRange>()
         val laps = run.optJSONArray("laps")
         val done = if (own != null) (if (own.optBoolean("completed")) steps.size else own.optInt("stepsDone", steps.size)).coerceIn(0, steps.size) else steps.size
+        // The step that was running when the run was stopped counts too (scored on the time it ran, with the cut-short
+        // rule) — otherwise a one-step workout ended early ("Long Run", stopped before its distance) scored 0.
+        val reached = if (own != null && done < steps.size) done + 1 else done
         if (own != null && laps != null && laps.length() >= 1) {
             // During a workout every step is a lap.
             var sec = 0; var idx = 0
@@ -75,7 +78,7 @@ object ExecScore {
                 while (idx < n && t[idx] < sec) idx++
                 bounds += start until idx
             }
-            if (bounds.size < done && idx < n) bounds += idx until n   // the step running when the run was stopped
+            if (bounds.size < reached && idx < n) bounds += idx until n   // the step running when the run was stopped
         } else {
             // Plan workout on a free run: lay the steps over the run by their time / distance; an open step takes the rest.
             var idx = 0
@@ -103,7 +106,7 @@ object ExecScore {
             val name = Workouts.kindName(kind) + (if (s.optInt("reps") > 1) " ${s.optInt("rep")}/${s.optInt("reps")}" else "")
             val planned = when (s.optString("dur")) { "time" -> s.optInt("value").toDouble(); "dist" -> if (avgSpeed > 0.5) s.optInt("value") / avgSpeed else 0.0; else -> 0.0 }
             val r = bounds.getOrNull(si)
-            if (r == null || r.isEmpty() || si >= done) {
+            if (r == null || r.isEmpty() || si >= reached) {
                 // Skipped / not reached.
                 out += Step(name, target, lo, hi, 0, 0, if (target != "none") 0 else null, false)
                 if (target != "none" && planned > 0) weight += planned * wf
