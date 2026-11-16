@@ -354,9 +354,7 @@ class NutritionActivity : Activity() {
                         tile("↩️", "Undo All", "(${stats.second} foods)", 0xFFFDA4AF.toInt(), 0xFF3A2329.toInt(), "undo", "Remove every AI-estimated value from your Food Database. This can't be undone.")),
                     listOf(tile("📷", "Find Pictures", "", 0xFF93C5FD.toInt(), 0xFF1E2A3A.toInt(), "pics",
                         "Finds a picture for every saved food that has none: the product photo from its barcode or a grocery search (Open Food Facts), or a Wikipedia picture for plain foods and restaurant dishes. AI plans each search (your key). Your own photos are never replaced."),
-                        tile("↻", "Rescan Foods", "", 0xFFFDBA74.toInt(), 0xFF3A2A1A.toInt(), "rescan", "Rebuild Healthy 7+ from every saved Nutrition day (and add barcode pictures).")),
-                    listOf(tile("🧹", "Remove Dupes", "", 0xFFFDBA74.toInt(), 0xFF3A2A1A.toInt(), "dedupe", "Remove duplicate foods from your saved foods."),
-                        android.view.View(ctx)),
+                        tile("🧹", "Remove Dupes", "", 0xFFFDBA74.toInt(), 0xFF3A2A1A.toInt(), "dedupe", "Remove duplicate foods from your saved foods.")),
                     listOf(tile("🩺", "Check Every Food", if (FoodTools.lastCheck(ctx).isNotEmpty()) "(tap ⓘ below for last report)" else "AI review", 0xFF86EFAC.toInt(), 0xFF1E3A2A.toInt(), "check",
                         "AI checks every food in your Food Database and every food you've logged: fixes impossible values, corrects numbers that are clearly wrong for the serving (only big mistakes — label and restaurant foods are trusted), " +
                         "and decides which belong on Healthy 7+ (removing ones that shouldn't be there and adding healthy foods that were missed). Uses your Anthropic key; a few minutes for a big list. You can undo it."),
