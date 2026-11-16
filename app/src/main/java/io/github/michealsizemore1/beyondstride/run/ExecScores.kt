@@ -12,7 +12,7 @@ import java.util.Locale
 
 /** 🎯 Execution Score for the phone's runs (worked out from the watch's record; remembered so lists stay quick). */
 object ExecScores {
-    private const val VER = 1
+    private const val VER = 2   // 2: the step running at stop counts (Nov 15 2026)
     private fun p(ctx: Context) = ctx.getSharedPreferences("execscore", 0)
 
     private var daysAt = 0L; private var daysCache: JSONObject? = null
