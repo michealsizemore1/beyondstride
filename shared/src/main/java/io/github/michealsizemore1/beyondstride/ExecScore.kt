@@ -12,7 +12,8 @@ import kotlin.math.roundToInt
  *  - Each second inside the target counts fully; a little outside (up to 8% off) gets partial credit.
  *  - The first moments of a step are skipped so effort can settle (45 s for heart rate, 15 s for power/pace).
  *  - Warm-ups and cool-downs count half as much as the main work.
- *  - Steps that were skipped count as 0; a step cut short loses some credit.
+ *  - Stopping the run early isn't penalized: steps not reached don't count, and the step running at the stop is scored
+ *    on the time it ran. A step skipped in the middle of a workout still loses some credit.
  *
  * The workout is the one run on the watch, or (for a free run) the plan's workout for that day.
  */
@@ -107,9 +108,8 @@ object ExecScore {
             val planned = when (s.optString("dur")) { "time" -> s.optInt("value").toDouble(); "dist" -> if (avgSpeed > 0.5) s.optInt("value") / avgSpeed else 0.0; else -> 0.0 }
             val r = bounds.getOrNull(si)
             if (r == null || r.isEmpty() || si >= reached) {
-                // Skipped / not reached.
-                out += Step(name, target, lo, hi, 0, 0, if (target != "none") 0 else null, false)
-                if (target != "none" && planned > 0) weight += planned * wf
+                // Not reached because the run was stopped early: shown as skipped, but no penalty (Nov 15 2026).
+                out += Step(name, target, lo, hi, 0, 0, null, false)
                 return@forEachIndexed
             }
             val sec = t[r.last] - t[r.first] + 1
@@ -129,9 +129,11 @@ object ExecScore {
             }
             if (cnt == 0) { out += Step(name, target, lo, hi, sec, 0, null, true); return@forEachIndexed }
             var pct = c / cnt
-            // Cut short: lose up to half the step's credit.
-            if (planned > 0 && sec < planned * 0.9) pct *= 0.5 + 0.5 * (sec / planned).coerceIn(0.0, 1.0)
-            val wsec = max(sec.toDouble(), planned)
+            // The step running when the run was stopped (or the last one a free run reached): no penalty for stopping
+            // early — it's scored only on the time it ran. A step skipped in the middle of a workout still loses up to half.
+            val stoppedHere = (own != null && si == done && done < steps.size) || (own == null && bounds.getOrNull(si + 1).let { it == null || it.isEmpty() })
+            if (!stoppedHere && planned > 0 && sec < planned * 0.9) pct *= 0.5 + 0.5 * (sec / planned).coerceIn(0.0, 1.0)
+            val wsec = if (stoppedHere) sec.toDouble() else max(sec.toDouble(), planned)
             credit += pct * wsec * wf; weight += wsec * wf
             out += Step(name, target, lo, hi, sec, (vs / vc).roundToInt(), (pct * 100).roundToInt(), true)
         }

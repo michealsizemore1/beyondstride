@@ -12,7 +12,7 @@ import java.util.Locale
 
 /** 🎯 Execution Score for the phone's runs (worked out from the watch's record; remembered so lists stay quick). */
 object ExecScores {
-    private const val VER = 2   // 2: the step running at stop counts (Nov 15 2026)
+    private const val VER = 3   // 2: the step running at stop counts (Nov 15 2026)
     private fun p(ctx: Context) = ctx.getSharedPreferences("execscore", 0)
 
     private var daysAt = 0L; private var daysCache: JSONObject? = null
@@ -55,7 +55,7 @@ object ExecScores {
         AlertDialog.Builder(ctx).setTitle("🎯 Execution ${r.score}/100 · ${r.label}")
             .setMessage(r.basis + "\n\n" + lines(r).joinToString("\n") +
                 "\n\nTime inside each step's target (a little outside gets partial credit). The first 45 s of a heart-rate step (15 s for pace/power) " +
-                "are skipped so effort can settle. Warm-up and cool-down count half; skipped or short steps lower the score.")
+                "are skipped so effort can settle. Warm-up and cool-down count half. Stopping early isn't penalized (steps not reached don't count); a step skipped mid-workout lowers the score.")
             .setPositiveButton("OK", null).show()
     }
 }

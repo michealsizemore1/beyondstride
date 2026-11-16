@@ -45,7 +45,7 @@ class ExecScoreTest {
         val r0 = run({ 135 }, 2300, null, listOf(2300))
         r0.put("workout", JSONObject().put("name", "Long Run").put("steps", lr.getJSONArray("steps")).put("completed", false).put("stepsDone", 0))
         val r = ExecScore.compute(r0, null, 185.0, 43.5, 300)
-        assertNotNull(r); println("stopped early: ${r!!.score} ${r.steps}"); assertTrue(r.score >= 50)
+        assertNotNull(r); println("stopped early: ${r!!.score} ${r.steps}"); assertTrue(r.score >= 90)
     }
     @Test fun noTargetsNoScore() {
         val free = Workouts.workout("Free", "", Workouts.step("run", "open", 0))
