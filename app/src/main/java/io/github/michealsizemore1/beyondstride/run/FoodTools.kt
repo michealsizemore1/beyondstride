@@ -115,7 +115,7 @@ object FoodTools {
             val q = Food.quality(f, run, hard)
             if (!healthyOk(ctx, f.name, q.score, q.confidencePct)) return@forEach
             val img = FoodLibrary.imageFor(ctx, f).ifEmpty { old[k]?.optString("image") ?: "" }
-            out += Food.toJson(Food.inferSources(f).copy(image = img), withId = false, withPhoto = true).put("score", maxOf(q.score, if (override(ctx, f.name) == "yes") 7.0 else 0.0)).put("mealCounts", counts[k] ?: JSONObject())
+            out += Food.toJson(Food.inferSources(f).copy(image = img), withId = false, withPhoto = true).put("score", maxOf(q.score, 7.0)).put("mealCounts", counts[k] ?: JSONObject())
         }
         FoodLibrary.setHealthyRaw(ctx, out.sortedWith(compareByDescending<JSONObject> { it.optDouble("score", 0.0) }.thenBy { it.optString("name") }))
         // Barcode pictures from Open Food Facts for saved foods that have none.
@@ -141,10 +141,18 @@ object FoodTools {
     private fun cp(ctx: Context) = ctx.getSharedPreferences("foodcheck", 0)
     private fun fixes(ctx: Context): JSONObject = try { JSONObject(cp(ctx).getString("fix", "{}")) } catch (e: Exception) { JSONObject() }
     private fun overrides(ctx: Context): JSONObject = try { JSONObject(cp(ctx).getString("healthy", "{}")) } catch (e: Exception) { JSONObject() }
-    /** "yes" (belongs in Healthy 7+ even if the score is a bit under 7), "no" (keep it out), or "". */
-    fun override(ctx: Context, name: String) = overrides(ctx).optString(name.trim().lowercase())
-    fun healthyOk(ctx: Context, name: String, score: Double, conf: Int): Boolean = when (override(ctx, name)) {
-        "no" -> false; "yes" -> score >= 5.5; else -> score >= 7 && conf >= 55 }
+    /**
+     * The AI's healthiness rating for a food (1–10, strict: whole foods 9–10, minimally processed 7–8, refined / added
+     * sugar or salt 5–6, treats ≤ 4), or null if not rated. An old "no" counts as 3; an old "yes" is ignored (re-rated next check).
+     */
+    fun rating(ctx: Context, name: String): Double? = overrides(ctx).optString(name.trim().lowercase()).let { v ->
+        when { v == "no" -> 3.0; v.isEmpty() || v == "yes" -> null; else -> v.toDoubleOrNull() } }
+    fun override(ctx: Context, name: String) = rating(ctx, name)?.let { if (it >= 7) "yes" else "no" } ?: ""
+    /** Healthy 7+ needs the app's food score ≥ 7 AND (when rated) the AI rating ≥ 7; a 6.5 score gets in only with a rating ≥ 8.5. */
+    fun healthyOk(ctx: Context, name: String, score: Double, conf: Int): Boolean {
+        val r = rating(ctx, name) ?: return score >= 7 && conf >= 55
+        return (score >= 7 && r >= 7) || (score >= 6.5 && r >= 8.5)
+    }
     /** Corrected values for a logged food that isn't in the Food Database (so later logs pick them up too). */
     fun applyFix(ctx: Context, f: Food.Item): Food.Item {
         val x = fixes(ctx).optJSONObject(f.name.trim().lowercase()) ?: return f
@@ -199,15 +207,18 @@ object FoodTools {
                         .apply { FIELDS.forEach { k -> if (o.has(k)) put(k, o.optDouble(k)) }; if (o.optString("barcode").isNotEmpty()) put("fromLabel", true); if (restaurant(o)) put("restaurant", true) }) }
                     val prompt = "You are checking a runner's food database. Values are PER SERVING (the serving text says how much). Units: cal kcal; prot, fat, carbs, fiber, sugar g; sodium, potassium, calcium, iron, vitC, magnesium, zinc, caffeine mg; vitD, vitB12 mcg.\n" +
                         "For each food:\n1) Correct only values that are clearly wrong for that food and serving (more than ~25% off typical), impossible, or obviously mis-entered (e.g. per-100g numbers on a 1-cup serving, mg vs g mix-ups, calories that don't fit the macros). Foods marked fromLabel came from a package label and restaurant foods from the chain: trust them unless impossible. Don't touch values that are reasonable. Don't add values that are missing.\n" +
-                        "2) healthy: \"yes\" if it's a nutritious everyday food for an endurance runner (whole or minimally processed: fruit, vegetables, legumes, whole grains, lean protein, fish, eggs, dairy/yogurt, nuts, seeds, olive oil, oats, potatoes, rice, etc.), \"no\" if it isn't (candy, desserts, pastries, chips, fried or fast food, sugary drinks, alcohol, heavily processed snacks), \"\" if it depends. Sports fuel (gels, chews, drinks) = \"\".\n" +
-                        "Return ONLY JSON, no other text: {\"foods\":[{\"n\":0,\"fix\":{\"field\":number},\"why\":\"short reason\",\"healthy\":\"yes|no|\"}]} — include every n; use an empty fix {} when nothing is wrong.\n\nFOODS:\n" + arr.toString()
+                        "2) rating: how healthy this exact food is as an everyday food, 1-10. Be STRICT and judge the specific item and its numbers, not the category: " +
+                        "9-10 whole, unprocessed (vegetables, fruit, beans/lentils, fish, plain oats, eggs); 7-8 minimally processed and nutritious (plain Greek yogurt, whole-grain bread, lean chicken/turkey, nuts, milk, brown rice, sweet potato); " +
+                        "5-6 fine sometimes but refined or with added sugar/salt/saturated fat (white rice, white bread, pasta, flavored yogurt, granola/protein bars, cereal, cheese, deli meat, most sauces and mixed restaurant dishes, coffee drinks); " +
+                        "3-4 treats and fast food (pizza, burgers, fries, pastries, ice cream, chips, sweetened drinks); 1-2 candy, soda, alcohol. Sports fuel (gels, chews, sports drinks) = 5. A typical log should have well under half its foods at 7+.\n" +
+                        "Return ONLY JSON, no other text: {\"foods\":[{\"n\":0,\"fix\":{\"field\":number},\"why\":\"short reason\",\"rating\":7}]} — include every n; use an empty fix {} when nothing is wrong.\n\nFOODS:\n" + arr.toString()
                     val txt = AiFood.askChat(ctx, "You are a careful sports dietitian checking nutrition data. Be conservative: only correct clear errors.", JSONArray().put(JSONObject().put("role", "user").put("content", prompt)), 3000)
                     val js = JSONObject(Regex("\\{[\\s\\S]*\\}").find(txt)?.value ?: throw Exception("no JSON"))
                     val res = js.optJSONArray("foods") ?: JSONArray()
                     for (r in 0 until res.length()) {
                         val ro = res.optJSONObject(r) ?: continue; val (isFav, o) = batch.getOrNull(ro.optInt("n", -1)) ?: continue
                         val key = o.optString("name").trim().lowercase()
-                        ro.optString("healthy").takeIf { it == "yes" || it == "no" }?.let { ov.put(key, it) } ?: ov.remove(key)
+                        ro.optDouble("rating").takeIf { !it.isNaN() && it in 1.0..10.0 }?.let { ov.put(key, String.format(java.util.Locale.US, "%.1f", it)) }
                         val fix = ro.optJSONObject("fix") ?: continue; if (fix.length() == 0) continue
                         val ch = ArrayList<String>()
                         fix.keys().forEach { k -> if (k !in FIELDS || !o.has(k)) return@forEach
@@ -232,7 +243,7 @@ object FoodTools {
                 (if (failed > 0) "\n⚠️ ${failed} group(s) of 12 couldn't be checked — run it again to finish." else "")
             val body = (if (report.isNotEmpty()) "\n\nCORRECTED\n" + report.joinToString("\n") else "\n\nNo values needed correcting.") +
                 (if (added.isNotEmpty()) "\n\nADDED TO HEALTHY 7+\n" + added.sorted().joinToString("\n") { "• $it" } else "") +
-                (if (removed.isNotEmpty()) "\n\nREMOVED FROM HEALTHY 7+\n" + removed.sorted().joinToString("\n") { "• $it" + if (override(ctx, it) == "no") " (not an everyday healthy food)" else " (score under 7)" } else "")
+                (if (removed.isNotEmpty()) "\n\nREMOVED FROM HEALTHY 7+\n" + removed.sorted().joinToString("\n") { "• $it" + (rating(ctx, it)?.let { r -> if (r < 7) String.format(java.util.Locale.US, " (healthiness %.0f/10)", r) else " (food score under 7)" } ?: " (food score under 7)") } else "")
             val out = head + body
             cp(ctx).edit().putString("report", out).putLong("at", System.currentTimeMillis()).apply()
             return out
