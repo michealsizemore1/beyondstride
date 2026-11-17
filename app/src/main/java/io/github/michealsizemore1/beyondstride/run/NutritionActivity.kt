@@ -506,7 +506,7 @@ class NutritionActivity : Activity() {
             android.app.AlertDialog.Builder(ctx).setTitle(title).setSingleChoiceItems(items.toTypedArray(), cur) { d, i -> set(i); d.dismiss(); render() }.show()
         val product: io.github.michealsizemore1.beyondstride.Products.Product?
         if (meal == "sports") {
-            addView(RunUi.text(ctx, "⚡ GU / SiS / Premier Protein quick add", 0xFFF5B041.toInt(), 12f, true))
+            addView(RunUi.text(ctx, "⚡ GU / SiS / Premier Protein / Gatorade quick add", 0xFFF5B041.toInt(), 12f, true))
             val lines = P.lines(qBrand); if (qLine.isNotEmpty() && qLine !in lines) qLine = ""
             addView(LinearLayout(ctx).apply {
                 orientation = LinearLayout.HORIZONTAL; setPadding(0, dp(6), 0, 0)

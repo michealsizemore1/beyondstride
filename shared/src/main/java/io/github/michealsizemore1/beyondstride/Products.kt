@@ -20,7 +20,7 @@ object Products {
             return b.joinToString(" · ")
         }
     }
-    val BRANDS = listOf("" to "All Brands", "GU" to "GU Energy", "SiS" to "SiS", "Premier Protein" to "Premier Protein")
+    val BRANDS = listOf("" to "All Brands", "GU" to "GU Energy", "SiS" to "SiS", "Premier Protein" to "Premier Protein", "Gatorade" to "Gatorade")
 
     val SPORTS = listOf(
         Product("GU", "GU Energy Gel", "Sour Peach", "1 packet (32g)", 100.0, 0.0, 0.0, 22.0, mapOf("sodium" to 100.0, "potassium" to 20.0)),
@@ -137,7 +137,12 @@ object Products {
         Product("Premier Protein", "Premier Protein Shake", "Bananas & Cream", "1 shake (11 fl oz)", 160.0, 30.0, 3.0, 4.0, mapOf("sodium" to 230.0)),
         Product("Premier Protein", "Premier Protein Shake", "Lemon Bar", "1 shake (11 fl oz)", 160.0, 30.0, 3.0, 3.0, mapOf("sodium" to 250.0)),
         Product("Premier Protein", "Premier Protein Shake", "Orange Cream Swirl (Limited Edition)", "1 shake (11 fl oz)", 160.0, 30.0, 3.0, 3.0, mapOf("sodium" to 250.0)),
-        Product("Premier Protein", "Premier Protein Shake", "Pumpkin Spice (Limited Time)", "1 shake (11 fl oz)", 160.0, 30.0, 3.0, 2.0, mapOf("sodium" to 230.0))
+        Product("Premier Protein", "Premier Protein Shake", "Pumpkin Spice (Limited Time)", "1 shake (11 fl oz)", 160.0, 30.0, 3.0, 2.0, mapOf("sodium" to 230.0)),
+        Product("Gatorade", "Gatorade Thirst Quencher", "20 fl oz bottle", "1 bottle (20 fl oz)", 140.0, 0.0, 0.0, 36.0, mapOf("sugar" to 34.0, "sodium" to 270.0, "potassium" to 75.0)),
+        Product("Gatorade", "Gatorade Thirst Quencher", "12 fl oz bottle", "1 bottle (12 fl oz)", 80.0, 0.0, 0.0, 21.0, mapOf("sugar" to 20.0, "sodium" to 160.0, "potassium" to 45.0)),
+        Product("Gatorade", "Gatorade Zero", "20 fl oz bottle", "1 bottle (20 fl oz)", 10.0, 0.0, 0.0, 2.0, mapOf("sugar" to 0.0, "sodium" to 280.0, "potassium" to 70.0)),
+        Product("Gatorade", "Gatorlyte", "20 fl oz bottle", "1 bottle (20 fl oz)", 50.0, 0.0, 0.0, 14.0, mapOf("sugar" to 12.0, "sodium" to 490.0, "potassium" to 350.0)),
+        Product("Gatorade", "Gatorlyte Zero", "20 fl oz bottle", "1 bottle (20 fl oz)", 10.0, 0.0, 0.0, 3.0, mapOf("sugar" to 0.0, "sodium" to 490.0, "potassium" to 350.0))
     )
 
     val SUPPLEMENTS = listOf(
