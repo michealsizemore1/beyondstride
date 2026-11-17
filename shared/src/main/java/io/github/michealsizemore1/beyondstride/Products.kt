@@ -147,5 +147,14 @@ object Products {
         Product("Pure Encapsulations", "Supplement", "Potassium Magnesium (citrate)", "1 capsule", 0.0, 0.0, 0.0, 0.0, mapOf("potassium" to 140.0, "magnesium" to 70.0))
     )
 
+    /** Liquids quick add (label values per bottle). */
+    val LIQUIDS = listOf(
+        Product("Gatorade", "Drink", "Thirst Quencher (20 fl oz bottle)", "1 bottle (20 fl oz)", 140.0, 0.0, 0.0, 36.0, mapOf("sugar" to 34.0, "sodium" to 270.0, "potassium" to 75.0)),
+        Product("Gatorade", "Drink", "Thirst Quencher (12 fl oz bottle)", "1 bottle (12 fl oz)", 80.0, 0.0, 0.0, 21.0, mapOf("sugar" to 20.0, "sodium" to 160.0, "potassium" to 45.0)),
+        Product("Gatorade", "Drink", "Gatorade Zero (20 fl oz bottle)", "1 bottle (20 fl oz)", 10.0, 0.0, 0.0, 2.0, mapOf("sugar" to 0.0, "sodium" to 280.0, "potassium" to 70.0)),
+        Product("Gatorade", "Drink", "Gatorlyte (20 fl oz bottle)", "1 bottle (20 fl oz)", 50.0, 0.0, 0.0, 14.0, mapOf("sugar" to 12.0, "sodium" to 490.0, "potassium" to 350.0)),
+        Product("Gatorade", "Drink", "Gatorlyte Zero (20 fl oz bottle)", "1 bottle (20 fl oz)", 10.0, 0.0, 0.0, 3.0, mapOf("sugar" to 0.0, "sodium" to 490.0, "potassium" to 350.0))
+    )
+
     fun lines(brand: String) = SPORTS.filter { brand.isEmpty() || it.brand == brand }.map { it.line }.distinct()
 }
