@@ -1708,6 +1708,7 @@ class RunActivity : Activity() {
             t.microsByNeed().forEach { m ->
                 addView(label("${m.name.replace("Vitamin ", "Vit ")}  ${m.shown()}", Color.WHITE, 10f).apply { setPadding(0, dp(2), 0, 0) })
                 addView(label("${m.pct.toInt()}% · ${m.status}", N.statusColor(m.status), 11f, true))
+                addView(label(m.maxText(), if (m.overMax) 0xFFF87171.toInt() else C.MUTED, 9f))
             }
         }
         col.addView(label("🍎 Quick add food ▸", Color.BLACK, 13f, true).apply {

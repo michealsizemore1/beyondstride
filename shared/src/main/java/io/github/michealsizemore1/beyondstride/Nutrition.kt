@@ -20,7 +20,19 @@ object Nutrition {
                 else if (value >= 10) value.roundToInt().toString() else String.format(java.util.Locale.US, "%.1f", value)
             return "$v$unit"
         }
+        /** Suggested daily max: the adult-male upper limit (food + supplements), or the app's ceiling for sodium / sugar / caffeine. */
+        val suggestedMax: Double? get() = if (max > 0) max else UL[field]
+        /** Over the suggested max (magnesium's limit counts supplements only, so food alone never trips it). */
+        val overMax get() = suggestedMax?.let { value > it && field != "magnesium" } ?: false
+        /** "Max 45mg", "Max 350mg (supplements)" or "No set max". */
+        fun maxText(): String {
+            val m = suggestedMax ?: return "No set max"
+            val v = if (m >= 1000) String.format(java.util.Locale.US, "%,d", m.roundToInt()) else m.roundToInt().toString()
+            return "Max $v$unit" + if (field == "magnesium") " (supplements)" else ""
+        }
     }
+    /** Tolerable upper intake levels, men 51+ (NIH). B12, potassium and fiber have none. */
+    private val UL = mapOf("iron" to 45.0, "calcium" to 2000.0, "vitD" to 100.0, "magnesium" to 350.0, "zinc" to 40.0, "vitC" to 2000.0)
     data class Day(
         val date: String, val cal: Int, val prot: Double, val carbs: Double, val fat: Double,
         val fiber: Double, val sodium: Int, val waterOz: Int, val target: Int, val range: Int, val active: Int,

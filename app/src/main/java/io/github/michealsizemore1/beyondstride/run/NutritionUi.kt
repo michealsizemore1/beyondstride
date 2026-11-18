@@ -242,7 +242,8 @@ object NutritionUi {
         val ceiling = nd.micros.firstOrNull { it.field == "sugar" }?.target ?: (36 + sports + natural)
         val sNote = if (sports > 0 || natural > 0) " (36g" + (if (sports > 0) " + ${Math.round(sports)}g fueling" else "") + (if (natural > 0) " + ${Math.round(natural)}g fruit/dairy" else "") + " today)" else ""
         val low = nd.micros.minByOrNull { m -> if (m.max > 0 && m.value > m.max) Math.max(0.0, 1 - (m.value - m.max) / m.max) else Math.max(0.0, Math.min(1.0, m.value / m.target)) }
-        return "Targets for a 53-year-old male distance runner: iron 14mg · calcium 1,000mg · vitamin D 15mcg · magnesium 483mg · vitamin B12 2.4mcg · sodium 2,300–4,000mg · potassium 3,400mg · zinc 15mg · vitamin C 90mg · fiber 28g · sugar ≤${Math.round(ceiling)}g$sNote · caffeine ≤400mg (a single race-day dose can push this higher by design, not a red flag)" +
+        return "Targets for a 53-year-old male distance runner: iron 14mg · calcium 1,000mg · vitamin D 15mcg · magnesium 483mg · vitamin B12 2.4mcg · sodium 2,300–4,000mg · potassium 3,400mg · zinc 15mg · vitamin C 90mg · fiber 28g · sugar ≤${Math.round(ceiling)}g$sNote · caffeine ≤400mg (a single race-day dose can push this higher by design, not a red flag). " +
+            "Suggested max (upper limits): iron 45mg · calcium 2,000mg · vitamin D 100mcg · zinc 40mg · vitamin C 2,000mg · magnesium 350mg from supplements (no limit from food) · B12, potassium and fiber have no set max" +
             (low?.let { " · lowest today: ${it.name} ${Math.round(it.value)}${it.unit}" } ?: "")
     }
 
@@ -292,6 +293,7 @@ object NutritionUi {
                         addView(RunUi.text(ctx, m.name.replace("Vitamin ", "Vit "), RunUi.MUTED, 10f))
                         addView(RunUi.text(ctx, m.shown(), Color.WHITE, 12f, true))
                         addView(RunUi.text(ctx, "${m.pct.toInt()}% · ${m.status}", N.statusColor(m.status), 12f, true))
+                        addView(RunUi.text(ctx, m.maxText(), if (m.overMax) 0xFFF87171.toInt() else RunUi.DIM, 10f))
                         setOnClickListener { microSources(act, nd, m) }
                     }, LinearLayout.LayoutParams(0, MATCH_PARENT, 1f).apply { if (i < 2) marginEnd = dp(4) })
                 }
