@@ -23,7 +23,10 @@ object Nutrition {
         /** Suggested daily max: the adult-male upper limit (food + supplements), or the app's ceiling for sodium / sugar / caffeine. */
         fun suggestedMax(): Double? = if (max > 0) max else UL.get(field)
         /** Over the suggested max (magnesium's limit counts supplements only, so food alone never trips it). */
-        val overMax: Boolean get() = (suggestedMax() ?: Double.MAX_VALUE) < value && field != "magnesium"
+        fun overMax(): Boolean {
+            val m = suggestedMax() ?: return false
+            return field != "magnesium" && value > m
+        }
         /** "Max 45mg", "Max 350mg (supplements)" or "No set max". */
         fun maxText(): String {
             val m = suggestedMax() ?: return "No set max"

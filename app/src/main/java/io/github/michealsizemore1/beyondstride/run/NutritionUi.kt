@@ -293,7 +293,7 @@ object NutritionUi {
                         addView(RunUi.text(ctx, m.name.replace("Vitamin ", "Vit "), RunUi.MUTED, 10f))
                         addView(RunUi.text(ctx, m.shown(), Color.WHITE, 12f, true))
                         addView(RunUi.text(ctx, "${m.pct.toInt()}% · ${m.status}", N.statusColor(m.status), 12f, true))
-                        addView(RunUi.text(ctx, m.maxText(), if (m.overMax) 0xFFF87171.toInt() else RunUi.DIM, 10f))
+                        addView(RunUi.text(ctx, m.maxText(), if (m.overMax()) 0xFFF87171.toInt() else RunUi.DIM, 10f))
                         setOnClickListener { microSources(act, nd, m) }
                     }, LinearLayout.LayoutParams(0, MATCH_PARENT, 1f).apply { if (i < 2) marginEnd = dp(4) })
                 }
