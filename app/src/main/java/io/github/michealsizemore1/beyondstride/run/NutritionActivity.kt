@@ -181,7 +181,7 @@ class NutritionActivity : Activity() {
             val order = N.MEAL_ORDER + foods.map { it.meal }.distinct().filter { it !in N.MEAL_ORDER }
             order.forEach { m ->
                 val mine = foods.filter { it.meal == m }
-                val picker = m == "sports" || m == "supplements" || m == "liquids"
+                val picker = m == "sports" || m == "supplements"
                 val open = openPrefs.getBoolean("open_$m", true) && (mine.isNotEmpty() || picker)
                 col.addView(RunUi.card(this).apply {
                     layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(8) }
@@ -490,7 +490,7 @@ class NutritionActivity : Activity() {
     private var scroller: ScrollView? = null
 
     // Quick add (Command Center): sports nutrition by brand / type / flavor; supplements from a list.
-    private var qBrand = ""; private var qLine = ""; private var qSport = 0; private var qSupp = 0; private var qLiq = 0
+    private var qBrand = ""; private var qLine = ""; private var qSport = 0; private var qSupp = 0
     private fun quickPicker(meal: String): LinearLayout = LinearLayout(this).apply {
         val ctx = this@NutritionActivity
         val P = io.github.michealsizemore1.beyondstride.Products
@@ -522,11 +522,6 @@ class NutritionActivity : Activity() {
                 (p.micros["caffeine"]?.let { " · ${it.toInt()}mg caf" } ?: "") + ")"
             product = list.getOrNull(qSport.coerceIn(0, maxOf(0, list.size - 1)))
             if (product != null) addView(chip(label(product)) { pick("Product", list.map { label(it) }, list.indexOf(product)) { qSport = it } }
-                .also { it.layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(6) } })
-        } else if (meal == "liquids") {
-            addView(RunUi.text(ctx, "🥤 Drink quick add", 0xFFF5B041.toInt(), 12f, true))
-            product = P.LIQUIDS.getOrNull(qLiq)
-            if (product != null) addView(chip("${product.brand} ${product.name}") { pick("Drink", P.LIQUIDS.map { "${it.brand} ${it.name}" }, qLiq) { qLiq = it } }
                 .also { it.layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(6) } })
         } else {
             addView(RunUi.text(ctx, "💊 Supplement quick add", 0xFFF5B041.toInt(), 12f, true))
