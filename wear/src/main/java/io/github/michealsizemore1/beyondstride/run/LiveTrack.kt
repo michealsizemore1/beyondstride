@@ -237,8 +237,19 @@ object LiveTrack {
             }
             lastDistM = Run.distance; lastMovingS = Run.movingSeconds
             if (t - lastPost >= 30_000 || Run.state != lastState) post(ctx, false)
-        } else if (runStart != 0L) {
-            // Run finished (or discarded).
+        } else if (runStart != 0L) finished(ctx)
+    }
+
+    /**
+     * Run finished (or discarded): mark the live page finished and text your contacts the totals.
+     * Called straight from the Finish button — the run service (and its 1-second tick) stops right after,
+     * so waiting for the next tick meant the finish text was usually never sent.
+     */
+    fun finished(ctx: Context) {
+        if (runStart == 0L || !enabled(ctx)) { runStart = 0L; return }
+        if (Run.distance > 0) lastDistM = Run.distance
+        if (Run.movingSeconds > 0) lastMovingS = Run.movingSeconds
+        run {
             queue(ctx, now(ctx, "finished").put("dist", Math.round(lastDistM)).put("moving", lastMovingS))
             // Tell your contacts the run is over (with the totals).
             val mi = lastDistM / 1609.344
@@ -246,6 +257,9 @@ object LiveTrack {
             val summary = String.format(java.util.Locale.US, "%.2f mi in %s", mi, Run.clock(lastMovingS)) + pace
             textVia(ctx, "/cmd/livedone", summary, "${name(ctx)} finished the run: $summary. ${link(ctx)}")
             runStart = 0L; status = "Finished"
+            // Let the last post go out over LTE, then give the connection back.
+            val app = ctx.applicationContext
+            Thread { try { Thread.sleep(90_000) } catch (e: Exception) { }; if (runStart == 0L && !dirty) releaseNet(app) }.start()
         }
     }
 

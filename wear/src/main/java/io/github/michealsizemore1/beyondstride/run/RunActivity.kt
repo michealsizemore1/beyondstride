@@ -2680,7 +2680,7 @@ class RunActivity : Activity() {
             })
             controlsBox.addView(label("Discard run", C.STOP, 11f, true).apply {
                 setPadding(0, dp(10), 0, 0)
-                setOnClickListener { Run.discard(this@RunActivity); RunService.stop(this@RunActivity); finish() }
+                setOnClickListener { Run.discard(this@RunActivity); try { LiveTrack.finished(this@RunActivity) } catch (e: Exception) { }; RunService.stop(this@RunActivity); finish() }
             })
         } else {
             controlsBox.addView(if (paused) button("RESUME", C.ACCENT) { Run.resume() }
@@ -2701,6 +2701,7 @@ class RunActivity : Activity() {
         if (usedTrail) io.github.michealsizemore1.beyondstride.TrailSync.choose(this, null, false, "watch")
         Speaker.finished(json)
         RunSync.pushAll(this)
+        try { LiveTrack.finished(this) } catch (e: Exception) { }
         RunService.stop(this)
         summary = json
         screen = Screen.SUMMARY
