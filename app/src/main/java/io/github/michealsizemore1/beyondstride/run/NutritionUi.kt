@@ -259,7 +259,7 @@ object NutritionUi {
         return "$who: iron ${tg("iron")} · calcium ${tg("calcium")} · vitamin D ${tg("vitD")} · magnesium ${tg("magnesium")} · vitamin B12 ${tg("vitB12")} · " +
             "sodium ${na?.let { num(it.target) + "–" + num(it.max) } ?: ""}mg · potassium ${tg("potassium")} · zinc ${tg("zinc")} · vitamin C ${tg("vitC")} · fiber ${tg("fiber")} · " +
             "sugar ≤${Math.round(ceiling)}g$sNote · caffeine ≤400mg (a single race-day dose can push this higher by design, not a red flag). " +
-            "Suggested max (upper limits): iron 45mg · calcium 2,000mg · vitamin D 100mcg · zinc 40mg · vitamin C 2,000mg · magnesium 350mg from supplements (no limit from food) · B12, potassium and fiber have no set max" +
+            "Suggested max: iron 20mg · calcium 2,000mg · vitamin D 100mcg · zinc 40mg · vitamin C 2,000mg · magnesium 350mg from supplements (no limit from food) · B12, potassium and fiber have no set max" +
             (low?.let { " · lowest today: ${it.name} ${Math.round(it.value)}${it.unit}" } ?: "")
     }
 
