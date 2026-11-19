@@ -287,6 +287,10 @@ object RunUi {
         val pts = org.json.JSONArray()
         for (i in 0 until n step stepBy) track.optJSONArray(i)?.let { p -> pts.put(org.json.JSONArray(listOf(p.optDouble(0), p.optDouble(1)))) }
         track.optJSONArray(n - 1)?.let { p -> pts.put(org.json.JSONArray(listOf(p.optDouble(0), p.optDouble(1)))) }
+        // Whole-run totals, shown until Play / the slider is used (so the panel never reads 0:00 at rest).
+        val totMeters = run.optDouble("distance").takeIf { !it.isNaN() } ?: 0.0
+        val tot = org.json.JSONArray(listOf(moving, Math.round(totMeters), run.optInt("avgHr"),
+            if (totMeters > 50) RunMath.paceFor(moving, totMeters) else "–", run.optInt("avgPower")))
         val html = """<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1">
             <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css">
             <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
@@ -375,10 +379,11 @@ object RunUi {
             <div id="panel"><div class="s"><b id="vt">0:00</b><span>time</span></div><div class="s"><b id="vd">0.00</b><span>miles</span></div>
             <div class="s"><b id="vp">–</b><span>pace</span></div><div class="s"><b id="vh" style="color:#ff6b6b">–</b><span>HR</span></div>
             <div class="s"><b id="vw" style="color:#ffb347">–</b><span>watts</span></div></div>
+            <div id="cap" style="text-align:center;font-size:10px;color:#9aa3a0;padding:0 0 4px">Whole run · tap ▶ Play or drag the slider to see each moment</div>
             <div id="m"></div>
             <div id="ctl"><button id="play">▶ Play</button><button id="spd">60×</button><input id="pos" type="range" min="0" max="1000" value="0"></div>
             </div><script>
-            var F=$frames, MI=$miles;
+            var F=$frames, MI=$miles, TOT=$tot, live=false;
             var m=L.map('m',{zoomControl:true,scrollWheelZoom:false});
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'}).addTo(m);
             var all=F.map(function(f){return [f[0],f[1]];});
@@ -395,17 +400,20 @@ object RunUi {
             function clock(s){s=Math.round(s);var h=Math.floor(s/3600),mm=Math.floor(s%3600/60),ss=s%60;return (h?h+':'+String(mm).padStart(2,'0'):mm)+':'+String(ss).padStart(2,'0');}
             var T=F[F.length-1][2]||1, t=0, playing=false, speeds=[30,60,120,240], si=1, last=0, idx=0;
             function frameAt(tt){while(idx<F.length-1&&F[idx+1][2]<=tt)idx++;while(idx>0&&F[idx][2]>tt)idx--;return idx;}
-            function show(follow){var k=frameAt(t),f=F[k];dot.setLatLng([f[0],f[1]]);done.setLatLngs(all.slice(0,k+1));
+            function totals(){document.getElementById('vt').textContent=clock(TOT[0]);document.getElementById('vd').textContent=(TOT[1]/1609.344).toFixed(2);
+              document.getElementById('vp').textContent=TOT[3];document.getElementById('vh').textContent=TOT[2]||'–';document.getElementById('vw').textContent=TOT[4]||'–';}
+            function goLive(){if(!live){live=true;document.getElementById('cap').textContent='At this point in the run';}}
+            function show(follow){if(!live){totals();return;}var k=frameAt(t),f=F[k];dot.setLatLng([f[0],f[1]]);done.setLatLngs(all.slice(0,k+1));
               document.getElementById('vt').textContent=clock(t);document.getElementById('vd').textContent=(f[3]/1609.344).toFixed(2);
               document.getElementById('vp').textContent=f[5]?clock(f[5]):'–';document.getElementById('vh').textContent=f[4]||'–';
               document.getElementById('vw').textContent=f[6]||'–';document.getElementById('pos').value=Math.round(t/T*1000);
               if(follow&&!m.getBounds().pad(-0.03).contains(dot.getLatLng()))m.panTo(dot.getLatLng(),{animate:true});}
             function step(now){if(!playing)return;if(last)t+=Math.min(1,(now-last)/1000)*speeds[si];last=now;
               if(t>=T){t=T;playing=false;document.getElementById('play').textContent='↺ Replay';}show(true);if(playing)requestAnimationFrame(step);}
-            document.getElementById('play').onclick=function(){if(t>=T){t=0;idx=0;}playing=!playing;last=0;
+            document.getElementById('play').onclick=function(){goLive();if(t>=T){t=0;idx=0;}playing=!playing;last=0;
               this.textContent=playing?'❚❚ Pause':'▶ Play';if(playing)requestAnimationFrame(step);};
             document.getElementById('spd').onclick=function(){si=(si+1)%speeds.length;this.textContent=speeds[si]+'×';};
-            document.getElementById('pos').oninput=function(){t=this.value/1000*T;show(true);};
+            document.getElementById('pos').oninput=function(){goLive();t=this.value/1000*T;show(true);};
             function fit(){m.invalidateSize();m.fitBounds(full.getBounds(),{padding:[18,18],maxZoom:17});}
             var fitted=0;function tryFit(){if(document.getElementById('m').clientHeight>50){fit();fitted++;}}
             tryFit();[100,300,700,1500].forEach(function(x){setTimeout(tryFit,x);});
