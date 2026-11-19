@@ -287,10 +287,6 @@ object RunUi {
         val pts = org.json.JSONArray()
         for (i in 0 until n step stepBy) track.optJSONArray(i)?.let { p -> pts.put(org.json.JSONArray(listOf(p.optDouble(0), p.optDouble(1)))) }
         track.optJSONArray(n - 1)?.let { p -> pts.put(org.json.JSONArray(listOf(p.optDouble(0), p.optDouble(1)))) }
-        // Whole-run totals, shown until Play / the slider is used (so the panel never reads 0:00 at rest).
-        val totMeters = run.optDouble("distance").takeIf { !it.isNaN() } ?: 0.0
-        val tot = org.json.JSONArray(listOf(moving, Math.round(totMeters), run.optInt("avgHr"),
-            if (totMeters > 50) RunMath.paceFor(moving, totMeters) else "–", run.optInt("avgPower")))
         val html = """<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1">
             <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css">
             <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
@@ -359,6 +355,10 @@ object RunUi {
             if (sp.meters >= 1609.344 * 0.95) miles.put(org.json.JSONObject().put("n", sp.n).put("m", sp.n * 1609.344)
                 .put("pace", RunMath.paceFor(sp.sec, sp.meters)).put("time", RunMath.clock(sp.sec)).put("hr", sp.hr).put("pw", sp.power))
         }
+        // Whole-run totals, shown until Play / the slider is used (so the panel never reads 0:00 at rest).
+        val totMeters = run.optDouble("distance").takeIf { !it.isNaN() } ?: 0.0
+        val tot = org.json.JSONArray(listOf(moving, Math.round(totMeters), run.optInt("avgHr"),
+            if (totMeters > 50) RunMath.paceFor(moving, totMeters) else "–", run.optInt("avgPower")))
         val html = """<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1">
             <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css">
             <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
