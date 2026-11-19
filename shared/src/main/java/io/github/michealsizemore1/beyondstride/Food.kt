@@ -59,6 +59,21 @@ object Food {
 
     private fun r1(v: Double) = (v * 10).roundToInt() / 10.0
 
+    private val UNITS = mapOf("iron" to "mg", "calcium" to "mg", "vitD" to "mcg", "magnesium" to "mg", "vitB12" to "mcg", "sodium" to "mg",
+        "potassium" to "mg", "zinc" to "mg", "vitC" to "mg", "fiber" to "g", "caffeine" to "mg")
+    /**
+     * Daily targets (target, max) — [regular] = rest day: a 53-year-old man (NIH / National Academies, men 51–70);
+     * otherwise a 53-year-old male distance runner (a little more iron, magnesium, zinc for sweat & impact; room for salt).
+     */
+    fun targets(regular: Boolean): Map<String, Pair<Double, Double>> = if (regular) mapOf(
+        "iron" to (8.0 to 0.0), "calcium" to (1000.0 to 0.0), "vitD" to (15.0 to 0.0), "magnesium" to (420.0 to 0.0), "vitB12" to (2.4 to 0.0),
+        "sodium" to (1500.0 to 2300.0), "potassium" to (3400.0 to 0.0), "zinc" to (11.0 to 0.0), "vitC" to (90.0 to 0.0), "fiber" to (30.0 to 0.0),
+        "caffeine" to (400.0 to 400.0))
+    else mapOf(
+        "iron" to (10.0 to 0.0), "calcium" to (1000.0 to 0.0), "vitD" to (15.0 to 0.0), "magnesium" to (483.0 to 0.0), "vitB12" to (2.4 to 0.0),
+        "sodium" to (2300.0 to 4000.0), "potassium" to (3400.0 to 0.0), "zinc" to (15.0 to 0.0), "vitC" to (90.0 to 0.0), "fiber" to (28.0 to 0.0),
+        "caffeine" to (400.0 to 400.0))
+
     /**
      * The day rebuilt from [items] — totals, meals, micronutrients and score — keeping [base]'s target,
      * fluids and weights. Same math as the Command Center's Nutrition tab.
@@ -73,19 +88,21 @@ object Food {
         val sportsSugar = items.filter { it.meal == "sports" }.sumOf { it.total(it.micros["sugar"]) }
         val naturalSugar = items.filter { naturalSugar(it) }.sumOf { it.total(it.micros["sugar"]) }
         val sugarCeiling = 36 + sportsSugar + naturalSugar
+        val t = targets(base.regularT)
+        fun m(n: String, f: String, v: Double) = t.getValue(f).let { (tg, mx) -> Nutrition.Micro(n, f, v, tg, mx, UNITS.getValue(f)) }
         val list = listOf(
-            Nutrition.Micro("Iron", "iron", r1(micro("iron")), 14.0, 0.0, "mg"),
-            Nutrition.Micro("Calcium", "calcium", r1(micro("calcium")), 1000.0, 0.0, "mg"),
-            Nutrition.Micro("Vitamin D", "vitD", r1(micro("vitD")), 15.0, 0.0, "mcg"),
-            Nutrition.Micro("Magnesium", "magnesium", r1(micro("magnesium")), 483.0, 0.0, "mg"),
-            Nutrition.Micro("Vitamin B12", "vitB12", r1(micro("vitB12")), 2.4, 0.0, "mcg"),
-            Nutrition.Micro("Sodium", "sodium", sodium.toDouble(), 2300.0, 4000.0, "mg"),
-            Nutrition.Micro("Potassium", "potassium", r1(micro("potassium")), 3400.0, 0.0, "mg"),
-            Nutrition.Micro("Zinc", "zinc", r1(micro("zinc")), 15.0, 0.0, "mg"),
-            Nutrition.Micro("Vitamin C", "vitC", r1(micro("vitC")), 90.0, 0.0, "mg"),
-            Nutrition.Micro("Fiber", "fiber", fiber, 28.0, 0.0, "g"),
+            m("Iron", "iron", r1(micro("iron"))),
+            m("Calcium", "calcium", r1(micro("calcium"))),
+            m("Vitamin D", "vitD", r1(micro("vitD"))),
+            m("Magnesium", "magnesium", r1(micro("magnesium"))),
+            m("Vitamin B12", "vitB12", r1(micro("vitB12"))),
+            m("Sodium", "sodium", sodium.toDouble()),
+            m("Potassium", "potassium", r1(micro("potassium"))),
+            m("Zinc", "zinc", r1(micro("zinc"))),
+            m("Vitamin C", "vitC", r1(micro("vitC"))),
+            m("Fiber", "fiber", fiber),
             Nutrition.Micro("Sugar", "sugar", r1(micro("sugar")), sugarCeiling, sugarCeiling, "g"),
-            Nutrition.Micro("Caffeine", "caffeine", micro("caffeine").roundToInt().toDouble(), 400.0, 400.0, "mg"),
+            m("Caffeine", "caffeine", micro("caffeine").roundToInt().toDouble()),
         )
         val score = if (items.isEmpty()) 0.0 else {
             val comp = list.map { m -> if (m.max > 0 && m.value > m.max) maxOf(0.0, 1 - (m.value - m.max) / m.max) else maxOf(0.0, minOf(1.0, m.value / m.target)) }

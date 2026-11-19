@@ -57,6 +57,8 @@ object Nutrition {
         val preWeight: Double = 0.0,
         /** A second run that day: its pre-run and post-run weights (lb), 0 when not entered. */
         val pre2Weight: Double = 0.0, val post2Weight: Double = 0.0,
+        /** Rest day with "regular targets on rest days" on: micronutrient targets for a 53-year-old man, not a distance runner. */
+        val regularT: Boolean = false,
     ) {
         /** The weight to compare the post-run weight with: pre-run if entered, otherwise wake-up. */
         val beforeRun get() = if (preWeight > 0) preWeight else weight
@@ -118,7 +120,7 @@ object Nutrition {
             o.optJSONObject("mt")?.optInt("prot") ?: 0, o.optJSONObject("mt")?.optInt("carbs") ?: 0, o.optJSONObject("mt")?.optInt("fat") ?: 0,
             o.optJSONObject("mt")?.optString("label") ?: "", o.optJSONObject("mt")?.optInt("cal") ?: 0,
             o.optJSONObject("notes")?.let { n -> n.keys().asSequence().associateWith { n.optString(it) } } ?: emptyMap(), o.optString("perfNote"), o.optJSONObject("prerun")?.toString() ?: "", o.optDouble("preWeight", 0.0),
-            o.optDouble("pre2Weight", 0.0), o.optDouble("post2Weight", 0.0))
+            o.optDouble("pre2Weight", 0.0), o.optDouble("post2Weight", 0.0), o.optBoolean("regT"))
     }
 
     /** Firebase's {"2026-11-06": {...}, ...} (or null) → days, oldest first. */
@@ -136,7 +138,7 @@ object Nutrition {
                 .put("items", JSONArray().apply { d.items.forEach { put(JSONObject().put("meal", it.meal).put("name", it.name).put("cal", it.cal).put("prot", it.prot).put("carbs", it.carbs).put("fat", it.fat)) } })
                 .put("microScore", d.microScore)
                 .put("foods", Food.listJson(d.foods))
-                .put("water", d.water).put("sportsOz", d.sportsOz).put("otherOz", d.otherOz).put("weight", d.weight).put("postWeight", d.postWeight).put("preWeight", d.preWeight).put("pre2Weight", d.pre2Weight).put("post2Weight", d.post2Weight).put("qrun", d.qRun).put("qhard", d.qHard)
+                .put("water", d.water).put("sportsOz", d.sportsOz).put("otherOz", d.otherOz).put("weight", d.weight).put("postWeight", d.postWeight).put("preWeight", d.preWeight).put("pre2Weight", d.pre2Weight).put("post2Weight", d.post2Weight).put("qrun", d.qRun).put("qhard", d.qHard).put("regT", d.regularT)
                 .put("notes", JSONObject().apply { d.notes.forEach { (k, v) -> put(k, v) } }).put("perfNote", d.perfNote).apply { if (d.prerun.isNotEmpty()) put("prerun", JSONObject(d.prerun)) }
                 .put("mt", JSONObject().put("prot", d.mtProt).put("carbs", d.mtCarbs).put("fat", d.mtFat).put("label", d.mtLabel).put("cal", d.mtCal))
                 .put("micros", JSONArray().apply { d.micros.forEach { put(JSONObject().put("n", it.name).put("f", it.field).put("v", it.value).put("t", it.target).put("mx", it.max).put("u", it.unit)) } }))

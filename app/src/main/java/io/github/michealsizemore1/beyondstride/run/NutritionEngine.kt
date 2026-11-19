@@ -144,13 +144,23 @@ object NutritionEngine {
         if (changed) FoodLibrary.setHealthyRaw(ctx, list.sortedWith(compareByDescending<JSONObject> { it.optDouble("score", 0.0) }.thenBy { it.optString("name") }))
     }
 
+    /** "Regular targets on rest days" switch (Nutrition, under the micronutrient tiles). On by default. */
+    fun regularOnRest(ctx: Context) = ctx.getSharedPreferences("nutrition_engine", 0).getBoolean("regularOnRest", true)
+    fun setRegularOnRest(ctx: Context, on: Boolean) = ctx.getSharedPreferences("nutrition_engine", 0).edit().putBoolean("regularOnRest", on).apply()
+
     /** The day with everything the Command Center used to add (target, macro ratio, notes stay as they are). */
     fun fill(ctx: Context, d: Nutrition.Day): Nutrition.Day {
         val (run, hard) = runContext(ctx, d.date)
         val today = d.date == io.github.michealsizemore1.beyondstride.Readiness.today()
         val cal = if (d.target > 0) d.target else try { CalorieTargets.result(ctx, date = d.date).target } catch (e: Exception) { 0 }
         val mt = macroTarget(ctx, d.date, cal)
-        return d.copy(qRun = run, qHard = hard, mtProt = mt.prot, mtCarbs = mt.carbs, mtFat = mt.fat, mtLabel = mt.label, mtCal = mt.calories,
+        // Rest day (no run logged or planned) → regular targets for a 53-year-old man, if that's switched on.
+        val planned = try { PlanStore.data(ctx).optJSONObject("current")?.optJSONObject("days")?.optString(d.date) ?: "" } catch (e: Exception) { "" }
+        val plannedRun = Regex("\\b(run|race|intervals?|repeats?|tempo|threshold|strides|fartlek|jog)\\b|\\b\\d+(?:\\.\\d+)?\\s*(?:mi|miles?|km)\\b", RegexOption.IGNORE_CASE).containsMatchIn(planned) &&
+            !Regex("^\\s*rest\\b", RegexOption.IGNORE_CASE).containsMatchIn(planned)
+        val regular = regularOnRest(ctx) && !run && !plannedRun
+        val d0 = d.copy(regularT = regular).let { x -> if (x.foods.isNotEmpty()) io.github.michealsizemore1.beyondstride.Food.summarize(x, x.foods) else x }
+        return d0.copy(qRun = run, qHard = hard, mtProt = mt.prot, mtCarbs = mt.carbs, mtFat = mt.fat, mtLabel = mt.label, mtCal = mt.calories,
             perfNote = perfNote(ctx, d.date), prerun = if (today) preRun(ctx, d.date)?.toString() ?: "" else "")
     }
 }

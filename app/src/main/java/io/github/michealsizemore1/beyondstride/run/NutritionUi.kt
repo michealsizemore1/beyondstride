@@ -130,6 +130,16 @@ object NutritionUi {
             qualityBar(act, col, "Top 7 micronutrient quality", nd.microScore, nd.microLabel(), microNote(nd))
             micros(act, col, nd, header = false)
             col.addView(RunUi.text(ctx, "Tap a nutrient to see which foods it came from.", RunUi.DIM, 11f).apply { setPadding(0, dp(4), 0, 0) })
+            val on = NutritionEngine.regularOnRest(act)
+            col.addView(RunUi.text(ctx, (if (on) "☑" else "☐") + "  Regular targets on rest days" +
+                (if (nd.regularT) " — today is a rest day, using them" else if (on) " — today is a run day, using runner targets" else " — off, runner targets every day"),
+                if (on) RunUi.ACCENT else RunUi.MUTED, 12f, true).apply {
+                setPadding(0, dp(8), 0, dp(2))
+                setOnClickListener {
+                    NutritionEngine.setRegularOnRest(act, !on)
+                    Thread { try { Local.refill(act, nd.date) } catch (e: Exception) { }; act.runOnUiThread { act.recreate() } }.start()
+                }
+            })
             Insights.gapFoods(act, nd).takeIf { it.isNotEmpty() }?.let { gaps ->
                 col.addView(RunUi.text(ctx, "🥕 Fill the gaps (from your Healthy 7+ foods)", 0xFF5FD38D.toInt(), 13f, true).apply { setPadding(0, dp(10), 0, 0) })
                 gaps.forEach { (m, foods) -> col.addView(RunUi.text(ctx, "Low on ${m.name} (${Math.round(m.pct)}%): " + foods.joinToString(" · "), Color.WHITE, 12f).apply { setPadding(0, dp(3), 0, 0) }) }
@@ -242,7 +252,13 @@ object NutritionUi {
         val ceiling = nd.micros.firstOrNull { it.field == "sugar" }?.target ?: (36 + sports + natural)
         val sNote = if (sports > 0 || natural > 0) " (36g" + (if (sports > 0) " + ${Math.round(sports)}g fueling" else "") + (if (natural > 0) " + ${Math.round(natural)}g fruit/dairy" else "") + " today)" else ""
         val low = nd.micros.minByOrNull { m -> if (m.max > 0 && m.value > m.max) Math.max(0.0, 1 - (m.value - m.max) / m.max) else Math.max(0.0, Math.min(1.0, m.value / m.target)) }
-        return "Targets for a 53-year-old male distance runner: iron 14mg · calcium 1,000mg · vitamin D 15mcg · magnesium 483mg · vitamin B12 2.4mcg · sodium 2,300–4,000mg · potassium 3,400mg · zinc 15mg · vitamin C 90mg · fiber 28g · sugar ≤${Math.round(ceiling)}g$sNote · caffeine ≤400mg (a single race-day dose can push this higher by design, not a red flag). " +
+        fun num(v: Double) = if (v >= 1000) String.format(Locale.US, "%,d", Math.round(v)) else if (v % 1.0 == 0.0) Math.round(v).toString() else v.toString()
+        fun tg(f: String) = nd.micros.firstOrNull { it.field == f }?.let { "${num(it.target)}${it.unit}" } ?: ""
+        val na = nd.micros.firstOrNull { it.field == "sodium" }
+        val who = if (nd.regularT) "Rest-day targets for a 53-year-old man" else "Targets for a 53-year-old male distance runner"
+        return "$who: iron ${tg("iron")} · calcium ${tg("calcium")} · vitamin D ${tg("vitD")} · magnesium ${tg("magnesium")} · vitamin B12 ${tg("vitB12")} · " +
+            "sodium ${na?.let { num(it.target) + "–" + num(it.max) } ?: ""}mg · potassium ${tg("potassium")} · zinc ${tg("zinc")} · vitamin C ${tg("vitC")} · fiber ${tg("fiber")} · " +
+            "sugar ≤${Math.round(ceiling)}g$sNote · caffeine ≤400mg (a single race-day dose can push this higher by design, not a red flag). " +
             "Suggested max (upper limits): iron 45mg · calcium 2,000mg · vitamin D 100mcg · zinc 40mg · vitamin C 2,000mg · magnesium 350mg from supplements (no limit from food) · B12, potassium and fiber have no set max" +
             (low?.let { " · lowest today: ${it.name} ${Math.round(it.value)}${it.unit}" } ?: "")
     }
