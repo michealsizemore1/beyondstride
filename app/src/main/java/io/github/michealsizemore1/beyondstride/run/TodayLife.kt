@@ -29,6 +29,9 @@ class TodayLife(private val act: Activity) : CcEngine.Listener {
     private val focus = LinearLayout(act).apply { orientation = LinearLayout.VERTICAL }
     private val checks = LinearLayout(act).apply { orientation = LinearLayout.VERTICAL }
     private var tries = 0
+    /** Shown only when the Command Center's storage is 80%+ full. */
+    private val storageWarn = RunUi.text(act, "", 0xFFF87171.toInt(), 12f, true).apply { visibility = View.GONE; setPadding(0, RunUi.dp(act, 10), 0, 0)
+        setOnClickListener { act.startActivity(Intent(act, RunSettingsActivity::class.java).putExtra("page", "life")) } }
     private var sig = ""
 
     val view: LinearLayout = RunUi.card(act).apply {
@@ -43,6 +46,7 @@ class TodayLife(private val act: Activity) : CcEngine.Listener {
         addView(sched)
         addView(focus)
         addView(checks)
+        addView(storageWarn)
         addView(RunUi.text(act, "Open Life → Daily for the full schedule, calendar and the day's review ›", 0xFFA78BFA.toInt(), 12f, true).apply {
             setPadding(0, d(12), 0, 0); setOnClickListener { openLife() } })
     }
@@ -64,6 +68,7 @@ class TodayLife(private val act: Activity) : CcEngine.Listener {
             val j = LifeUi.obj(r)
             if (j == null || !j.has("schedule")) { if (tries++ < 40) ui.postDelayed(retry, 1000); return@evaluateJavascript }
             status.visibility = View.GONE; CcEngine.ready(act); fill(j)
+            CcEngine.storagePct(act).let { p -> storageWarn.text = "💾 Life storage is $p% full — tap to see what's taking the room"; storageWarn.visibility = if (p >= 80) View.VISIBLE else View.GONE }
         }
     }
     private fun js(call: String) = CcEngine.get(act).evaluateJavascript("window.ccNative&&$call", null)

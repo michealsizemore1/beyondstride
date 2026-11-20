@@ -167,6 +167,7 @@ object CcEngine {
     /** After a backup was restored: put the Life data back into the page (once), then it reloads. */
     fun markLifeRestorePending(ctx: android.content.Context) = lp(ctx).edit().putBoolean("pending", true).apply()
     fun ready(act: Activity) {
+        checkStorage(act)
         if (!lp(act).getBoolean("pending", false)) return
         lp(act).edit().putBoolean("pending", false).apply()
         val app = act.applicationContext; val w = web ?: return
@@ -178,5 +179,31 @@ object CcEngine {
                 w.evaluateJavascript("ccNative.lifeRestoreEnd()") { r -> android.widget.Toast.makeText(app, if (r?.contains("ok") == true) "🌱 Life data restored from the backup" else "Couldn't restore the Life data: $r", android.widget.Toast.LENGTH_LONG).show() }
             }
         }.start()
+    }
+
+    // ── 💾 Storage heads-up: the Command Center's storage is about 10 MB; when full, new saves fail. ──
+    fun storagePct(ctx: android.content.Context) = lp(ctx).getInt("pct", 0)
+    private var storageAt = 0L
+    fun checkStorage(act: Activity) {
+        val now = System.currentTimeMillis(); if (now - storageAt < 30 * 60_000L) return; storageAt = now
+        val app = act.applicationContext
+        web?.evaluateJavascript("window.ccNative&&ccNative.storage?ccNative.storage():''") { r ->
+            val o = LifeUi.obj(r) ?: return@evaluateJavascript
+            val pct = o.optInt("pct"); lp(app).edit().putInt("pct", pct).apply()
+            val today = java.time.LocalDate.now().toString()
+            if (pct >= 80 && lp(app).getString("warned", "") != today) {
+                lp(app).edit().putString("warned", today).apply()
+                try {
+                    val nm = app.getSystemService(android.app.NotificationManager::class.java) ?: return@evaluateJavascript
+                    nm.createNotificationChannel(android.app.NotificationChannel("reminders", "Reminders", android.app.NotificationManager.IMPORTANCE_DEFAULT))
+                    val pi = android.app.PendingIntent.getActivity(app, 961, Intent(app, RunSettingsActivity::class.java).putExtra("page", "life").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                        android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT)
+                    nm.notify(961, android.app.Notification.Builder(app, "reminders").setSmallIcon(io.github.michealsizemore1.beyondstride.R.drawable.ic_stat_run)
+                        .setContentTitle("🌱 Life storage is $pct% full").setContentText("When it's full, new saves fail. Tap to see what's taking the room.")
+                        .setLocalOnly(true)   // phone only: Life never goes to the watch
+                        .setContentIntent(pi).setAutoCancel(true).build())
+                } catch (e: Exception) { }
+            }
+        }
     }
 }

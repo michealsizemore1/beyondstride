@@ -428,9 +428,14 @@
       document.querySelectorAll('.tri-check[data-key="spMeditation"]').forEach(function(e){applyTriState(e,'green');});try{save();}catch(e){}refresh();
       try{if(typeof renderMeditLog==='function')renderMeditLog();}catch(e){}return true;},
     /** ⚙️ Settings this Command Center keeps (the AI key stays in this browser only). */
+    // 💾 How full the Command Center's storage is (Android WebView / Chrome: about 10 MB counted this way), and the biggest items.
+    storage:function(){var r=null;try{r=journalStorageHealth();}catch(e){}if(!r)return '';var Q=10485760,used=r.bytes+r.externalBytes;
+      var top=(r.sizes||[]).slice(0,4).filter(function(x){return x.bytes>1024;}).map(function(x){var f='';if(x.key.indexOf('planner_')===0){try{var o=JSON.parse(localStorage.getItem(x.key)||'{}'),bl=0;Object.keys(o).forEach(function(k){var l=JSON.stringify(o[k]).length;if(l>bl){bl=l;f=k;}});if(bl<20000)f='';}catch(e){}}
+        return {key:x.key,kb:Math.round(x.bytes/1024),field:f};});
+      return JSON.stringify({pct:Math.round(used/Q*100),mb:Math.round(used/1048576*100)/100,entries:r.planner,invalid:r.invalid,top:top});},
     settings:function(){var h=document.getElementById('journalStorageHealth');try{journalStorageHealth();}catch(e){}
       return JSON.stringify({hasKey:typeof journalAIKey==='function'&&!!journalAIKey(),aiContext:(function(){try{return journalPrefs().aiContext!==false;}catch(e){return true;}})(),
-        storage:h?String(h.innerText||'').replace(/\s+/g,' ').trim().slice(0,300):'',sync:window.ccSync?{linked:ccSync.linked(),pending:ccSync.pending()}:null,
+        storage:h?String(h.innerText||'').replace(/\s+/g,' ').trim().slice(0,300):'',store:(function(){try{return JSON.parse(ccNative.storage()||'null');}catch(e){return null;}})(),sync:window.ccSync?{linked:ccSync.linked(),pending:ccSync.pending()}:null,
         status:(document.getElementById('v26SaveText')||{}).textContent||''});},
     setKey:function(k){k=String(k||'').trim();if(k)localStorage.setItem('ai_key',k);else localStorage.removeItem('ai_key');return true;},
     setAIContext:function(on){var p={};try{p=JSON.parse(localStorage.getItem('journal_ui_prefs')||'{}')||{};}catch(e){}p.aiContext=!!on;localStorage.setItem('journal_ui_prefs',JSON.stringify(p));var el=document.getElementById('settingAIContext');if(el)el.checked=!!on;return true;},

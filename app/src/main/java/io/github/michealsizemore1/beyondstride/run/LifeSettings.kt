@@ -22,6 +22,7 @@ object LifeSettings {
         val keyState = RunUi.text(act, "Loading…", Color.WHITE, 15f, true)
         val ctxToggle = RunUi.text(act, "", Color.WHITE, 14f)
         val status = RunUi.text(act, "", RunUi.MUTED, 12f)
+        val storage = LinearLayout(act).apply { orientation = LinearLayout.VERTICAL }
         var aiContext = true
         lateinit var load: () -> Unit
         load = {
@@ -34,7 +35,20 @@ object LifeSettings {
                 val sync = j.optJSONObject("sync")
                 status.text = listOfNotNull(
                     sync?.let { if (it.optBoolean("linked")) "🔄 Sync with Chrome: on" + (if (it.optInt("pending") > 0) " · ${it.optInt("pending")} waiting to upload" else " · up to date") else "🔄 Sync: not linked yet" },
-                    j.optString("status").takeIf { it.isNotBlank() }, j.optString("storage").takeIf { it.isNotBlank() }?.let { "💾 $it" }).joinToString("\n")
+                    j.optString("status").takeIf { it.isNotBlank() }).joinToString("\n")
+                // 💾 Storage, laid out line by line, colored by how full it is.
+                storage.removeAllViews()
+                j.optJSONObject("store")?.let { st -> val pct = st.optInt("pct")
+                    val col = if (pct >= 85) 0xFFF87171.toInt() else if (pct >= 70) 0xFFF59E0B.toInt() else 0xFF4ADE80.toInt()
+                    storage.addView(RunUi.text(act, "💾 Storage: ${pct}% full · ${st.optDouble("mb")} MB · ${st.optInt("entries")} daily entries", col, 13f, true))
+                    if (st.optInt("invalid") > 0) storage.addView(RunUi.text(act, "⚠️ ${st.optInt("invalid")} daily entr${if (st.optInt("invalid") == 1) "y needs" else "ies need"} attention", 0xFFF87171.toInt(), 12f))
+                    val top = st.optJSONArray("top")
+                    if (top != null && top.length() > 0) { storage.addView(RunUi.text(act, "Largest items:", RunUi.MUTED, 12f).apply { setPadding(0, d(4), 0, 0) })
+                        for (i in 0 until top.length()) { val o = top.getJSONObject(i)
+                            storage.addView(RunUi.text(act, "• ${o.optString("key")} — ${o.optInt("kb")} KB" + (o.optString("field").takeIf { it.isNotBlank() }?.let { " (mostly $it)" } ?: ""), RunUi.MUTED, 12f)) } }
+                    storage.addView(RunUi.text(act, if (pct >= 80) "Getting full — when it's full, new saves fail. Tell Claude \"Life storage is getting full\" to make room (nothing is lost: it's all in your backup and sync)."
+                        else "You'll get a heads-up at 80%.", if (pct >= 80) col else RunUi.DIM, 11f).apply { setPadding(0, d(4), 0, 0) })
+                }
             }
         }
         val key = EditText(act).apply { hint = "Paste Anthropic API key (sk-ant-…)"; isSingleLine = true; setTextColor(Color.WHITE); setHintTextColor(RunUi.DIM); textSize = 14f
@@ -51,6 +65,7 @@ object LifeSettings {
             addView(RunUi.text(act, "The Life tab's own key: it stays in this phone's Command Center only — never synced or backed up. BeyondStride's key (AI food search, Coach) is separate and is never given to it.", RunUi.DIM, 11f).apply { setPadding(0, d(6), 0, 0) })
             addView(ctxToggle.apply { setPadding(0, d(12), 0, d(4)); setOnClickListener { js("ccNative.setAIContext(${!aiContext})") { load() } } })
             addView(status.apply { setPadding(0, d(8), 0, 0) })
+            addView(storage.apply { setPadding(0, d(8), 0, 0) })
             addView(RunUi.button(act, "🔄 Sync now", 0xFF374151.toInt(), Color.WHITE) { js("ccNative.syncNow()") { web.postDelayed({ load() }, 4000) } },
                 LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = d(8) })
             load()
