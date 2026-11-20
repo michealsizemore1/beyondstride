@@ -96,4 +96,24 @@ object CcEngine {
     }
 
     fun detachFromParent(w: WebView) { (w.parent as? ViewGroup)?.removeView(w) }
+
+    /**
+     * Today's body numbers from the phone (sleep, sleep score, morning HR, weight, steps, BP and pulse) go straight into
+     * Wellness — no trip through the cloud. Same rule as before: a value you typed yourself is never replaced.
+     */
+    private var pushedAt = 0L
+    fun pushWellness(act: Activity, force: Boolean = false) {
+        val now = System.currentTimeMillis(); if (!force && now - pushedAt < 60_000L) return; pushedAt = now
+        val app = act.applicationContext
+        Thread {
+            val date = java.time.LocalDate.now().toString()
+            val w = try { DailySummary.build(app, date).optJSONObject("wellness") } catch (e: Exception) { null } ?: return@Thread
+            fun tryPush(n: Int) {
+                val v = web ?: return
+                v.post { v.evaluateJavascript("(typeof bsFillWellnessNow==='function'&&typeof dk==='function'&&typeof today!=='undefined')?bsFillWellnessNow(${org.json.JSONObject.quote(date)},$w):'wait'") { r ->
+                    if (r?.contains("wait") == true && n > 0) v.postDelayed({ tryPush(n - 1) }, 1000) } }
+            }
+            tryPush(30)
+        }.start()
+    }
 }

@@ -188,6 +188,10 @@
     if(changed&&typeof v26Toast==='function')v26Toast('Filled from BeyondStride (sleep / sleep score / weight / resting HR / steps / BP)');
   }
 
+  // BeyondStride's phone app hands today's numbers straight in (no trip through the cloud): same rules as above —
+  // a value you typed yourself is never replaced.
+  window.bsFillWellnessNow=function(k,w){try{if(w&&typeof w==='object')fillWellness(k,{wellness:w});return true;}catch(e){return false;}};
+
   // "From BeyondStride" box in the Daily AI Review (collapsed; tap to open).
   var shownFor='',open=false;
   function box(){

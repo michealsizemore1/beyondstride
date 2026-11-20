@@ -53,7 +53,7 @@ class TodayLife(private val act: Activity) : CcEngine.Listener {
     }
 
     /** Call from onResume (and it refreshes itself whenever the Command Center saves). */
-    fun start() { CcEngine.add(this); CcEngine.get(act).onResume(); tries = 0; load() }
+    fun start() { CcEngine.add(this); CcEngine.get(act).onResume(); CcEngine.pushWellness(act); tries = 0; load() }
     fun stop() { CcEngine.remove(this); ui.removeCallbacks(retry) }
     override fun changed() { ui.removeCallbacks(retry); ui.postDelayed(retry, 400) }
     private val retry = Runnable { load() }

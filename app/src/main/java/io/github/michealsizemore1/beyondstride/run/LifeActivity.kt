@@ -159,7 +159,7 @@ class LifeActivity : Activity() {
         setContentView(RunUi.tabbed(this, box, RunUi.TAB_LIFE))
     }
 
-    override fun onResume() { super.onResume(); CcEngine.get(this); web.onResume(); Thread { try { CalendarReminders.refresh(applicationContext) } catch (e: Exception) { } }.start(); web.evaluateJavascript("window.ccSync&&ccSync.now()", null); if (!full) { ui.removeCallbacks(reload); ui.postDelayed(reload, 300) } }
+    override fun onResume() { super.onResume(); CcEngine.get(this); web.onResume(); CcEngine.pushWellness(this); Thread { try { CalendarReminders.refresh(applicationContext) } catch (e: Exception) { } }.start(); web.evaluateJavascript("window.ccSync&&ccSync.now()", null); if (!full) { ui.removeCallbacks(reload); ui.postDelayed(reload, 300) } }
     // Upload anything not yet sent before the app goes to the background.
     override fun onPause() { study.stopReading(); more.pause(); web.evaluateJavascript("window.ccSync&&ccSync.now()", null); web.onPause(); super.onPause() }
     override fun onSaveInstanceState(out: Bundle) { super.onSaveInstanceState(out); out.putInt("page", page) }
@@ -920,7 +920,11 @@ class LifeActivity : Activity() {
                 override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
                 override fun afterTextChanged(s: Editable?) { if (hasFocus()) { ui.removeCallbacks(commit); ui.postDelayed(commit, 900) } }
             })
-            setOnFocusChangeListener { _, has -> if (!has) { ui.removeCallbacks(commit); commit.run(); ui.postDelayed(reload, 1200) } }
+            setOnFocusChangeListener { _, has -> if (!has) { ui.removeCallbacks(commit); commit.run(); ui.postDelayed(reload, 1200)
+                // One weight: typed here, it's also today's wake-up weight in Nutrition (sweat rate, Coach, charts).
+                if (id == "wWghtVal") text.toString().trim().toDoubleOrNull()?.takeIf { it in 70.0..600.0 }?.let { w ->
+                    val app = applicationContext
+                    Thread { try { HydrationSync.change(app, "weight", value = w, date = java.time.LocalDate.now().toString()) } catch (e: Exception) { } }.start() } } }
             setOnEditorActionListener { v, _, _ -> v.clearFocus(); false }
         }.also { edits[id] = it }
         /** A row: [box] Label: [field] — or, for a sub-row (no box), indented with its icon. */
@@ -1014,6 +1018,16 @@ class LifeActivity : Activity() {
                 val hr = ser("restHR")
                 chartCard("🫀 Morning HR — $L", "● bpm", 0xFFF472B6.toInt(), listOf(hr to 0xFFF472B6.toInt()), "No morning heart rates in the last $range days.") {
                     val hs = hr.filterNotNull(); "$range-day avg: ${hs.average().toInt()} bpm • Range: ${hs.min().toInt()} – ${hs.max().toInt()} bpm" }
+                // 💤 Sleeping HR (Samsung Health, lowest overnight) — moved here from Fitness, with its trend note.
+                val nights = try { io.github.michealsizemore1.beyondstride.ReadinessSync.nights(this@LifeActivity).filter { it.sleepHr > 0 } } catch (e: Exception) { emptyList() }
+                val byDay = nights.associate { it.day to it.sleepHr.toDouble() }
+                val shr = labels.map { byDay[it] }
+                val shc = chartCard("💤 Sleeping HR — $L", "● bpm", 0xFFFF6B6B.toInt(), listOf(shr to 0xFFFF6B6B.toInt()), "No sleeping heart rate in the last $range days (Samsung Health sleep).") {
+                    val xs = shr.filterNotNull(); "$range-day avg: ${xs.average().toInt()} bpm • Range: ${xs.min().toInt()} – ${xs.max().toInt()} bpm • zones use ${RunSettings.hrRest(this@LifeActivity)} bpm" }
+                try { io.github.michealsizemore1.beyondstride.Readiness.rhrTrend(nights.sortedBy { it.day }.takeLast(30))?.let { tr ->
+                    shc.addView(RunUi.text(this@LifeActivity, String.format(java.util.Locale.US, "7-night average %.1f bpm", tr.recent) + (tr.change?.let { String.format(java.util.Locale.US, " · %s%.1f vs week before", if (it > 0) "+" else "", it) } ?: ""), Color.WHITE, 13f, true).apply { setPadding(0, d(6), 0, 0) })
+                    shc.addView(RunUi.text(this@LifeActivity, tr.note, tr.color, 13f).apply { setPadding(0, d(2), 0, 0) }) } } catch (e: Exception) { }
+                shc.setOnClickListener { startActivity(Intent(this@LifeActivity, ReadinessActivity::class.java)) }
                 // 😴 Sleep
                 val sl = ser("sleep")
                 chartCard("😴 Sleep — $L", "● hours", 0xFFA78BFA.toInt(), listOf(sl to 0xFFA78BFA.toInt()), "No sleep in the last $range days.") {
