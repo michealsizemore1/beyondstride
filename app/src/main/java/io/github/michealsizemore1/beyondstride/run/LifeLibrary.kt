@@ -62,7 +62,10 @@ class LifeLibrary(private val act: Activity, private val web: WebView, private v
     private fun loadCovers(tries: Int) {
         web.evaluateJavascript("window.ccNative&&ccNative.bookCovers?ccNative.bookCovers():'{}'") { r ->
             val c = LifeUi.obj(r) ?: JSONObject()
-            if (c.toString() != covers.toString()) { covers = c; draw() }
+            // Add or update only — a cover still loading in the page must not make one already shown disappear (removing is done by Remove Cover).
+            var changed = false
+            c.keys().forEach { k -> val v = c.optString(k); if (v.isNotBlank() && covers.optString(k) != v) { covers.put(k, v); changed = true } }
+            if (changed) draw()
             if (tries > 1) LifeUi.ui.postDelayed({ loadCovers(tries - 1) }, 700)
         }
     }
@@ -291,7 +294,7 @@ class LifeLibrary(private val act: Activity, private val web: WebView, private v
                         addView(RunUi.text(act, o.optString("source"), RunUi.DIM, 10f).apply { gravity = Gravity.CENTER })
                         setOnClickListener { dlg.dismiss()
                             web.evaluateJavascript("window.ccNative&&ccNative.coverApply(${JSONObject.quote(id)},${JSONObject.quote(url)})") { covers.put(id, url); draw()
-                                LifeUi.ui.postDelayed({ web.evaluateJavascript("window.ccNative&&ccNative.bookCoversReset()") { loadCovers(3) } }, 1500) } } })
+                                LifeUi.ui.postDelayed({ loadCovers(4) }, 1500) } } })
                 }
             }
         }

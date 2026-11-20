@@ -330,7 +330,10 @@
     coverSearch:function(id){window._bsCovRes=window._bsCovRes||{};var k=String(id);_bsCovRes[k]=null;var b=getBooks().find(function(x){return String(x.id)===k;});if(!b)return false;
       _findCover(b.title,b.author,function(c){_bsCovRes[k]=(c||[]).map(function(x){return {url:x.url,source:x.source||''};});});return true;},
     coverResults:function(id){var r=(window._bsCovRes||{})[String(id)];return r==null?'':JSON.stringify(r);},
-    coverApply:function(id,url){var b=getBooks().find(function(x){return String(x.id)===String(id);});if(!b)return false;try{applyBookCover(b.id,url);}catch(e){return false;}if(window._bsCov)delete _bsCov[String(id)];return true;},
+    coverApply:function(id,url){var b=getBooks().find(function(x){return String(x.id)===String(id);});if(!b)return false;var k=String(id);window._bsCov=window._bsCov||{};_bsCov[k]=url;
+      // Same as applyBookCover (a small JPEG when the picture allows it, else the link), but it remembers the result here too.
+      function put(v){_bsCov[k]=v;setBookCover(b.id,v).then(function(){try{renderLibrary();}catch(e){}});}
+      var img=new Image();img.crossOrigin='anonymous';img.onload=function(){try{put(_resizeToDataUrl(img,160,220,0.85));}catch(e){put(url);}};img.onerror=function(){put(url);};img.src=url;return true;},
     coverSet:function(id,dataUrl){var b=getBooks().find(function(x){return String(x.id)===String(id);});if(!b||String(dataUrl).indexOf('data:image')!==0)return false;
       setBookCover(b.id,dataUrl).then(function(){try{renderLibrary();}catch(e){}});if(window._bsCov)_bsCov[String(id)]=dataUrl;return true;},
     coverDelete:function(id){var b=getBooks().find(function(x){return String(x.id)===String(id);});if(!b)return false;deleteBookCover(b.id).then(function(){try{renderLibrary();}catch(e){}});if(window._bsCov)_bsCov[String(id)]='';return true;},
