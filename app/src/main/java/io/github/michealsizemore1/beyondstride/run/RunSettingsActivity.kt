@@ -232,6 +232,8 @@ class RunSettingsActivity : Activity() {
             addView(RunUi.text(ctx, if (at == 0L) "No backup yet" else "Last backup: " +
                 java.text.SimpleDateFormat("EEE, MMM d · h:mm a", java.util.Locale.getDefault()).format(java.util.Date(at)), Color.WHITE, 15f, true))
             Backup.lastInfo(ctx).takeIf { it.isNotBlank() }?.let { addView(RunUi.text(ctx, it, RunUi.MUTED, 12f)) }
+            if (LifeTab.on(ctx)) addView(RunUi.text(ctx, CcEngine.lifeAt(ctx).let { at -> if (at == 0L || !CcEngine.lifeFile(ctx).exists()) "🌱 Life data: not saved yet — tap Back up now"
+                else "🌱 Life data saved " + java.text.SimpleDateFormat("EEE, MMM d · h:mm a", java.util.Locale.getDefault()).format(java.util.Date(at)) + " · " + CcEngine.lifeInfo(ctx) }, 0xFF4ADE80.toInt(), 12f).apply { setPadding(0, dp(2), 0, 0) })
             addView(RunUi.text(ctx, "Runs, workouts & plan, courses, settings, zones, LiveTrack, morning checks, sleep, personal bests, your nutrition history (with food photos, favorites and notes), Activities and training plans, and the 🌱 Life tab (habits, journal, reviews, schedule, calendar, books with covers and documents, Bible studies, files) — in one file. Your AI keys are never included. " +
                 "Save it to Google Drive so it's safe if the phone is lost.", RunUi.DIM, 12f).apply { setPadding(0, dp(6), 0, 0) })
             addView(RunUi.button(ctx, if (Backup.uri(ctx) == null) "Back up now…" else "Back up now", RunUi.ACCENT) { withLife {
@@ -521,14 +523,16 @@ class RunSettingsActivity : Activity() {
         Thread { try { BpImport.sync(app, 14); DailySummary.publish(app, force = true) } catch (e: Exception) { }
             runOnUiThread { if (!isFinishing) { Toast.makeText(this, BpImport.lastInfo(app).substringAfter(" · ").ifBlank { "Done" }, Toast.LENGTH_LONG).show(); render() } } }.start()
     }
-    /** A fresh copy of the 🌱 Life data first (so the backup has today's), then [go]. Waits at most 20 seconds. */
+    /** A fresh copy of the 🌱 Life data first (so the backup has today's), then [go]. Waits at most a minute. */
     private fun withLife(go: () -> Unit) {
         if (!LifeTab.on(this)) { go(); return }
         var done = false
         val fin = { if (!done) { done = true; go() } }
         Toast.makeText(this, "Saving your Life data…", Toast.LENGTH_SHORT).show()
-        CcEngine.exportLife(this, force = true) { runOnUiThread { fin() } }
-        android.os.Handler(mainLooper).postDelayed({ fin() }, 20_000L)
+        CcEngine.exportLife(this, force = true) { msg -> runOnUiThread {
+            if (msg.startsWith("error")) Toast.makeText(this, "Couldn't save the Life data ($msg) — backing up the rest", Toast.LENGTH_LONG).show()
+            fin() } }
+        android.os.Handler(mainLooper).postDelayed({ fin() }, 60_000L)
     }
     private fun syncWeights() {
         val app = applicationContext

@@ -138,8 +138,14 @@ object CcEngine {
         if (lp(act).getBoolean("pending", false)) return   // a restore is waiting: don't overwrite the restored copy
         lifeBusy = true; lifeCb = done; synchronized(lifeBuf) { lifeBuf.setLength(0) }
         val w = get(act)
-        w.evaluateJavascript("(window.ccNative&&ccNative.lifeBackup&&typeof load==='function')?ccNative.lifeBackup():'no'") { r -> if (r == null || r.contains("no")) { lifeBusy = false } }
-        w.postDelayed({ lifeBusy = false }, 120_000L)
+        // The page may still be starting (e.g. straight from Settings): wait for it, up to 40 seconds.
+        fun attempt(n: Int) {
+            w.evaluateJavascript("(window.ccNative&&ccNative.lifeBackup&&typeof load==='function'&&typeof getBooks==='function')?ccNative.lifeBackup():'wait'") { r ->
+                if (r == null || r.contains("wait")) { if (n > 0) w.postDelayed({ attempt(n - 1) }, 1000) else { lifeBusy = false; val cb = lifeCb; lifeCb = null; cb?.invoke("error: the Life tab didn't start") } }
+            }
+        }
+        attempt(40)
+        w.postDelayed({ if (lifeBusy) { lifeBusy = false; val cb = lifeCb; lifeCb = null; cb?.invoke("error: took too long") } }, 120_000L)
     }
     private fun lifeFinished(ctx: android.content.Context, msg: String) {
         val cb = lifeCb; lifeCb = null
