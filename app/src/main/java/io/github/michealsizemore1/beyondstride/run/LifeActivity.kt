@@ -202,7 +202,6 @@ class LifeActivity : Activity() {
         col.addView(RunUi.text(this, "The pages from the Command Center's ☰ menu. Tap one to open it.", RunUi.MUTED, 12f).apply { setPadding(0, d(4), 0, d(6)) })
         val items = listOf(
             Triple("📖", "Bible", "bible") to "Bible reading archive, sermon & study notes",
-            Triple("📁", "Uploads", "file-uploads") to "Journal archive and other files",
             Triple("🌱", "Habits", "habits2") to "All habits, add / edit, history",
             Triple("📚", "Library", "library") to "Books, audiobooks, finish plan",
             Triple("🧘", "Meditate", "meditate") to "Guided timer, scripture, session log",
