@@ -139,7 +139,7 @@ class LifeActivity : Activity() {
             }
         }
         buildNative()
-        showPage(savedInstanceState?.getInt("page") ?: 0)
+        showPage((savedInstanceState?.getInt("page") ?: 0).let { if (it == 3) 0 else it })
         setContentView(RunUi.tabbed(this, box, RunUi.TAB_LIFE))
     }
 
