@@ -66,6 +66,8 @@ class LifeActivity : Activity() {
     private lateinit var more: LifeMore
     private lateinit var moreScroll: ScrollView
     private lateinit var tabMore: TextView
+    private lateinit var tabTabs: TextView
+    private lateinit var tabsScroll: ScrollView
     private var full = false
     private var focusCard: FocusCard? = null
     private var checksCard: ChecksCard? = null
@@ -140,20 +142,24 @@ class LifeActivity : Activity() {
             more = LifeMore(this@LifeActivity, web) { needKey() }
             moreScroll = ScrollView(this@LifeActivity).apply { setBackgroundColor(RunUi.BG); isFillViewport = true; addView(more.col) }
             addView(moreScroll, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
+            tabsScroll = ScrollView(this@LifeActivity).apply { setBackgroundColor(RunUi.BG); isFillViewport = true; addView(tabsPage()) }
+            addView(tabsScroll, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
             study = BibleStudyPage(this@LifeActivity, web) { showPage(0) }
             addView(study.view, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
         }
-        fun pill(label: String, onClick: () -> Unit) = RunUi.text(this, label, Color.WHITE, 12f, true).apply {
+        fun pill(label: String, onClick: () -> Unit) = RunUi.text(this, label, Color.WHITE, 11.5f, true).apply {
+            isSingleLine = true
             gravity = android.view.Gravity.CENTER; setPadding(0, RunUi.dp(this@LifeActivity, 8), 0, RunUi.dp(this@LifeActivity, 8))
             setOnClickListener { onClick() }
         }
-        tabToday = pill("🎯 Today") { showPage(0) }; tabReviews = pill("📊 Reviews") { showPage(1) }; tabFull = pill("📓 Full") { showPage(2) }; tabMore = pill("🗂️ More") { showPage(4) }
+        tabToday = pill("🎯 Today") { showPage(0) }; tabReviews = pill("📊 Reviews") { showPage(1) }; tabFull = pill("📓 Full") { showPage(2) }; tabMore = pill("🗂️ More") { showPage(4) }; tabTabs = pill("☰ Tabs") { showPage(5) }
         bar = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL; setBackgroundColor(RunUi.BG)
             setPadding(RunUi.dp(this@LifeActivity, 14), RunUi.dp(this@LifeActivity, 6), RunUi.dp(this@LifeActivity, 14), RunUi.dp(this@LifeActivity, 6))
             addView(tabToday, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginEnd = RunUi.dp(this@LifeActivity, 6) })
             addView(tabReviews, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1.1f).apply { marginEnd = RunUi.dp(this@LifeActivity, 6) })
-            addView(tabMore, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginEnd = RunUi.dp(this@LifeActivity, 6) })
+            addView(tabMore, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginEnd = RunUi.dp(this@LifeActivity, 5) })
+            addView(tabTabs, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 0.9f).apply { marginEnd = RunUi.dp(this@LifeActivity, 5) })
             addView(tabFull, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 0.85f))
         }
         val box = LinearLayout(this).apply {
@@ -179,6 +185,40 @@ class LifeActivity : Activity() {
     override fun onDestroy() { ui.removeCallbacksAndMessages(null); study.destroy(); web.destroy(); super.onDestroy() }
 
     private fun show(f: Boolean) = showPage(if (f) 2 else 0)
+
+    /** ☰ Tabs — the Command Center's ☰ menu pages as big buttons; each opens that page full screen. */
+    private fun tabsPage(): LinearLayout {
+        val d = { v: Int -> RunUi.dp(this, v) }
+        val col = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(d(14), d(8), d(14), d(24)) }
+        col.addView(RunUi.text(this, "Command Center pages", Color.WHITE, 16f, true))
+        col.addView(RunUi.text(this, "The pages from the Command Center's ☰ menu. Tap one to open it.", RunUi.MUTED, 12f).apply { setPadding(0, d(4), 0, d(6)) })
+        val items = listOf(
+            Triple("📖", "Bible", "bible") to "Bible reading archive, sermon & study notes",
+            Triple("📁", "Uploads", "file-uploads") to "Journal archive and other files",
+            Triple("🌱", "Habits", "habits2") to "All habits, add / edit, history",
+            Triple("📚", "Library", "library") to "Books, audiobooks, finish plan",
+            Triple("🧘", "Meditate", "meditate") to "Guided timer, scripture, session log",
+            Triple("❤️", "Wellness", "wellness") to "BP, meds, weight, sleep, movement")
+        items.chunked(2).forEach { row ->
+            col.addView(LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; setPadding(0, d(8), 0, 0)
+                row.forEachIndexed { i, (t, desc) ->
+                    addView(LinearLayout(this@LifeActivity).apply {
+                        orientation = LinearLayout.VERTICAL; setPadding(d(14), d(14), d(14), d(14)); background = RunUi.rounded(RunUi.CARD, d(16).toFloat())
+                        addView(RunUi.text(this@LifeActivity, t.first, Color.WHITE, 30f))
+                        addView(RunUi.text(this@LifeActivity, t.second, Color.WHITE, 16f, true).apply { setPadding(0, d(6), 0, d(2)) })
+                        addView(RunUi.text(this@LifeActivity, desc, RunUi.MUTED, 11f))
+                        setOnClickListener { openCcPage(t.third) }
+                    }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { if (i == 0) marginEnd = d(8) })
+                }
+                if (row.size == 1) addView(View(this@LifeActivity), LinearLayout.LayoutParams(0, 1, 1f))
+            })
+        }
+        return col
+    }
+    private fun openCcPage(name: String) {
+        showPage(2)
+        web.evaluateJavascript("(function(){var b=document.getElementById('hm-$name');if(b)b.click();else if(typeof hmSwitch==='function')hmSwitch('$name',{preventDefault:function(){}});window.scrollTo(0,0);})()", null)
+    }
     private fun showPage(p: Int) {
         val was = page; page = p; full = p == 2
         if (was == 3 && p != 3) study.hide()
@@ -187,9 +227,10 @@ class LifeActivity : Activity() {
         bar.visibility = if (p == 3) View.GONE else View.VISIBLE
         reviewsScroll.visibility = if (p == 1) View.VISIBLE else View.GONE
         moreScroll.visibility = if (p == 4) View.VISIBLE else View.GONE
+        tabsScroll.visibility = if (p == 5) View.VISIBLE else View.GONE
         if (p == 4) more.load()
         fun style(t: TextView, on: Boolean) { t.background = RunUi.rounded(if (on) RunUi.ACCENT else RunUi.CARD, RunUi.dp(this, 20).toFloat()); t.setTextColor(if (on) Color.BLACK else Color.WHITE) }
-        style(tabToday, p == 0); style(tabReviews, p == 1); style(tabFull, p == 2); style(tabMore, p == 4)
+        style(tabToday, p == 0); style(tabReviews, p == 1); style(tabFull, p == 2); style(tabMore, p == 4); style(tabTabs, p == 5)
         if (p == 0 || p == 1) reload.run()
         if (p == 1) { weekTab?.load(); monthCard?.load(); yearCard?.load(); dashCard?.load() }
     }
@@ -954,7 +995,7 @@ class LifeActivity : Activity() {
     @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
         if (full && web.canGoBack()) web.goBack()
-        else if (full || page == 1 || page == 3 || page == 4) show(false)
+        else if (full || page in listOf(1, 3, 4, 5)) show(false)
         else @Suppress("DEPRECATION") super.onBackPressed()
     }
 
