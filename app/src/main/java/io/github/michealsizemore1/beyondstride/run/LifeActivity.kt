@@ -54,6 +54,7 @@ class LifeActivity : Activity() {
     private var checksCard: ChecksCard? = null
     private var scheduleCard: ScheduleCard? = null
     private var reviewCard: ReviewCard? = null
+    private var wellCard: WellnessCard? = null
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -146,6 +147,7 @@ class LifeActivity : Activity() {
         focusCard = FocusCard().also { nativeCol.addView(it.view) }
         scheduleCard = ScheduleCard().also { nativeCol.addView(it.view) }
         checksCard = ChecksCard().also { nativeCol.addView(it.view) }
+        wellCard = WellnessCard().also { nativeCol.addView(it.view) }
         reviewCard = ReviewCard().also { nativeCol.addView(it.view) }
         nativeCol.addView(RunUi.text(this, "Everything else is in 📓 Full Command Center (tap above). More sections will move here one at a time.", RunUi.DIM, 11f).apply { setPadding(0, RunUi.dp(this@LifeActivity, 12), 0, 0) })
     }
@@ -156,10 +158,10 @@ class LifeActivity : Activity() {
         web.evaluateJavascript("(window.ccNative&&typeof load==='function')?(ccNative.all?ccNative.all():ccNative.focus()):null") { r ->
             val json = try { (JSONTokener(r).nextValue() as? String)?.let { JSONObject(it) } } catch (e: Exception) { null }
             if (json == null) { focusCard?.loading(); if (tries++ < 60) ui.postDelayed(reload, 700) ; return@evaluateJavascript }
-            tries = 0; focusCard?.fill(json); scheduleCard?.fill(json); checksCard?.fill(json); reviewCard?.fill(json)
+            tries = 0; focusCard?.fill(json); scheduleCard?.fill(json); checksCard?.fill(json); wellCard?.fill(json); reviewCard?.fill(json)
             // An older copy of the Command Center is still cached (the website updates before this screen can use the
             // new parts): fetch the newest once.
-            if ((!json.has("checks") || !json.has("schedule") || !json.has("review")) && !refreshed) { refreshed = true; web.clearCache(true); web.reload(); ui.postDelayed(reload, 2500) }
+            if ((!json.has("checks") || !json.has("schedule") || !json.has("review") || !json.has("wellness")) && !refreshed) { refreshed = true; web.clearCache(true); web.reload(); ui.postDelayed(reload, 2500) }
         }
     }
     private fun js(call: String) = web.evaluateJavascript("window.ccNative&&$call", null)
@@ -298,6 +300,70 @@ class LifeActivity : Activity() {
         }
     }
 
+    /** 💚 Wellness — BP, meds, weight, sleep, dog walk, steps, bike: the check and its numbers, like the Wellness tab. */
+    private inner class WellnessCard {
+        val view = RunUi.card(this@LifeActivity)
+        private val body = LinearLayout(this@LifeActivity).apply { orientation = LinearLayout.VERTICAL }
+        private val boxes = HashMap<String, TextView>(); private val states = HashMap<String, String>(); private val edits = HashMap<String, EditText>()
+        private var built = ""
+        private val count = RunUi.text(this@LifeActivity, "", RunUi.MUTED, 13f, true)
+        private fun d(v: Int) = RunUi.dp(this@LifeActivity, v)
+        init {
+            view.addView(LinearLayout(this@LifeActivity).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL
+                addView(RunUi.text(this@LifeActivity, "💚 Wellness", Color.WHITE, 16f, true), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+                addView(count) })
+            view.addView(body)
+            view.addView(RunUi.text(this@LifeActivity, "Typing a value checks it off on its own (BP, weight, sleep, dog walk, 10,000+ steps) — same as the Command Center. Meds stays manual: tap its box.", RunUi.DIM, 10f).apply { setPadding(0, d(8), 0, 0) })
+        }
+        fun fill(j: JSONObject) {
+            val arr = j.optJSONArray("wellness") ?: run { view.visibility = View.GONE; return }
+            view.visibility = View.VISIBLE
+            val rows = (0 until arr.length()).map { arr.getJSONObject(it) }
+            val shape = rows.joinToString("|") { r -> r.optString("key") + ":" + (0 until r.getJSONArray("fields").length()).joinToString(",") { r.getJSONArray("fields").getJSONObject(it).optString("id") } }
+            if (shape != built) { built = shape; build(rows) }
+            rows.forEach { r ->
+                val key = r.optString("key"); states[key] = r.optString("state"); boxes[key]?.let { paintBox(it, r.optString("state")) }
+                val f = r.getJSONArray("fields")
+                for (i in 0 until f.length()) { val o = f.getJSONObject(i); edits[o.optString("id")]?.let { if (!it.hasFocus() && it.text.toString() != o.optString("value")) it.setText(o.optString("value")) } }
+            }
+            count.text = "${rows.count { it.optString("state") == "green" }}/${rows.size}"
+        }
+        private fun build(rows: List<JSONObject>) {
+            body.removeAllViews(); boxes.clear(); edits.clear()
+            rows.forEach { r ->
+                val key = r.optString("key")
+                val box = TextView(this@LifeActivity).apply { gravity = android.view.Gravity.CENTER; textSize = 14f; setTypeface(typeface, android.graphics.Typeface.BOLD)
+                    setOnClickListener { val n = CYCLE[(CYCLE.indexOf(states[key] ?: "") + 1) % CYCLE.size]; states[key] = n; paintBox(this, n); js("ccNative.setCheck(${JSONObject.quote(key)},${JSONObject.quote(n)})") } }
+                boxes[key] = box
+                body.addView(LinearLayout(this@LifeActivity).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL; setPadding(0, d(10), 0, d(2))
+                    addView(box, LinearLayout.LayoutParams(d(28), d(28)))
+                    addView(RunUi.text(this@LifeActivity, r.optString("label"), Color.WHITE, 14f, true).apply { setPadding(d(10), 0, 0, 0) }) })
+                val f = r.getJSONArray("fields")
+                val line = LinearLayout(this@LifeActivity).apply { orientation = LinearLayout.HORIZONTAL; setPadding(d(38), d(2), 0, 0) }
+                for (i in 0 until f.length()) { val o = f.getJSONObject(i); val id = o.optString("id")
+                    val et = EditText(this@LifeActivity).apply {
+                        hint = if (f.length() > 1) o.optString("label") + " · " + o.optString("hint") else o.optString("hint")
+                        setTextColor(Color.WHITE); setHintTextColor(RunUi.DIM); textSize = 14f; isSingleLine = true
+                        inputType = if (o.optBoolean("number")) android.text.InputType.TYPE_CLASS_NUMBER else android.text.InputType.TYPE_CLASS_TEXT
+                        imeOptions = EditorInfo.IME_ACTION_DONE
+                        background = RunUi.rounded(0xFF26302C.toInt(), d(8).toFloat()); setPadding(d(10), d(7), d(10), d(7))
+                        val commit = Runnable { js("ccNative.setField(${JSONObject.quote(id)},${JSONObject.quote(text.toString())})") }
+                        addTextChangedListener(object : TextWatcher {
+                            override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+                            override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+                            override fun afterTextChanged(s: Editable?) { if (hasFocus()) { ui.removeCallbacks(commit); ui.postDelayed(commit, 900) } }
+                        })
+                        setOnFocusChangeListener { _, has -> if (!has) { ui.removeCallbacks(commit); commit.run(); ui.postDelayed(reload, 1200) } }
+                        setOnEditorActionListener { v, _, _ -> v.clearFocus(); false }
+                    }
+                    edits[id] = et
+                    line.addView(et, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { if (i > 0) marginStart = d(6) })
+                }
+                body.addView(line)
+            }
+        }
+    }
+
     /** ✅ Daily Checks — Bible, Meditation, Listening, Wellness, Planning & Review: the Command Center's checkmarks. */
     private inner class ChecksCard {
         val view = RunUi.card(this@LifeActivity)
@@ -308,13 +374,14 @@ class LifeActivity : Activity() {
         init {
             view.addView(RunUi.text(this@LifeActivity, "✅ Daily Checks", Color.WHITE, 16f, true))
             view.addView(summary); view.addView(body)
-            view.addView(RunUi.text(this@LifeActivity, "Automatic checks (BP, weight, sleep, steps, dog walk, audiobook…) still fill in on their own. Meds stays manual.", RunUi.DIM, 10f).apply { setPadding(0, d(8), 0, 0) })
+            view.addView(RunUi.text(this@LifeActivity, "Automatic checks (audiobook, Bible Study…) still fill in on their own.", RunUi.DIM, 10f).apply { setPadding(0, d(8), 0, 0) })
         }
         private fun icon(g: String) = when { g.contains("Bible") -> "📖"; g.contains("Meditation") -> "🧘"; g.contains("Listening") -> ""; g.contains("Wellness") -> "💚"; g.contains("Planning") -> "📝"; else -> "•" }
         private fun nice(l: String) = l.replaceFirstChar { it.uppercase() }.replace(Regex("^Goal\\s+"), "")
         fun fill(j: JSONObject) {
             val arr = j.optJSONArray("checks") ?: run { summary.text = "Getting the newest Command Center…"; return }
-            val items = (0 until arr.length()).map { arr.getJSONObject(it) }
+            val hasWell = j.has("wellness")   // Wellness has its own card (with the numbers) below
+            val items = (0 until arr.length()).map { arr.getJSONObject(it) }.filter { !(hasWell && it.optString("group").contains("Wellness")) }
             val n = { st: String -> items.count { it.optString("state") == st } }
             summary.text = "${n("green")} done · ${n("purple")} partly · ${n("red")} not done · ${n("black")} N/A · ${n("")} not marked"
             val newSig = items.joinToString("|") { it.optString("key") + it.optString("id") + ":" + it.optString("state") + ":" + it.optString("label") }
