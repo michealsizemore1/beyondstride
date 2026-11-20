@@ -75,6 +75,9 @@ class LifeActivity : Activity() {
     private lateinit var moreScroll: ScrollView
     private lateinit var tabMore: TextView
     private lateinit var tabTabs: TextView
+    private lateinit var tabMonth: TextView
+    private lateinit var tabYear: TextView
+    private lateinit var tabReview: TextView
     private lateinit var tabsScroll: ScrollView
     private var full = false
     private var focusCard: FocusCard? = null
@@ -158,20 +161,23 @@ class LifeActivity : Activity() {
             study = BibleStudyPage(this@LifeActivity, web) { showPage(0) }
             addView(study.view, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
         }
-        fun pill(label: String, onClick: () -> Unit) = RunUi.text(this, label, Color.WHITE, 11.5f, true).apply {
-            isSingleLine = true
-            gravity = android.view.Gravity.CENTER; setPadding(0, RunUi.dp(this@LifeActivity, 8), 0, RunUi.dp(this@LifeActivity, 8))
+        // Top row like the Command Center's: ☰ More | Daily · Weekly · Monthly · Yearly · Review.
+        fun tab(label: String, onClick: () -> Unit) = RunUi.text(this, label, RunUi.MUTED, 14f, true).apply {
+            isSingleLine = true; gravity = android.view.Gravity.CENTER
+            setPadding(RunUi.dp(this@LifeActivity, 10), RunUi.dp(this@LifeActivity, 12), RunUi.dp(this@LifeActivity, 10), RunUi.dp(this@LifeActivity, 12))
             setOnClickListener { onClick() }
         }
-        tabToday = pill("🎯 Today") { showPage(0) }; tabReviews = pill("📊 Reviews") { showPage(1) }; tabFull = pill("📓 Full") { showPage(2) }; tabMore = pill("🗂️ More") { showPage(4) }; tabTabs = pill("☰ Tabs") { showPage(5) }
+        tabTabs = tab("☰ More") { showPage(5) }; tabToday = tab("Daily") { showPage(0) }; tabReviews = tab("Weekly") { showPage(1) }
+        tabMonth = tab("Monthly") { showPage(7) }; tabYear = tab("Yearly") { showPage(8) }; tabReview = tab("Review") { showPage(9) }
+        tabMore = tab("🗂️ Tools") { showPage(4) }; tabFull = tab("📓 Full") { showPage(2) }   // reached from ☰ More
         bar = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL; setBackgroundColor(RunUi.BG)
-            setPadding(RunUi.dp(this@LifeActivity, 14), RunUi.dp(this@LifeActivity, 6), RunUi.dp(this@LifeActivity, 14), RunUi.dp(this@LifeActivity, 6))
-            addView(tabTabs, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 0.9f).apply { marginEnd = RunUi.dp(this@LifeActivity, 5) })
-            addView(tabToday, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginEnd = RunUi.dp(this@LifeActivity, 6) })
-            addView(tabReviews, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1.1f).apply { marginEnd = RunUi.dp(this@LifeActivity, 6) })
-            addView(tabMore, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginEnd = RunUi.dp(this@LifeActivity, 5) })
-            addView(tabFull, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 0.85f))
+            orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL; background = RunUi.rounded(RunUi.CARD, 0f)
+            addView(tabTabs, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT))
+            addView(View(this@LifeActivity).apply { setBackgroundColor(0x22FFFFFF) }, LinearLayout.LayoutParams(RunUi.dp(this@LifeActivity, 1), ViewGroup.LayoutParams.MATCH_PARENT))
+            addView(android.widget.HorizontalScrollView(this@LifeActivity).apply { isHorizontalScrollBarEnabled = false
+                addView(LinearLayout(this@LifeActivity).apply { orientation = LinearLayout.HORIZONTAL
+                    listOf(tabToday, tabReviews, tabMonth, tabYear, tabReview).forEach { addView(it) } }) },
+                LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         }
         val box = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -201,14 +207,17 @@ class LifeActivity : Activity() {
     private fun tabsPage(): LinearLayout {
         val d = { v: Int -> RunUi.dp(this, v) }
         val col = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(d(14), d(8), d(14), d(24)) }
-        col.addView(RunUi.text(this, "Command Center pages", Color.WHITE, 16f, true))
+        col.addView(RunUi.text(this, "☰ More", Color.WHITE, 16f, true))
         col.addView(RunUi.text(this, "The pages from the Command Center's ☰ menu. Tap one to open it.", RunUi.MUTED, 12f).apply { setPadding(0, d(4), 0, d(6)) })
         val items = listOf(
             Triple("📖", "Bible", "bible") to "Bible reading archive, sermon & study notes",
             Triple("🌱", "Habits", "habits2") to "All habits, add / edit, history",
             Triple("📚", "Library", "library") to "Books, audiobooks, finish plan",
             Triple("🧘", "Meditate", "meditate") to "Guided timer, scripture, session log",
-            Triple("❤️", "Wellness", "wellness") to "BP, meds, weight, sleep, movement")
+            Triple("❤️", "Wellness", "wellness") to "BP, meds, weight, sleep, movement",
+            Triple("📈", "Dashboard", "dash") to "Weight, BP, sleep, miles, steps charts",
+            Triple("🗂️", "Tools", "tools") to "Search, Ask AI, BP report, files, settings",
+            Triple("📓", "Full Command Center", "full") to "The whole website, as it looks in Chrome")
         items.chunked(2).forEach { row ->
             col.addView(LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; setPadding(0, d(8), 0, 0)
                 row.forEachIndexed { i, (t, desc) ->
@@ -217,7 +226,7 @@ class LifeActivity : Activity() {
                         addView(RunUi.text(this@LifeActivity, t.first, Color.WHITE, 30f))
                         addView(RunUi.text(this@LifeActivity, t.second, Color.WHITE, 16f, true).apply { setPadding(0, d(6), 0, d(2)) })
                         addView(RunUi.text(this@LifeActivity, desc, RunUi.MUTED, 11f))
-                        setOnClickListener { openSection(t.third, t.first + " " + t.second) }
+                        setOnClickListener { when (t.third) { "tools" -> showPage(4); "full" -> showPage(2); else -> openSection(t.third, t.first + " " + t.second) } }
                     }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { if (i == 0) marginEnd = d(8) })
                 }
                 if (row.size == 1) addView(View(this@LifeActivity), LinearLayout.LayoutParams(0, 1, 1f))
@@ -233,6 +242,7 @@ class LifeActivity : Activity() {
             "meditate" -> listOfNotNull(medHeader?.view, more.meditView)
             "library" -> listOfNotNull(lifeLibrary?.view)
             "habits2" -> listOfNotNull(habitsCard?.view)
+            "dash" -> listOfNotNull(dashCard?.view)
             else -> emptyList()
         }
         if (views.isEmpty()) { openCcPage(name); return }
@@ -243,10 +253,11 @@ class LifeActivity : Activity() {
             addView(RunUi.text(this@LifeActivity, "‹", RunUi.ACCENT, 26f, true).apply { setPadding(d(2), 0, d(12), 0); setOnClickListener { showPage(5) } })
             addView(RunUi.text(this@LifeActivity, title, Color.WHITE, 20f, true)) })
         views.forEach { v -> (v.parent as? ViewGroup)?.removeView(v); sectionCol.addView(v) }
-        sectionCol.addView(RunUi.text(this, "Open the full ${title.substringAfter(' ')} page ›", 0xFFA78BFA.toInt(), 13f, true).apply {
+        if (name != "dash") sectionCol.addView(RunUi.text(this, "Open the full ${title.substringAfter(' ')} page ›", 0xFFA78BFA.toInt(), 13f, true).apply {
             setPadding(0, d(14), 0, 0); setOnClickListener { openCcPage(name) } })
         showPage(6); sectionScroll.scrollTo(0, 0)
         if (name == "habits2") habitsCard?.load()
+        if (name == "dash") dashCard?.load()
         if (name == "meditate") { more.load(); more.loadSounds() }
         if (name == "bible") lifeBible?.load()
         if (name == "library") lifeLibrary?.load(true)
@@ -255,21 +266,37 @@ class LifeActivity : Activity() {
         showPage(2)
         web.evaluateJavascript("(function(){var b=document.getElementById('hm-$name');if(b)b.click();else if(typeof hmSwitch==='function')hmSwitch('$name',{preventDefault:function(){}});window.scrollTo(0,0);})()", null)
     }
+    private fun showReviews(p: Int) {
+        val v = when (p) { 1 -> listOfNotNull(weekTab?.view); 7 -> listOfNotNull(monthCard?.view); 8 -> listOfNotNull(yearCard?.view); else -> listOfNotNull(weekCard?.view) }
+        if (reviewsCol.childCount == v.size && v.withIndex().all { (i, x) -> reviewsCol.getChildAt(i) === x }) return
+        reviewsCol.removeAllViews(); v.forEach { x -> (x.parent as? ViewGroup)?.removeView(x); reviewsCol.addView(x) }
+        reviewsScroll.scrollTo(0, 0)
+    }
     private fun showPage(p: Int) {
         val was = page; page = p; full = p == 2
         if (was == 3 && p != 3) study.hide()
         nativeScroll.visibility = if (p == 0) View.VISIBLE else View.GONE   // the website stays loaded underneath either way
         study.view.visibility = if (p == 3) View.VISIBLE else View.GONE
         bar.visibility = if (p == 3) View.GONE else View.VISIBLE
-        reviewsScroll.visibility = if (p == 1) View.VISIBLE else View.GONE
+        reviewsScroll.visibility = if (p == 1 || p in 7..9) View.VISIBLE else View.GONE
+        if (p == 1 || p in 7..9) showReviews(p)
         moreScroll.visibility = if (p == 4) View.VISIBLE else View.GONE
         tabsScroll.visibility = if (p == 5) View.VISIBLE else View.GONE
         sectionScroll.visibility = if (p == 6) View.VISIBLE else View.GONE
         if (p == 4) more.load()
-        fun style(t: TextView, on: Boolean) { t.background = RunUi.rounded(if (on) RunUi.ACCENT else RunUi.CARD, RunUi.dp(this, 20).toFloat()); t.setTextColor(if (on) Color.BLACK else Color.WHITE) }
-        style(tabToday, p == 0); style(tabReviews, p == 1); style(tabFull, p == 2); style(tabMore, p == 4); style(tabTabs, p == 5 || p == 6)
-        if (p == 0 || p == 1 || p == 6) reload.run()
-        if (p == 1) { weekTab?.load(); monthCard?.load(); yearCard?.load(); dashCard?.load() }
+        // Active tab: white with an accent underline (like the Command Center's); ☰ More gets a lighter block.
+        fun style(t: TextView, on: Boolean) {
+            t.setTextColor(if (on) Color.WHITE else RunUi.MUTED)
+            t.background = if (on) android.graphics.drawable.LayerDrawable(arrayOf(android.graphics.drawable.ColorDrawable(0), android.graphics.drawable.ColorDrawable(RunUi.ACCENT))).apply {
+                setLayerInset(1, 0, 0, 0, 0); setLayerGravity(1, android.view.Gravity.BOTTOM); setLayerHeight(1, RunUi.dp(this@LifeActivity, 3)) } else null
+        }
+        style(tabToday, p == 0); style(tabReviews, p == 1); style(tabMonth, p == 7); style(tabYear, p == 8); style(tabReview, p == 9)
+        val moreOn = p == 2 || p == 4 || p == 5 || p == 6
+        tabTabs.setTextColor(if (moreOn) Color.WHITE else RunUi.MUTED); tabTabs.setBackgroundColor(if (moreOn) 0xFF2A3430.toInt() else 0xFF222B28.toInt())
+        if (p == 0 || p == 1 || p == 6 || p in 7..9) reload.run()
+        if (p == 1) weekTab?.load()
+        if (p == 7) monthCard?.load()
+        if (p == 8) yearCard?.load()
     }
 
     // ── Native sections ──
@@ -292,14 +319,10 @@ class LifeActivity : Activity() {
         medHeader = LifeMeditate(this, web)
         reviewCard = ReviewCard().also { nativeCol.addView(it.view) }
         journalCard = JournalCard().also { nativeCol.addView(it.view) }
-        reviewsCol.removeAllViews()
-        weekTab = WeekTabCard().also { reviewsCol.addView(it.view) }
-        weekCard = WeeklyCard().also { reviewsCol.addView(it.view) }
-        monthCard = PeriodCard("monthly").also { reviewsCol.addView(it.view) }
-        yearCard = PeriodCard("yearly").also { reviewsCol.addView(it.view) }
-        dashCard = LifeDashboard(this, web).also { reviewsCol.addView(it.view) }
-        reviewsCol.addView(RunUi.text(this, "The BP report, habit streak chart and the injury roll-up are in 📓 Full.", RunUi.DIM, 11f).apply { setPadding(0, RunUi.dp(this@LifeActivity, 12), 0, 0) })
-        nativeCol.addView(RunUi.text(this, "Bible Study, Wellness, Meditation, Listening and Habits are in ☰ Tabs. Reviews are in 📊 Reviews. Search, Ask AI, BP report, files and settings are in 🗂️ More.", RunUi.DIM, 11f).apply { setPadding(0, RunUi.dp(this@LifeActivity, 12), 0, 0) })
+        // Weekly · Monthly · Yearly · Review each get their own page (showReviews puts the right card on it).
+        weekTab = WeekTabCard(); weekCard = WeeklyCard(); monthCard = PeriodCard("monthly"); yearCard = PeriodCard("yearly")
+        dashCard = LifeDashboard(this, web)   // ☰ More → Dashboard
+        nativeCol.addView(RunUi.text(this, "Bible, Habits, Library, Meditate, Wellness, Dashboard, Tools (search, Ask AI, BP report, files, settings) and the full Command Center are in ☰ More.", RunUi.DIM, 11f).apply { setPadding(0, RunUi.dp(this@LifeActivity, 12), 0, 0) })
     }
 
     private var tries = 0
