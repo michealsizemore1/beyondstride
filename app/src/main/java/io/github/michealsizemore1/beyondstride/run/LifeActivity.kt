@@ -235,7 +235,7 @@ class LifeActivity : Activity() {
         web.evaluateJavascript("(function(){var b=document.getElementById('hm-$name');if(b)b.click();else if(typeof hmSwitch==='function')hmSwitch('$name',{preventDefault:function(){}});window.scrollTo(0,0);})()", null)
     }
     private fun showReviews(p: Int) {
-        val v = listOfNotNull(weekTab?.view, reviewCard?.view, weekCard?.view)   // 📝 Review: this week's goals, today's review, the weekly review
+        val v = listOfNotNull(weekTab?.view, journalCard?.view, reviewCard?.view, weekCard?.view)   // 📝 Review: goals, journal, today's review, the weekly review
         if (reviewsCol.childCount == v.size && v.withIndex().all { (i, x) -> reviewsCol.getChildAt(i) === x }) return
         reviewsCol.removeAllViews(); v.forEach { x -> (x.parent as? ViewGroup)?.removeView(x); reviewsCol.addView(x) }
         reviewsScroll.scrollTo(0, 0)
@@ -291,11 +291,11 @@ class LifeActivity : Activity() {
         biblePeriods = PeriodTables("Spirituality", "bible", drop = listening)
         libPeriods = PeriodTables("Spirituality", "lib", only = listening)
         reviewCard = ReviewCard()   // on 📝 Review (looking back), not Daily (planning the day)
-        journalCard = JournalCard().also { nativeCol.addView(it.view) }
+        journalCard = JournalCard()   // on 📝 Review, above today's review (AI Fill reads it)
         // Weekly · Monthly · Yearly · Review each get their own page (showReviews puts the right card on it).
         weekTab = WeekTabCard(); weekCard = WeeklyCard(); monthCard = PeriodCard("monthly"); yearCard = PeriodCard("yearly")
         dashCard = LifeDashboard(this, web)   // no longer shown: its charts moved under Wellness
-        nativeCol.addView(RunUi.text(this, "Bible, Habits, Library, Meditate, Wellness, Dashboard, Tools (search, Ask AI, BP report, files, settings) and the full Command Center are in ☰ More.", RunUi.DIM, 11f).apply { setPadding(0, RunUi.dp(this@LifeActivity, 12), 0, 0) })
+        nativeCol.addView(RunUi.text(this, "Bible, Habits, Library, Meditate, Wellness, Tools (search, Ask AI, BP report, files, settings) and the full Command Center are in ☰ More. Your journal and the day's and week's reviews are in 📝 Review.", RunUi.DIM, 11f).apply { setPadding(0, RunUi.dp(this@LifeActivity, 12), 0, 0) })
     }
 
     private var tries = 0
