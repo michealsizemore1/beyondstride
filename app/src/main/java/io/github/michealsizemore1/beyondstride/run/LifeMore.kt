@@ -42,6 +42,8 @@ class LifeMore(private val act: Activity, private val web: WebView, private val 
     val col = LinearLayout(act).apply { orientation = LinearLayout.VERTICAL; setPadding(d(14), 0, d(14), d(24)) }
     private val ui = Handler(Looper.getMainLooper())
     lateinit var meditView: LinearLayout
+    /** 🩺 Blood pressure report — shown in ☰ More → Wellness, with the BP chart (not in Tools). */
+    lateinit var bpView: LinearLayout
     private fun d(v: Int) = RunUi.dp(act, v)
     private fun str(r: String?) = try { JSONTokener(r ?: "").nextValue() as? String ?: "" } catch (e: Exception) { "" }
     private fun js(call: String, cb: (String) -> Unit = {}) = web.evaluateJavascript("window.ccNative&&ccNative.search?$call:null") { cb(it ?: "") }
@@ -59,7 +61,8 @@ class LifeMore(private val act: Activity, private val web: WebView, private val 
     private fun build() {
         col.removeAllViews()
         meditView = meditCard()   // shown in ☰ Tabs → Meditate
-        col.addView(searchCard()); col.addView(askCard()); col.addView(bpCard()); col.addView(filesCard()); col.addView(settingsCard())
+        bpView = bpCard()   // shown in ☰ More → Wellness
+        col.addView(searchCard()); col.addView(askCard()); col.addView(filesCard()); col.addView(settingsCard())
     }
 
     // ── 🔍 Search ──

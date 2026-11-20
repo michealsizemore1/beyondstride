@@ -182,7 +182,7 @@ class LifeActivity : Activity() {
             Triple("🌱", "Habits", "habits2") to "All habits, add / edit, history",
             Triple("📚", "Library", "library") to "Books, audiobooks, finish plan",
             Triple("🧘", "Meditate", "meditate") to "Guided timer, scripture, session log",
-            Triple("❤️", "Wellness", "wellness") to "BP, meds, weight, sleep, movement",
+            Triple("❤️", "Wellness", "wellness") to "BP + report, meds, weight, sleep, movement",
             Triple("📓", "Full Command Center", "full") to "The whole website, as it looks in Chrome")
         items.chunked(2).forEach { row ->
             col.addView(LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; setPadding(0, d(8), 0, 0)
@@ -203,7 +203,7 @@ class LifeActivity : Activity() {
     /** A ☰ Tabs section as BeyondStride screens (Uploads still opens the Command Center's own page). */
     private fun openSection(name: String, title: String) {
         val views: List<View> = when (name) {
-            "wellness" -> listOfNotNull(wellCard?.view, wellPeriods?.view)
+            "wellness" -> listOfNotNull(wellCard?.view, more.bpView, wellPeriods?.view)
             "bible" -> listOfNotNull(lifeBible?.view, biblePeriods?.view)
             "meditate" -> listOfNotNull(medHeader?.view, more.meditView)
             "library" -> listOfNotNull(lifeLibrary?.view, libPeriods?.view)
@@ -294,7 +294,7 @@ class LifeActivity : Activity() {
         // Weekly · Monthly · Yearly · Review each get their own page (showReviews puts the right card on it).
         weekTab = WeekTabCard(); weekCard = WeeklyCard(); monthCard = PeriodCard("monthly"); yearCard = PeriodCard("yearly")
         dashCard = LifeDashboard(this, web)   // no longer shown: its charts moved under Wellness
-        nativeCol.addView(RunUi.text(this, "Bible, Habits, Library, Meditate, Wellness and the full Command Center are in ☰ More; search, Ask AI, BP report, files and settings are in Tools. Your journal and the day's and week's reviews are in 📝 Review.", RunUi.DIM, 11f).apply { setPadding(0, RunUi.dp(this@LifeActivity, 12), 0, 0) })
+        nativeCol.addView(RunUi.text(this, "Bible, Habits, Library, Meditate, Wellness (with the BP report) and the full Command Center are in ☰ More; search, Ask AI, files and settings are in Tools. Your journal and the day's and week's reviews are in 📝 Review.", RunUi.DIM, 11f).apply { setPadding(0, RunUi.dp(this@LifeActivity, 12), 0, 0) })
     }
 
     private var tries = 0
