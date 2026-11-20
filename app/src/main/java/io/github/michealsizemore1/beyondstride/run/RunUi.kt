@@ -138,18 +138,22 @@ object RunUi {
     }
     fun tabbed(act: android.app.Activity, content: View, selected: Int): View {
         keepScroll(act, content)
-        val tabs = listOf<Triple<String, String, Class<*>?>>(
+        // Bar order: Today · Life · Fitness · Nutrition · Activities (each keeps its own TAB_ number for "selected").
+        val showLife = LifeTab.on(act) || selected == TAB_LIFE
+        val ids = listOfNotNull(TAB_TODAY, if (showLife) TAB_LIFE else null, TAB_FITNESS, TAB_NUTRITION, TAB_RUNS)
+        val tabs = listOfNotNull<Triple<String, String, Class<*>?>>(
             Triple("Today", "☀", RunsActivity::class.java),
+            if (showLife) Triple("Life", "📓", LifeActivity::class.java) else null,
             Triple("Fitness", "♥", FitnessActivity::class.java),
             Triple("Nutrition", "🍎", NutritionActivity::class.java),
             Triple("Activities", "≡", ActivitiesActivity::class.java),
-        ) + (if (LifeTab.on(act) || selected == TAB_LIFE) listOf(Triple<String, String, Class<*>?>("Life", "📓", LifeActivity::class.java)) else emptyList())
+        )
         val bar = LinearLayout(act).apply {
             orientation = LinearLayout.HORIZONTAL
             setBackgroundColor(0xFF0E1412.toInt())
             setPadding(dp(act, 6), dp(act, 6), dp(act, 6), dp(act, 6))
             tabs.forEachIndexed { i, (name, glyph, cls) ->
-                val on = i == selected
+                val on = ids[i] == selected
                 addView(LinearLayout(act).apply {
                     orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER
                     addView(text(act, glyph, if (on) Color.BLACK else MUTED, 20f, true).apply {
