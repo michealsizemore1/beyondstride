@@ -126,6 +126,8 @@ object CcEngine {
     // Never the AI key or other secrets. Restoring a backup puts it back the next time the page opens.
     private val lifeBuf = StringBuilder()
     private var lifeBusy = false
+    private var lifeStarted = 0L
+    fun lifeLastTry(ctx: android.content.Context) = lp(ctx).getString("try", "") ?: ""
     private var lifeCb: ((String) -> Unit)? = null
     fun lifeFile(ctx: android.content.Context) = java.io.File(ctx.filesDir, "life_backup.json")
     private fun lp(ctx: android.content.Context) = ctx.getSharedPreferences("lifebackup", 0)
@@ -134,21 +136,23 @@ object CcEngine {
     /** Saves a fresh copy of the Life data (at most every 20 minutes unless [force]). */
     fun exportLife(act: Activity, force: Boolean = false, done: (String) -> Unit = {}) {
         val now = System.currentTimeMillis()
-        if (lifeBusy || (!force && now - lifeAt(act) < 20 * 60_000L)) return
-        if (lp(act).getBoolean("pending", false)) return   // a restore is waiting: don't overwrite the restored copy
-        lifeBusy = true; lifeCb = done; synchronized(lifeBuf) { lifeBuf.setLength(0) }
+        if (!force && now - lifeAt(act) < 20 * 60_000L) return
+        if (lp(act).getBoolean("pending", false)) { done("error: a restore is waiting to be put back first (open Life once)"); return }
+        if (lifeBusy && now - lifeStarted < 90_000L) { val prev = lifeCb; lifeCb = { m -> prev?.invoke(m); done(m) }; return }   // one already running: tell both when it ends
+        lifeBusy = true; lifeStarted = now; lifeCb = done; synchronized(lifeBuf) { lifeBuf.setLength(0) }
         val w = get(act)
         // The page may still be starting (e.g. straight from Settings): wait for it, up to 40 seconds.
         fun attempt(n: Int) {
             w.evaluateJavascript("(window.ccNative&&ccNative.lifeBackup&&typeof load==='function'&&typeof getBooks==='function')?ccNative.lifeBackup():'wait'") { r ->
-                if (r == null || r.contains("wait")) { if (n > 0) w.postDelayed({ attempt(n - 1) }, 1000) else { lifeBusy = false; val cb = lifeCb; lifeCb = null; cb?.invoke("error: the Life tab didn't start") } }
+                if (r == null || r.contains("wait")) { if (n > 0) w.postDelayed({ attempt(n - 1) }, 1000) else { lifeBusy = false; lifeFinished(act.applicationContext, "error: the Life tab didn't start") } }
             }
         }
         attempt(40)
-        w.postDelayed({ if (lifeBusy) { lifeBusy = false; val cb = lifeCb; lifeCb = null; cb?.invoke("error: took too long") } }, 120_000L)
+        w.postDelayed({ if (lifeBusy && System.currentTimeMillis() - lifeStarted >= 115_000L) { lifeBusy = false; lifeFinished(act.applicationContext, "error: took too long (no answer from the Life tab)") } }, 120_000L)
     }
     private fun lifeFinished(ctx: android.content.Context, msg: String) {
         val cb = lifeCb; lifeCb = null
+        lp(ctx).edit().putString("try", java.text.SimpleDateFormat("h:mm a", java.util.Locale.US).format(java.util.Date()) + ": " + msg.take(160)).apply()
         if (msg.startsWith("error")) { lifeBusy = false; cb?.invoke(msg); return }
         val txt = synchronized(lifeBuf) { lifeBuf.toString().also { lifeBuf.setLength(0) } }
         Thread {

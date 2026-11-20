@@ -232,7 +232,7 @@ class RunSettingsActivity : Activity() {
             addView(RunUi.text(ctx, if (at == 0L) "No backup yet" else "Last backup: " +
                 java.text.SimpleDateFormat("EEE, MMM d · h:mm a", java.util.Locale.getDefault()).format(java.util.Date(at)), Color.WHITE, 15f, true))
             Backup.lastInfo(ctx).takeIf { it.isNotBlank() }?.let { addView(RunUi.text(ctx, it, RunUi.MUTED, 12f)) }
-            if (LifeTab.on(ctx)) addView(RunUi.text(ctx, CcEngine.lifeAt(ctx).let { at -> if (at == 0L || !CcEngine.lifeFile(ctx).exists()) "🌱 Life data: not saved yet — tap Back up now"
+            if (LifeTab.on(ctx)) addView(RunUi.text(ctx, CcEngine.lifeAt(ctx).let { at -> if (at == 0L || !CcEngine.lifeFile(ctx).exists()) "🌱 Life data: not saved yet" + (CcEngine.lifeLastTry(ctx).takeIf { it.isNotBlank() }?.let { " · last try $it" } ?: " — tap Back up now")
                 else "🌱 Life data saved " + java.text.SimpleDateFormat("EEE, MMM d · h:mm a", java.util.Locale.getDefault()).format(java.util.Date(at)) + " · " + CcEngine.lifeInfo(ctx) }, 0xFF4ADE80.toInt(), 12f).apply { setPadding(0, dp(2), 0, 0) })
             addView(RunUi.text(ctx, "Runs, workouts & plan, courses, settings, zones, LiveTrack, morning checks, sleep, personal bests, your nutrition history (with food photos, favorites and notes), Activities and training plans, and the 🌱 Life tab (habits, journal, reviews, schedule, calendar, books with covers and documents, Bible studies, files) — in one file. Your AI keys are never included. " +
                 "Save it to Google Drive so it's safe if the phone is lost.", RunUi.DIM, 12f).apply { setPadding(0, dp(6), 0, 0) })
@@ -532,7 +532,7 @@ class RunSettingsActivity : Activity() {
         CcEngine.exportLife(this, force = true) { msg -> runOnUiThread {
             if (msg.startsWith("error")) Toast.makeText(this, "Couldn't save the Life data ($msg) — backing up the rest", Toast.LENGTH_LONG).show()
             fin() } }
-        android.os.Handler(mainLooper).postDelayed({ fin() }, 60_000L)
+        android.os.Handler(mainLooper).postDelayed({ fin() }, 100_000L)
     }
     private fun syncWeights() {
         val app = applicationContext
