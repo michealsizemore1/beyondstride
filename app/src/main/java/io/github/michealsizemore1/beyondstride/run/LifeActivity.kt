@@ -147,11 +147,15 @@ class LifeActivity : Activity() {
     }
 
     private var tries = 0
+    private var refreshed = false
     private val reload: Runnable = Runnable {
         web.evaluateJavascript("(window.ccNative&&typeof load==='function')?(ccNative.all?ccNative.all():ccNative.focus()):null") { r ->
             val json = try { (JSONTokener(r).nextValue() as? String)?.let { JSONObject(it) } } catch (e: Exception) { null }
             if (json == null) { focusCard?.loading(); if (tries++ < 60) ui.postDelayed(reload, 700) ; return@evaluateJavascript }
             tries = 0; focusCard?.fill(json); checksCard?.fill(json)
+            // An older copy of the Command Center is still cached (the website updates before this screen can use the
+            // new parts): fetch the newest once.
+            if (!json.has("checks") && !refreshed) { refreshed = true; web.clearCache(true); web.reload(); ui.postDelayed(reload, 2500) }
         }
     }
     private fun js(call: String) = web.evaluateJavascript("window.ccNative&&$call", null)
@@ -180,7 +184,7 @@ class LifeActivity : Activity() {
         private fun icon(g: String) = when { g.contains("Bible") -> "📖"; g.contains("Meditation") -> "🧘"; g.contains("Listening") -> ""; g.contains("Wellness") -> "💚"; g.contains("Planning") -> "📝"; else -> "•" }
         private fun nice(l: String) = l.replaceFirstChar { it.uppercase() }.replace(Regex("^Goal\\s+"), "")
         fun fill(j: JSONObject) {
-            val arr = j.optJSONArray("checks") ?: return
+            val arr = j.optJSONArray("checks") ?: run { summary.text = "Getting the newest Command Center…"; return }
             val items = (0 until arr.length()).map { arr.getJSONObject(it) }
             val n = { st: String -> items.count { it.optString("state") == st } }
             summary.text = "${n("green")} done · ${n("purple")} partly · ${n("red")} not done · ${n("black")} N/A · ${n("")} not marked"
