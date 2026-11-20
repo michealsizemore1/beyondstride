@@ -275,7 +275,7 @@ class LifeActivity : Activity() {
         calendar = LifeCalendar(this, web).also { nativeCol.addView(it.view) }
         focusCard = FocusCard().also { nativeCol.addView(it.view) }
         scheduleCard = ScheduleCard().also { nativeCol.addView(it.view) }
-        checksCard = ChecksCard("✅ Daily Checks") { g -> !g.contains("Bible") && !g.contains("Meditation") && !g.contains("Listening") && !g.contains("Wellness") }.also { nativeCol.addView(it.view) }
+        // (The old "Daily Checks · Planning & Review" card is gone: those two checks are hidden leftovers in the Command Center.)
         // These live in their own sections (☰ Tabs), like the Command Center's ☰ menu pages.
         wellCard = WellnessCard()
         bibleCard = BibleCard()
