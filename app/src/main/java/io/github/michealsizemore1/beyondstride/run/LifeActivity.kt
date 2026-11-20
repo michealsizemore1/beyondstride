@@ -617,7 +617,7 @@ class LifeActivity : Activity() {
                                 val col = if (pill != null) Color.WHITE else css(o.optString("c"))?.let { lift(it) } ?: base
                                 sb.setSpan(android.text.style.ForegroundColorSpan(col), st, sb.length, 0)
                                 if (o.optBoolean("b") || k == 0 || total) sb.setSpan(android.text.style.StyleSpan(android.graphics.Typeface.BOLD), st, sb.length, 0)
-                                if (o.optBoolean("s")) sb.setSpan(android.text.style.RelativeSizeSpan(0.82f), st, sb.length, 0) }
+                            }
                             val tv = RunUi.text(this@LifeActivity, "", base, 12f).apply { text = sb; isSingleLine = true }
                             if (pill != null) { tv.background = RunUi.rounded(css(pill.optString("bg")) ?: 0xFFEF4444.toInt(), d(10).toFloat()); tv.setPadding(d(8), d(1), d(8), d(1))
                                 addView(tv, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = d(2) }) }
@@ -711,7 +711,7 @@ class LifeActivity : Activity() {
         }
         private fun fill(j: JSONObject) {
             label.text = j.optString("label"); body.removeAllViews()
-            j.optString("heat").takeIf { it.isNotEmpty() }?.let { heat(it) }
+            // (The habit completion calendar was removed from BeyondStride's Monthly page at Micheal's request; still on the website.)
             val secs = j.optJSONArray("sections") ?: return
             for (i in 0 until secs.length()) { val sec = secs.getJSONObject(i)
                 body.addView(RunUi.text(this@LifeActivity, sec.optString("title"), RunUi.ACCENT, 13f, true).apply { setPadding(0, d(12), 0, d(4)) })
