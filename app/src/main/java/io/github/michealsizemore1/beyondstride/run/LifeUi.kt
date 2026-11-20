@@ -61,5 +61,33 @@ object LifeUi {
         }
     }
     fun setIfIdle(e: EditText, v: String) { if (!e.hasFocus() && e.text.toString() != v) e.setText(v) }
+
+    // ── Images: covers from the web (cached), and photos turned into small JPEG data URLs like the Command Center makes. ──
+    private val imgCache = android.util.LruCache<String, android.graphics.Bitmap>(40)
+    fun loadImage(url: String, into: android.widget.ImageView) {
+        into.tag = url
+        imgCache.get(url)?.let { into.setImageBitmap(it); return }
+        if (url.startsWith("data:")) {
+            try { val b = android.util.Base64.decode(url.substringAfter(","), android.util.Base64.DEFAULT); android.graphics.BitmapFactory.decodeByteArray(b, 0, b.size)?.let { imgCache.put(url, it); into.setImageBitmap(it) } } catch (e: Exception) {}
+            return
+        }
+        Thread {
+            val bm = try { (java.net.URL(url).openConnection() as java.net.HttpURLConnection).run { connectTimeout = 8000; readTimeout = 10000; instanceFollowRedirects = true
+                inputStream.use { android.graphics.BitmapFactory.decodeStream(it) } } } catch (e: Exception) { null }
+            if (bm != null) { imgCache.put(url, bm); ui.post { if (into.tag == url) into.setImageBitmap(bm) } }
+        }.start()
+    }
+    fun photoDataUrl(ctx: android.content.Context, uri: android.net.Uri, maxW: Int = 160, maxH: Int = 220): String? = try {
+        val src = ctx.contentResolver.openInputStream(uri)!!.use { android.graphics.BitmapFactory.decodeStream(it) }
+        val sc = minOf(maxW.toFloat() / src.width, maxH.toFloat() / src.height, 1f)
+        val bm = android.graphics.Bitmap.createScaledBitmap(src, (src.width * sc).toInt().coerceAtLeast(1), (src.height * sc).toInt().coerceAtLeast(1), true)
+        val out = java.io.ByteArrayOutputStream(); bm.compress(android.graphics.Bitmap.CompressFormat.JPEG, 85, out)
+        "data:image/jpeg;base64," + android.util.Base64.encodeToString(out.toByteArray(), android.util.Base64.NO_WRAP)
+    } catch (e: Exception) { null }
+    /** Poll [js] (a call returning '' until ready) every 700 ms, up to [tries] times. */
+    fun poll(web: android.webkit.WebView, js: String, tries: Int = 25, done: (String?) -> Unit) {
+        web.evaluateJavascript("window.ccNative?($js):''") { r -> val v = str(r)
+            if (v.isNotEmpty()) done(v) else if (tries > 1) ui.postDelayed({ poll(web, js, tries - 1, done) }, 700) else done(null) }
+    }
     fun lp(top: Int = 0) = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = top }
 }

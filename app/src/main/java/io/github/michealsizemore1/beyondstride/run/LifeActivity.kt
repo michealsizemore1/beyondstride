@@ -63,6 +63,7 @@ class LifeActivity : Activity() {
     private var libCard: LibraryCard? = null
     private var habitsCard: LifeHabits? = null
     private var lifeBible: LifeBible? = null
+    private var pickCb: ((Uri) -> Unit)? = null
     private var lifeLibrary: LifeLibrary? = null
     private var medHeader: LifeMeditate? = null
     private var bibleChecks: ChecksCard? = null
@@ -315,7 +316,8 @@ class LifeActivity : Activity() {
         libCard = LibraryCard()
         habitsCard = LifeHabits(this, web, { showPage(2) }, { })
         lifeBible = LifeBible(this, web, { showPage(2) }, { bibleCard?.go?.performClick() }, { needKey() })
-        lifeLibrary = LifeLibrary(this, web) { showPage(2) }
+        lifeLibrary = LifeLibrary(this, web, { showPage(2) }) { type, cb -> pickCb = cb
+            try { startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType(type), 43) } catch (e: Exception) { pickCb = null } }
         medHeader = LifeMeditate(this, web)
         reviewCard = ReviewCard().also { nativeCol.addView(it.view) }
         journalCard = JournalCard().also { nativeCol.addView(it.view) }
@@ -1112,6 +1114,7 @@ class LifeActivity : Activity() {
 
     @Deprecated("Deprecated in Java")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        if (requestCode == 43) { val cb = pickCb; pickCb = null; if (resultCode == RESULT_OK) data?.data?.let { cb?.invoke(it) }; return }
         if (requestCode == LifeMore.PICK) { if (resultCode == RESULT_OK) data?.data?.let { more.onPicked(it) }; return }
         if (requestCode == 41) { fileCb?.onReceiveValue(WebChromeClient.FileChooserParams.parseResult(resultCode, data)); fileCb = null; return }
         @Suppress("DEPRECATION") super.onActivityResult(requestCode, resultCode, data)
@@ -1122,7 +1125,7 @@ class LifeActivity : Activity() {
     override fun onBackPressed() {
         if (full && web.canGoBack()) web.goBack()
         else if (page == 6) showPage(5)
-        else if (full || page in listOf(1, 3, 4, 5)) show(false)
+        else if (full || page in listOf(1, 3, 4, 5, 7, 8, 9)) show(false)
         else @Suppress("DEPRECATION") super.onBackPressed()
     }
 

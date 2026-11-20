@@ -123,7 +123,86 @@ class LifeBible(private val act: Activity, private val web: WebView, private val
         btns += "📚 ${b.optString("planLabel").ifBlank { "Plan" }}" to "plan"; btns += "🗂️ Journal" to "journal"
         btns.chunked(3).forEach { row -> heroRow.addView(LinearLayout(act).apply { orientation = LinearLayout.HORIZONTAL; setPadding(0, 0, 0, d(6))
             row.forEach { (t, a) -> addView(LifeUi.pill(act, t, 0x29FFFFFF, Color.WHITE, 12f) {
-                web.evaluateJavascript("window.ccNative&&ccNative.bibleHero(${JSONObject.quote(a)})") { openFull() } }.apply { setPadding(d(11), d(7), d(11), d(7)) },
+                heroAction(a) }.apply { setPadding(d(11), d(7), d(11), d(7)) },
                 LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { marginEnd = d(6) }) } }) }
     }
+    // ── 📅 Day · ✏️ Fix reading · 📚 Plan · 🗂️ Journal — natively (same saved settings as the Command Center card). ──
+    private fun msg(m: String) = android.app.AlertDialog.Builder(act).setMessage(m).setPositiveButton("OK", null).show()
+    private fun bs(call: String, done: (String) -> Unit) = web.evaluateJavascript("(function(){try{var r=bibleStudy.$call;return typeof r==='string'?r:JSON.stringify(r);}catch(e){return '';}})()") { done(LifeUi.str(it)) }
+    private fun after(r: String) { if (r == "ok") load() else if (r.isNotBlank()) msg(r) }
+    private fun heroAction(a: String) = bs("nCard()") { r ->
+        val c = try { JSONObject(r) } catch (e: Exception) { msg("The Bible Study isn't ready yet — try again in a moment."); return@bs }
+        when (a) {
+            "day" -> {
+                val (m, dd) = c.optString("day", "1/1").split("/").map { it.toIntOrNull() ?: 1 }.let { it[0] to it.getOrElse(1) { 1 } }
+                android.app.DatePickerDialog(act, { _, _, mo, day -> bs("nDay(${JSONObject.quote("${mo + 1}/$day")})") { after(it) } }, java.time.LocalDate.now().year, m - 1, dd).apply {
+                    setTitle("Which One Year Chronological day are you on?"); setMessage("Use this if you're behind or ahead.") }.show()
+            }
+            "fix" -> {
+                val e = LifeUi.field(act, "e.g. Acts 17:16-18:3; 1 Thessalonians 1:1-5:11", 2).apply { setText(c.optString("reading")) }
+                val col = LinearLayout(act).apply { orientation = LinearLayout.VERTICAL; setPadding(d(20), d(8), d(20), 0)
+                    addView(RunUi.text(act, "Today's reading in your One Year Chronological Bible (${c.optString("day")}). Separate passages with \";\".", RunUi.MUTED, 12f))
+                    addView(e, LifeUi.lp(d(8)))
+                    addView(RunUi.text(act, "Built-in list: ${c.optString("builtin").ifBlank { "—" }}", RunUi.DIM, 11f).apply { setPadding(0, d(6), 0, 0) }) }
+                android.app.AlertDialog.Builder(act).setTitle("✏️ Fix reading").setView(col)
+                    .setPositiveButton("Save") { _, _ -> bs("nFix(${JSONObject.quote(e.text.toString())})") { after(it) } }
+                    .setNeutralButton("Use built-in") { _, _ -> bs("nFix('')") { after(it) } }
+                    .setNegativeButton("Cancel", null).show()
+            }
+            "plan" -> {
+                val p = c.optJSONObject("plan") ?: JSONObject(); var type = p.optString("type", "oneyear")
+                val books = c.optJSONArray("books") ?: org.json.JSONArray(); val names = (0 until books.length()).map { books.getJSONArray(it).optString(0) }
+                val col = LinearLayout(act).apply { orientation = LinearLayout.VERTICAL; setPadding(d(20), d(8), d(20), 0) }
+                val group = android.widget.RadioGroup(act)
+                val opts = listOf("oneyear" to "One Year Chronological Bible (follows each day's reading)", "book" to "One book, chapter by chapter", "verse" to "Your Daily Bread verse")
+                val bookWrap = LinearLayout(act).apply { orientation = LinearLayout.VERTICAL; setPadding(d(8), d(4), 0, 0) }
+                val bookSp = android.widget.Spinner(act).apply { adapter = android.widget.ArrayAdapter(act, android.R.layout.simple_spinner_dropdown_item, names)
+                    setSelection(names.indexOf(p.optString("book", "John")).let { if (it < 0) names.indexOf("John").coerceAtLeast(0) else it }) }
+                val ch = LifeUi.field(act, "Start at chapter").apply { inputType = android.text.InputType.TYPE_CLASS_NUMBER; setText(p.optInt("chapter", 1).toString()) }
+                bookWrap.addView(RunUi.text(act, "Which book?", RunUi.MUTED, 12f)); bookWrap.addView(bookSp); bookWrap.addView(RunUi.text(act, "Chapter", RunUi.MUTED, 12f).apply { setPadding(0, d(6), 0, 0) }); bookWrap.addView(ch)
+                opts.forEachIndexed { i, (k, l) -> group.addView(android.widget.RadioButton(act).apply { id = 100 + i; text = l; isChecked = k == type }) }
+                bookWrap.visibility = if (type == "book") View.VISIBLE else View.GONE
+                group.setOnCheckedChangeListener { _, idc -> type = opts[idc - 100].first; bookWrap.visibility = if (type == "book") View.VISIBLE else View.GONE }
+                col.addView(group); col.addView(bookWrap)
+                android.app.AlertDialog.Builder(act).setTitle("📚 Study plan").setView(android.widget.ScrollView(act).apply { addView(col) })
+                    .setPositiveButton("Save") { _, _ -> bs("nPlan(${JSONObject.quote(type)},${JSONObject.quote(names.getOrElse(bookSp.selectedItemPosition) { "John" })},${ch.text.toString().toIntOrNull() ?: 1})") { after(it) } }
+                    .setNegativeButton("Cancel", null).show()
+            }
+            else -> journal()
+        }
+    }
+    private fun journal() = bs("nJournal()") { r ->
+        val items = try { org.json.JSONArray(r) } catch (e: Exception) { org.json.JSONArray() }
+        val list = LinearLayout(act).apply { orientation = LinearLayout.VERTICAL }
+        val open = HashSet<Int>()
+        val search = LifeUi.field(act, "🔍 Search your studies…")
+        fun draw() {
+            list.removeAllViews(); val q = search.text.toString().lowercase()
+            var shown = 0
+            for (i in 0 until items.length()) { val o = items.getJSONObject(i); if (q.isNotBlank() && !o.toString().lowercase().contains(q)) continue; shown++
+                val date = try { java.time.LocalDate.parse(o.optString("date")).format(java.time.format.DateTimeFormatter.ofPattern("EEE, MMM d, yyyy", java.util.Locale.US)) } catch (e: Exception) { o.optString("date") }
+                list.addView(LinearLayout(act).apply { orientation = LinearLayout.VERTICAL; layoutParams = LifeUi.lp(d(8))
+                    background = RunUi.rounded(0xFF241B3A.toInt(), d(10).toFloat()); setPadding(d(12), d(10), d(12), d(10))
+                    addView(RunUi.text(act, "$date · ${o.optString("label").ifBlank { o.optString("ref") }}", Color.WHITE, 14f, true))
+                    if (o.optString("theme").isNotBlank()) addView(RunUi.text(act, o.optString("theme"), RunUi.MUTED, 12f))
+                    if (i in open) {
+                        addView(RunUi.text(act, o.optString("ref"), RunUi.DIM, 11f).apply { setPadding(0, d(4), 0, 0) })
+                        fun sec(t: String, v: String) { if (v.isBlank()) return; addView(RunUi.text(act, t, HEAD, 13f, true).apply { setPadding(0, d(8), 0, d(2)) }); addView(RunUi.text(act, v, Color.WHITE, 13f)) }
+                        fun arr(k: String) = o.optJSONArray(k)?.let { a -> (0 until a.length()).joinToString("\n") { a.optString(it) } } ?: ""
+                        sec("S — Scripture", o.optString("s")); sec("O — Observation", arr("o")); sec("A — Application", arr("a")); sec("P — Prayer", o.optString("p"))
+                    }
+                    setOnClickListener { if (i in open) open.remove(i) else open.add(i); draw() } })
+            }
+            if (shown == 0) list.addView(RunUi.text(act, if (items.length() == 0) "No studies yet." else "No studies match.", RunUi.MUTED, 13f).apply { setPadding(0, d(20), 0, d(20)) })
+        }
+        search.addTextChangedListener(object : android.text.TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+            override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+            override fun afterTextChanged(s: android.text.Editable?) { draw() } })
+        draw()
+        val col = LinearLayout(act).apply { orientation = LinearLayout.VERTICAL; setPadding(d(16), d(8), d(16), d(8)); addView(search); addView(list) }
+        android.app.AlertDialog.Builder(act).setTitle("🗂️ Study Journal · ${items.length()} studies").setView(android.widget.ScrollView(act).apply { addView(col) })
+            .setPositiveButton("Close", null).show()
+    }
+
 }

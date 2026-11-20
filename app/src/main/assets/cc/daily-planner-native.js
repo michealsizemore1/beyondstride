@@ -268,7 +268,7 @@
       weekStart:h2Key(ws),habits:habits,heat:heat,heatStart:h2Key(hs)};
   }
   window.ccNative={
-    version:16,
+    version:17,
     biblePage:function(){return JSON.stringify(biblePage());},
     setVerse:function(v){goRealDay();var el=document.getElementById('spDailyBreadText');if(!el)return false;el.value=String(v||'');if(el.oninput)el.oninput.call(el);else{localStorage.setItem('medit_scripture',el.value);save();}return true;},
     bibleAI:function(kind){goRealDay();try{if(!journalAIKey())return 'nokey';}catch(e){return 'nokey';}
@@ -299,6 +299,35 @@
     planDelete:function(){localStorage.removeItem('audiobook_finish_plan');try{renderAudiobookFinishPlan();}catch(e){}return true;},
     meditSound:function(type){try{meditToggleSound(type);if(window._meditAudioCtx&&_meditAudioCtx.resume)_meditAudioCtx.resume();}catch(e){return false;}return true;},
     meditSounds:function(){var o={};try{['rain','ocean','forest'].forEach(function(t){o[t]=!!(_meditAudioNodes&&_meditAudioNodes[t]);});}catch(e){}return JSON.stringify(o);},
+    // 🌱 Habit form (Create / Edit) without the page: same fields and rules as h2SaveHabit.
+    habitGet:function(id){try{var h=h2State().habits.find(function(x){return x.id===id;});return h?JSON.stringify(h):'';}catch(e){return '';}},
+    habitSave:function(json){var f;try{f=JSON.parse(json);}catch(e){return 'bad';}var name=String(f.name||'').trim();if(!name)return 'Please enter a habit name.';
+      var state=h2State(),id=f.id||'';var habit={id:id||('h2-'+Date.now()),name:name,category:f.category||'Health',color:f.color||'#0a3161',type:['check','count','duration'].indexOf(f.type)>=0?f.type:'check',
+        target:Math.max(1,Number(f.target)||1),schedule:['daily','weekdays','custom','weekly'].indexOf(f.schedule)>=0?f.schedule:'daily',weeklyTarget:Math.max(1,Math.min(7,Number(f.weeklyTarget)||3)),
+        days:(f.days||[]).map(Number).filter(function(d){return d>=0&&d<=6;}),why:String(f.why||'').trim(),cue:String(f.cue||'').trim(),minimum:String(f.minimum||'').trim(),created:new Date().toISOString()};
+      if(id){var i=state.habits.findIndex(function(h){return h.id===id;});if(i<0)return 'That habit is gone.';habit.created=state.habits[i].created||habit.created;habit.autoSource=state.habits[i].autoSource||'';if(state.habits[i].color&&!f.color)habit.color=state.habits[i].color;state.habits[i]=habit;}
+      else state.habits.push(habit);
+      if(!h2SaveState(state))return 'Storage is full.';try{h2Render();}catch(e){}return 'ok';},
+    // 📚 Book covers: search online, apply, set from a photo, remove (stored where the page keeps them).
+    coverSearch:function(id){window._bsCovRes=window._bsCovRes||{};var k=String(id);_bsCovRes[k]=null;var b=getBooks().find(function(x){return String(x.id)===k;});if(!b)return false;
+      _findCover(b.title,b.author,function(c){_bsCovRes[k]=(c||[]).map(function(x){return {url:x.url,source:x.source||''};});});return true;},
+    coverResults:function(id){var r=(window._bsCovRes||{})[String(id)];return r==null?'':JSON.stringify(r);},
+    coverApply:function(id,url){var b=getBooks().find(function(x){return String(x.id)===String(id);});if(!b)return false;try{applyBookCover(b.id,url);}catch(e){return false;}if(window._bsCov)delete _bsCov[String(id)];return true;},
+    coverSet:function(id,dataUrl){var b=getBooks().find(function(x){return String(x.id)===String(id);});if(!b||String(dataUrl).indexOf('data:image')!==0)return false;
+      setBookCover(b.id,dataUrl).then(function(){try{renderLibrary();}catch(e){}});if(window._bsCov)_bsCov[String(id)]=dataUrl;return true;},
+    coverDelete:function(id){var b=getBooks().find(function(x){return String(x.id)===String(id);});if(!b)return false;deleteBookCover(b.id).then(function(){try{renderLibrary();}catch(e){}});if(window._bsCov)_bsCov[String(id)]='';return true;},
+    // 📁 Book documents: list (async → poll docsResult), open (hands the file to BeyondStride), add in parts, delete.
+    docsLoad:function(id){window._bsDocs=window._bsDocs||{};var k=String(id),b=getBooks().find(function(x){return String(x.id)===k;});if(!b)return false;
+      getBookDocuments(b.id).then(function(ds){_bsDocs[k]=ds.map(function(d){return {id:d.id,name:d.name||'document',type:d.type||'',size:d.size||0,addedAt:d.addedAt||''};});});return true;},
+    docsResult:function(id){var r=(window._bsDocs||{})[String(id)];return r==null?'':JSON.stringify(r);},
+    docOpen:function(docId){getAllBookDocuments().then(function(all){var d=all.find(function(x){return String(x.id)===String(docId);});if(!d||!d.dataUrl)return;
+      var u=String(d.dataUrl),i=u.indexOf(',');try{BSNative.file(d.name||'document',d.type||'application/octet-stream',u.slice(i+1));}catch(e){}});return true;},
+    docDelete:function(docId,id){var b=getBooks().find(function(x){return String(x.id)===String(id);});deleteBookDocument(Number(docId),b?b.id:id).catch(function(){});if(window._bsDocs)delete _bsDocs[String(id)];return true;},
+    docStart:function(){window.__bsDoc=[];return true;},
+    docPart:function(b64){window.__bsDoc.push(b64);return true;},
+    docEnd:function(id,name,type,size){var b=getBooks().find(function(x){return String(x.id)===String(id);});if(!b)return false;var data='data:'+(type||'application/octet-stream')+';base64,'+(window.__bsDoc||[]).join('');window.__bsDoc=null;
+      window._bsDocs=window._bsDocs||{};delete _bsDocs[String(id)];
+      putBookDocument({bookId:b.id,name:name,type:type,size:Number(size)||0,dataUrl:data,addedAt:new Date().toISOString()}).then(function(){ccNative.docsLoad(id);});return true;},
     habitsPage:function(off){return JSON.stringify(habitsPage(off));},
     /** On the Habits page's day: log / adjust / move / delete. */
     habitLogOn:function(off,id,status){try{var d=new Date();d.setDate(d.getDate()+(Number(off)||0));h2ViewDate=d;h2SetLog(id,status);}catch(e){return false;}return true;},

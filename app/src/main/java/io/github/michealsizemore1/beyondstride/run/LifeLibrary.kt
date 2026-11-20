@@ -28,7 +28,7 @@ import java.util.Locale
  * Date (schedule + progress), 🎧 Today's Listening, sort / Expand / Collapse / + Add Book, and each book with its cover,
  * stars, notes, ✏️ Edit, ✕ Delete, 📝 Reading Notes (+ Add Note) and 📁 Documents.
  */
-class LifeLibrary(private val act: Activity, private val web: WebView, private val openFull: () -> Unit) {
+class LifeLibrary(private val act: Activity, private val web: WebView, private val openFull: () -> Unit, private val pick: (String, (android.net.Uri) -> Unit) -> Unit) {
     val view = LinearLayout(act).apply { orientation = LinearLayout.VERTICAL }
     private fun d(v: Int) = RunUi.dp(act, v)
     private val BLUE = 0xFF8B9CF6.toInt(); private val GREEN = 0xFF27AE60.toInt()
@@ -179,10 +179,9 @@ class LifeLibrary(private val act: Activity, private val web: WebView, private v
         val id = b.optString("id"); val open = id in expanded
         val c = RunUi.card(act).apply { layoutParams = LifeUi.lp(d(10)); setPadding(d(14), d(12), d(14), d(12)) }
         c.addView(LinearLayout(act).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
-            covers.optString(id).takeIf { it.startsWith("data:") }?.let { url ->
-                try { val bytes = Base64.decode(url.substringAfter(","), Base64.DEFAULT); val bm = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-                    if (bm != null) addView(ImageView(act).apply { setImageBitmap(bm); scaleType = ImageView.ScaleType.CENTER_CROP; clipToOutline = true
-                        background = RunUi.rounded(0xFF26302C.toInt(), d(5).toFloat()) }, LinearLayout.LayoutParams(d(44), d(60)).apply { marginEnd = d(10) }) } catch (e: Exception) {} }
+            covers.optString(id).takeIf { it.startsWith("data:") || it.startsWith("http") }?.let { url ->
+                addView(ImageView(act).apply { scaleType = ImageView.ScaleType.CENTER_CROP; clipToOutline = true
+                    background = RunUi.rounded(0xFF26302C.toInt(), d(5).toFloat()); LifeUi.loadImage(url, this) }, LinearLayout.LayoutParams(d(44), d(60)).apply { marginEnd = d(10) }) }
             addView(LinearLayout(act).apply { orientation = LinearLayout.VERTICAL
                 addView(RunUi.text(act, b.optString("title"), Color.WHITE, 15f, true))
                 if (b.optString("author").isNotBlank()) addView(RunUi.text(act, "by " + b.optString("author"), RunUi.MUTED, 12f).apply { setTypeface(typeface, Typeface.ITALIC) })
@@ -195,7 +194,7 @@ class LifeLibrary(private val act: Activity, private val web: WebView, private v
         if (!open) return c
         c.addView(LinearLayout(act).apply { orientation = LinearLayout.HORIZONTAL; setPadding(0, d(10), 0, d(4))
             fun b(t: String, bg: Int, fg: Int, on: () -> Unit) = addView(LifeUi.pill(act, t, bg, fg, 11f, on).apply { setPadding(d(10), d(5), d(10), d(5)) }, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { marginEnd = d(6) })
-            b("🖼️ Cover", 0xFF4F46E5.toInt(), Color.WHITE) { web.evaluateJavascript("window.ccNative&&ccNative.bookOpen(${JSONObject.quote(id)})") { openFull() } }
+            b("🖼️ Cover", 0xFF4F46E5.toInt(), Color.WHITE) { coverDialog(b) }
             b("✏️ Edit", 0xFF26302C.toInt(), Color.WHITE) { bookDialog(b) }
             b("✕ Delete", 0xFF3A1F22.toInt(), 0xFFF87171.toInt()) {
                 AlertDialog.Builder(act).setMessage("Remove this book from your library?").setPositiveButton("Remove") { _, _ -> web.evaluateJavascript("window.ccNative&&ccNative.bookDelete(${JSONObject.quote(id)})") { load() } }.setNegativeButton("Keep", null).show() } })
@@ -218,10 +217,84 @@ class LifeLibrary(private val act: Activity, private val web: WebView, private v
                     n.optString(k).takeIf { it.isNotBlank() }?.let { addView(RunUi.text(act, l, BLUE, 11f, true).apply { setPadding(0, d(6), 0, 0) }); addView(RunUi.text(act, it, Color.WHITE, 13f)) } }
             })
         }
+        val dOpen = id in docsOpen
         c.addView(LinearLayout(act).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(0, d(10), 0, 0)
-            addView(RunUi.text(act, "📁 Documents", GREEN, 13f, true), LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
-            addView(LifeUi.pill(act, "+ Upload", GREEN, Color.WHITE, 11f) { web.evaluateJavascript("window.ccNative&&ccNative.bookOpen(${JSONObject.quote(id)})") { openFull() } }.apply { setPadding(d(10), d(4), d(10), d(4)) }) })
+            addView(RunUi.text(act, "📁 Documents" + (docs[id]?.let { if (it.length() > 0) " (${it.length()})" else "" } ?: ""), GREEN, 13f, true).apply {
+                setOnClickListener { if (dOpen) docsOpen.remove(id) else { docsOpen.add(id); loadDocs(id) }; draw() } }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
+            addView(LifeUi.pill(act, "+ Upload", GREEN, Color.WHITE, 11f) { uploadDoc(id) }.apply { setPadding(d(10), d(4), d(10), d(4)) }) })
+        if (dOpen) {
+            val list = docs[id]
+            if (list == null) c.addView(RunUi.text(act, "Loading…", RunUi.DIM, 12f).apply { setPadding(0, d(4), 0, 0) })
+            else if (list.length() == 0) c.addView(RunUi.text(act, "No documents yet.", RunUi.DIM, 12f).apply { setPadding(0, d(4), 0, 0) })
+            else for (i in 0 until list.length()) { val doc = list.getJSONObject(i)
+                c.addView(LinearLayout(act).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; layoutParams = LifeUi.lp(d(6))
+                    background = RunUi.rounded(0xFF1E2A24.toInt(), d(8).toFloat()); setPadding(d(10), d(8), d(10), d(8))
+                    addView(RunUi.text(act, "📄 " + doc.optString("name"), Color.WHITE, 13f).apply { setOnClickListener { web.evaluateJavascript("window.ccNative&&ccNative.docOpen(${doc.optLong("id")})", null) } }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
+                    addView(RunUi.text(act, size(doc.optLong("size")), RunUi.DIM, 11f).apply { setPadding(d(6), 0, d(10), 0) })
+                    addView(RunUi.text(act, "✕", 0xFFF87171.toInt(), 14f).apply { setOnClickListener {
+                        AlertDialog.Builder(act).setMessage("Delete \"${doc.optString("name")}\"?").setPositiveButton("Delete") { _, _ ->
+                            web.evaluateJavascript("window.ccNative&&ccNative.docDelete(${doc.optLong("id")},${JSONObject.quote(id)})") { LifeUi.ui.postDelayed({ loadDocs(id) }, 400) } }.setNegativeButton("Keep", null).show() } }) })
+            }
+        }
         return c
+    }
+    private val docsOpen = HashSet<String>(); private val docs = HashMap<String, JSONArray>()
+    private fun size(n: Long) = if (n >= 1_048_576) String.format(Locale.US, "%.1f MB", n / 1_048_576.0) else if (n >= 1024) "${n / 1024} KB" else "$n B"
+    private fun loadDocs(id: String) {
+        web.evaluateJavascript("window.ccNative&&ccNative.docsLoad(${JSONObject.quote(id)})") {
+            LifeUi.poll(web, "ccNative.docsResult(${JSONObject.quote(id)})", 15) { r -> docs[id] = try { JSONArray(r ?: "[]") } catch (e: Exception) { JSONArray() }; draw() } }
+    }
+    private fun uploadDoc(id: String) = pick("*/*") { uri ->
+        Thread {
+            try {
+                var name = "document"; var len = 0L
+                act.contentResolver.query(uri, null, null, null, null)?.use { cu -> if (cu.moveToFirst()) {
+                    cu.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME).takeIf { it >= 0 }?.let { name = cu.getString(it) ?: name }
+                    cu.getColumnIndex(android.provider.OpenableColumns.SIZE).takeIf { it >= 0 }?.let { len = cu.getLong(it) } } }
+                if (len > 25L * 1024 * 1024) { LifeUi.ui.post { AlertDialog.Builder(act).setMessage("That file is over 25 MB — too big to keep here.").setPositiveButton("OK", null).show() }; return@Thread }
+                val bytes = act.contentResolver.openInputStream(uri)!!.use { it.readBytes() }
+                val type = act.contentResolver.getType(uri) ?: "application/octet-stream"
+                val b64 = Base64.encodeToString(bytes, Base64.NO_WRAP)
+                LifeUi.ui.post {
+                    web.evaluateJavascript("ccNative.docStart()", null)
+                    var i = 0; while (i < b64.length) { web.evaluateJavascript("ccNative.docPart('${b64.substring(i, minOf(b64.length, i + 500_000))}')", null); i += 500_000 }
+                    web.evaluateJavascript("ccNative.docEnd(${JSONObject.quote(id)},${JSONObject.quote(name)},${JSONObject.quote(type)},${bytes.size})") { docsOpen.add(id); LifeUi.ui.postDelayed({ loadDocs(id) }, 600) }
+                }
+            } catch (e: Exception) { LifeUi.ui.post { AlertDialog.Builder(act).setMessage("Couldn't read that file.").setPositiveButton("OK", null).show() } }
+        }.start()
+    }
+    private fun coverDialog(b: JSONObject) {
+        val id = b.optString("id"); val has = covers.optString(id).isNotBlank()
+        val opts = mutableListOf("🔍 Find Cover", "📷 Upload Cover"); if (has) opts += "Remove Cover"
+        AlertDialog.Builder(act).setTitle(b.optString("title")).setItems(opts.toTypedArray()) { _, w ->
+            when (opts[w]) {
+                "🔍 Find Cover" -> findCover(b)
+                "📷 Upload Cover" -> pick("image/*") { uri -> Thread { val url = LifeUi.photoDataUrl(act, uri)
+                    LifeUi.ui.post { if (url == null) return@post; web.evaluateJavascript("window.ccNative&&ccNative.coverSet(${JSONObject.quote(id)},${JSONObject.quote(url)})") { covers.put(id, url); draw() } } }.start() }
+                else -> AlertDialog.Builder(act).setMessage("Remove book cover?").setPositiveButton("Remove") { _, _ ->
+                    web.evaluateJavascript("window.ccNative&&ccNative.coverDelete(${JSONObject.quote(id)})") { covers.remove(id); draw() } }.setNegativeButton("Keep", null).show()
+            } }.show()
+    }
+    private fun findCover(b: JSONObject) {
+        val id = b.optString("id")
+        val grid = android.widget.GridLayout(act).apply { columnCount = 3; setPadding(d(14), d(10), d(14), d(4)) }
+        val status = RunUi.text(act, "Searching…", RunUi.MUTED, 13f).apply { setPadding(d(20), d(12), d(20), 0) }
+        val box = LinearLayout(act).apply { orientation = LinearLayout.VERTICAL; addView(status); addView(grid) }
+        val dlg = AlertDialog.Builder(act).setTitle("🔍 Covers for ${b.optString("title")}").setView(android.widget.ScrollView(act).apply { addView(box) }).setNegativeButton("Close", null).show()
+        web.evaluateJavascript("window.ccNative&&ccNative.coverSearch(${JSONObject.quote(id)})") {
+            LifeUi.poll(web, "ccNative.coverResults(${JSONObject.quote(id)})", 30) { r ->
+                val arr = try { JSONArray(r ?: "[]") } catch (e: Exception) { JSONArray() }
+                status.text = if (arr.length() == 0) "No covers found." else "Tap a cover to use it."
+                for (i in 0 until arr.length()) { val o = arr.getJSONObject(i); val url = o.optString("url")
+                    grid.addView(LinearLayout(act).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_HORIZONTAL; setPadding(d(4), d(4), d(4), d(4))
+                        addView(ImageView(act).apply { scaleType = ImageView.ScaleType.CENTER_CROP; LifeUi.loadImage(url, this) }, LinearLayout.LayoutParams(d(70), d(96)))
+                        addView(RunUi.text(act, o.optString("source"), RunUi.DIM, 10f).apply { gravity = Gravity.CENTER })
+                        setOnClickListener { dlg.dismiss()
+                            web.evaluateJavascript("window.ccNative&&ccNative.coverApply(${JSONObject.quote(id)},${JSONObject.quote(url)})") { covers.put(id, url); draw()
+                                LifeUi.ui.postDelayed({ web.evaluateJavascript("window.ccNative&&ccNative.bookCoversReset()") { loadCovers(3) } }, 1500) } } })
+                }
+            }
+        }
     }
     private fun niceDate(s: String): String? = try { java.time.LocalDate.parse(s).format(java.time.format.DateTimeFormatter.ofPattern("MMM d, yyyy", Locale.US)) } catch (e: Exception) { null }
 

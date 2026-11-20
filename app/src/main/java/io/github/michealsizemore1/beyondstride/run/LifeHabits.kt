@@ -60,7 +60,7 @@ class LifeHabits(private val act: Activity, private val web: WebView, private va
                 LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f).apply { marginStart = d(6); marginEnd = d(6) })
             addView(nav("›", 1))
             addView(RunUi.text(act, "+ Add Habit", Color.WHITE, 13f, true).apply { background = RunUi.rounded(0xFF5B21B6.toInt(), d(10).toFloat()); setPadding(d(12), d(9), d(12), d(9))
-                setOnClickListener { web.evaluateJavascript("window.ccNative&&ccNative.habitForm('')") { openFull() } } }, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { marginStart = d(8) })
+                setOnClickListener { habitDialog(null) } }, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { marginStart = d(8) })
         })
         // Status colors
         view.addView(RunUi.card(act).apply {
@@ -128,7 +128,7 @@ class LifeHabits(private val act: Activity, private val web: WebView, private va
             val lp = { LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { marginStart = d(6) } }
             addView(b("▲", idx > 0) { act("ccNative.habitMove($id,-1)") }, lp())
             addView(b("▼", idx < n - 1) { act("ccNative.habitMove($id,1)") }, lp())
-            addView(b("✎", true) { web.evaluateJavascript("window.ccNative&&ccNative.habitForm($id)") { openFull() } }, lp())
+            addView(b("✎", true) { web.evaluateJavascript("window.ccNative&&ccNative.habitGet($id)") { r -> habitDialog(LifeUi.str(r).takeIf { it.isNotBlank() }?.let { JSONObject(it) }) } }, lp())
             addView(b("🗑", true) { AlertDialog.Builder(act).setMessage("Delete \"${h.optString("name")}\" and its tracked history?").setPositiveButton("Delete") { _, _ -> act("ccNative.habitDelete($id)") }.setNegativeButton("Keep", null).show() }, lp()) })
         // Controls
         when (h.optString("kind")) {
@@ -219,4 +219,59 @@ class LifeHabits(private val act: Activity, private val web: WebView, private va
             bar.post { fill.layoutParams = FrameLayout.LayoutParams(bar.width * rate / 100, d(7)); fill.requestLayout() }
         }
     }
+    /** Create a Habit / Edit Habit — the Command Center's habit form, natively. */
+    private fun habitDialog(h: JSONObject?) {
+        fun field(hint: String, v: String, number: Boolean = false) = android.widget.EditText(act).apply { this.hint = hint; setText(v); isSingleLine = true
+            if (number) inputType = android.text.InputType.TYPE_CLASS_NUMBER }
+        fun label(t: String) = RunUi.text(act, t, RunUi.MUTED, 12f, true).apply { setPadding(0, d(10), 0, 0) }
+        fun spinner(items: List<Pair<String, String>>, cur: String, onPick: (String) -> Unit = {}) = Spinner(act).apply {
+            adapter = ArrayAdapter(act, android.R.layout.simple_spinner_dropdown_item, items.map { it.second })
+            setSelection(items.indexOfFirst { it.first == cur }.coerceAtLeast(0), false)
+            onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+                override fun onItemSelected(p: AdapterView<*>?, v: View?, pos: Int, id: Long) { onPick(items[pos].first) }
+                override fun onNothingSelected(p: AdapterView<*>?) {} } }
+        val col = LinearLayout(act).apply { orientation = LinearLayout.VERTICAL; setPadding(d(20), d(4), d(20), d(8)) }
+        val name = field("Example: Read the Bible", h?.optString("name") ?: "")
+        val cats = listOf("Faith", "Health", "Fitness", "Growth", "Relationships", "Home", "Other").map { it to it }
+        var cat = h?.optString("category")?.takeIf { it.isNotBlank() } ?: "Health"
+        val types = listOf("check" to "Done / not done", "count" to "Count toward a target", "duration" to "Minutes toward a target")
+        var type = h?.optString("type")?.takeIf { it.isNotBlank() } ?: "check"
+        val target = field("1", (h?.optInt("target", 1) ?: 1).toString(), true)
+        val scheds = listOf("daily" to "Every day", "weekdays" to "Weekdays", "custom" to "Specific days", "weekly" to "Times per week")
+        var sched = h?.optString("schedule")?.takeIf { it.isNotBlank() } ?: "daily"
+        val weekly = field("3", (h?.optInt("weeklyTarget", 3) ?: 3).toString(), true)
+        val days = HashSet<Int>(); (h?.optJSONArray("days"))?.let { a -> for (i in 0 until a.length()) days.add(a.optInt(i)) } ?: days.addAll(listOf(1, 2, 3, 4, 5))
+        val why = field("The identity or result this habit supports", h?.optString("why") ?: "")
+        val cue = field("Pour my morning coffee", h?.optString("cue") ?: "")
+        val min = field("Read one page (minimum version)", h?.optString("minimum") ?: "")
+        val targetWrap = LinearLayout(act).apply { orientation = LinearLayout.VERTICAL; addView(label("Daily target")); addView(target) }
+        val weeklyWrap = LinearLayout(act).apply { orientation = LinearLayout.VERTICAL; addView(label("Times each week")); addView(weekly) }
+        val dayRow = LinearLayout(act).apply { orientation = LinearLayout.HORIZONTAL; setPadding(0, d(10), 0, 0) }
+        fun drawDays() { dayRow.removeAllViews(); listOf("S", "M", "T", "W", "T", "F", "S").forEachIndexed { i, l -> val on = i in days
+            dayRow.addView(RunUi.text(act, l, if (on) Color.WHITE else RunUi.MUTED, 14f, true).apply { gravity = Gravity.CENTER; setPadding(0, d(8), 0, d(8))
+                background = RunUi.rounded(if (on) 0xFF5B21B6.toInt() else 0xFF26302C.toInt(), d(8).toFloat())
+                setOnClickListener { if (on) days.remove(i) else days.add(i); drawDays() } }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f).apply { marginEnd = d(4) }) } }
+        fun vis() { targetWrap.visibility = if (type == "check") View.GONE else View.VISIBLE; weeklyWrap.visibility = if (sched == "weekly") View.VISIBLE else View.GONE
+            dayRow.visibility = if (sched == "custom") View.VISIBLE else View.GONE }
+        col.addView(label("Habit name")); col.addView(name)
+        col.addView(label("Category")); col.addView(spinner(cats, cat) { cat = it })
+        col.addView(label("Tracking style")); col.addView(spinner(types, type) { type = it; vis() })
+        col.addView(targetWrap)
+        col.addView(label("Schedule")); col.addView(spinner(scheds, sched) { sched = it; vis() })
+        col.addView(weeklyWrap); col.addView(dayRow); drawDays(); vis()
+        col.addView(label("Why this matters")); col.addView(why)
+        col.addView(label("After I…")); col.addView(cue)
+        col.addView(label("I will…")); col.addView(min)
+        val dlg = AlertDialog.Builder(act).setTitle(if (h == null) "Create a Habit" else "Edit Habit").setView(android.widget.ScrollView(act).apply { addView(col) })
+            .setPositiveButton("Save Habit", null).setNegativeButton("Cancel", null).create()
+        dlg.setOnShowListener { dlg.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+            val o = JSONObject().put("id", h?.optString("id") ?: "").put("name", name.text.toString()).put("category", cat).put("type", type)
+                .put("target", target.text.toString().toIntOrNull() ?: 1).put("schedule", sched).put("weeklyTarget", weekly.text.toString().toIntOrNull() ?: 3)
+                .put("days", JSONArray(days.sorted())).put("why", why.text.toString()).put("cue", cue.text.toString()).put("minimum", min.text.toString())
+            h?.optString("color")?.takeIf { it.isNotBlank() }?.let { o.put("color", it) }
+            web.evaluateJavascript("window.ccNative&&ccNative.habitSave(${JSONObject.quote(o.toString())})") { r -> val m = LifeUi.str(r)
+                if (m == "ok") { dlg.dismiss(); load(); changed() } else AlertDialog.Builder(act).setMessage(m.ifBlank { "Couldn't save the habit." }).setPositiveButton("OK", null).show() } } }
+        dlg.show()
+    }
+
 }
