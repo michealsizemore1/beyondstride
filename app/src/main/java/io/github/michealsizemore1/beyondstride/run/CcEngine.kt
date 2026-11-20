@@ -95,4 +95,5 @@ object CcEngine {
         if (wrapper?.baseContext === act) wrapper?.baseContext = act.applicationContext
     }
 
+    fun detachFromParent(w: WebView) { (w.parent as? ViewGroup)?.removeView(w) }
 }
