@@ -57,6 +57,8 @@ class RunSettingsActivity : Activity() {
                 .apply { layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(12) } })
             col.addView(RunUi.button(this, "Background: " + (if (io.github.michealsizemore1.beyondstride.Theme.light) "Lighter" else "Dark") + "  (tap to switch)", RunUi.CARD, Color.WHITE) { toggleBg() }
                 .apply { layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(10) } })
+            col.addView(RunUi.button(this, "Life tab: " + (if (LifeTab.on(ctx)) "On" else "Off") + "  (tap to " + (if (LifeTab.on(ctx)) "remove" else "add") + ")", RunUi.CARD, Color.WHITE) { LifeTab.setOn(ctx, !LifeTab.on(ctx)); render() }
+                .apply { layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(10) } })
             col.addView(RunUi.button(this, "Watch data screens ›", RunUi.ACCENT) { startActivity(Intent(ctx, ScreensActivity::class.java)) }
                 .apply { layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(10) } })
             col.addView(RunUi.button(this, "LiveTrack ›", 0xFF4FA3E0.toInt(), Color.WHITE) { startActivity(Intent(ctx, LiveTrackActivity::class.java)) }
@@ -384,6 +386,9 @@ class RunSettingsActivity : Activity() {
         row("✨", "AI food search", if (AiFood.hasKey(ctx)) "Key saved · AI search and label photos on" else "Add your Anthropic key") { page = "ai"; render() }
         row("⇪", "Backup", Backup.lastAt(ctx).takeIf { it > 0 }?.let { "Last: " + java.text.SimpleDateFormat("MMM d, h:mm a", java.util.Locale.getDefault()).format(java.util.Date(it)) +
             (if (Backup.auto(ctx) && Backup.uri(ctx) != null) " · auto" else "") } ?: "Not set up") { page = "backup"; render() }
+        row("📓", "Life tab", if (LifeTab.on(ctx)) "On · the Command Center inside the app · tap to remove" else "Off · tap to add the Command Center tab") {
+            LifeTab.setOn(ctx, !LifeTab.on(ctx)); render()
+            android.widget.Toast.makeText(ctx, if (LifeTab.on(ctx)) "Life tab added" else "Life tab removed", android.widget.Toast.LENGTH_SHORT).show() }
         row("ⓘ", "About", "Phone app " + packageManager.getPackageInfo(packageName, 0).versionName) { page = "about"; render() }
         row("☰", "Menu style", "Cards · tap to switch back to classic (phone and watch)") { setMenuStyle("classic") }
         row("◐", "Background", if (io.github.michealsizemore1.beyondstride.Theme.light) "Lighter · tap for dark" else "Dark · tap for lighter") { toggleBg() }

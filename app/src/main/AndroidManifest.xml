@@ -94,6 +94,12 @@
             android:label="Nutrition"
             android:taskAffinity="io.github.michealsizemore1.beyondstride.running" />
         <activity
+            android:name=".run.LifeActivity"
+            android:exported="false"
+            android:label="Life"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|uiMode"
+            android:taskAffinity="io.github.michealsizemore1.beyondstride.running" />
+        <activity
             android:name=".run.FitnessActivity"
             android:exported="false"
             android:label="Fitness"

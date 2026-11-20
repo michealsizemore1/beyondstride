@@ -121,6 +121,7 @@ object RunUi {
         }
 
     const val TAB_TODAY = 0; const val TAB_FITNESS = 1; const val TAB_NUTRITION = 2; const val TAB_PLAN = 3; const val TAB_RUNS = 3   // the Plan screen opens from Activities (⌚ Watch workouts)
+    const val TAB_LIFE = 4   // 📓 the Command Center (Settings → Life tab turns it off)
 
 
     /** Page content with the bottom tab bar (Today · Fitness · Plan · Runs). */
@@ -142,7 +143,7 @@ object RunUi {
             Triple("Fitness", "♥", FitnessActivity::class.java),
             Triple("Nutrition", "🍎", NutritionActivity::class.java),
             Triple("Activities", "≡", ActivitiesActivity::class.java),
-        )
+        ) + (if (LifeTab.on(act) || selected == TAB_LIFE) listOf(Triple<String, String, Class<*>?>("Life", "📓", LifeActivity::class.java)) else emptyList())
         val bar = LinearLayout(act).apply {
             orientation = LinearLayout.HORIZONTAL
             setBackgroundColor(0xFF0E1412.toInt())
