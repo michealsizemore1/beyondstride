@@ -142,7 +142,8 @@ class LifeActivity : Activity() {
             addView(View(this@LifeActivity).apply { setBackgroundColor(0x22FFFFFF) }, LinearLayout.LayoutParams(RunUi.dp(this@LifeActivity, 1), ViewGroup.LayoutParams.MATCH_PARENT))
             addView(android.widget.HorizontalScrollView(this@LifeActivity).apply { isHorizontalScrollBarEnabled = false
                 addView(LinearLayout(this@LifeActivity).apply { orientation = LinearLayout.HORIZONTAL
-                    listOf(tabToday, tabReview).forEach { addView(it) }   // Weekly / Monthly / Yearly now live in each area's section }) },
+                    // Weekly / Monthly / Yearly now live in each area's section.
+                    listOf(tabToday, tabReview).forEach { addView(it) } }) },
                 LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         }
         val box = LinearLayout(this).apply {
