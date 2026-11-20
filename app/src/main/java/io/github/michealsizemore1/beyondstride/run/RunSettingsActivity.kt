@@ -524,6 +524,7 @@ class RunSettingsActivity : Activity() {
     private fun syncWeights() {
         val app = applicationContext
         Thread { val n = try { WeightImport.sync(app, 7) } catch (e: Exception) { 0 }
+            if (n > 0) try { DailySummary.publish(app, force = true) } catch (e: Exception) { }   // the Command Center's Weight fills in right away
             runOnUiThread { Toast.makeText(this, if (n > 0) "Filled $n weight${if (n == 1) "" else "s"} from the scale" else WeightImport.lastInfo(app).ifEmpty { "Nothing new from the scale" }, Toast.LENGTH_LONG).show(); render() } }.start()
     }
     private fun askHealth(p: Set<String>) {
