@@ -1,16 +1,4 @@
-function jaOpenDB(){
-  return new Promise(function(resolve,reject){
-    var req=indexedDB.open('JournalArchiveDB',1);
-    req.onupgradeneeded=function(e){
-      var db=e.target.result;
-      if(!db.objectStoreNames.contains('journals')){
-        db.createObjectStore('journals',{keyPath:'id',autoIncrement:true});
-      }
-    };
-    req.onsuccess=function(e){resolve(e.target.result);};
-    req.onerror=function(e){reject(e.target.error);};
-  });
-}
+function jaOpenDB(){return ccIdbOpen('JournalArchiveDB');}
 
 var JA_TEXT_LIMIT=5*1024*1024; // index first 5MB of text for search
 

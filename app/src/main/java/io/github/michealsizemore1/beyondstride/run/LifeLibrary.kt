@@ -65,8 +65,11 @@ class LifeLibrary(private val act: Activity, private val web: WebView, private v
     private fun checkCovers() {
         web.evaluateJavascript("window.ccNative&&ccNative.coverStats&&ccNative.coverStats()") {
             LifeUi.poll(web, "ccNative.coverStatsResult()", 20) { r -> val o = try { JSONObject(r ?: "") } catch (e: Exception) { return@poll }
-                coverInfo = if (o.has("error")) "🖼️ Couldn't read the cover store: " + o.optString("error") else
-                    "🖼️ Covers on this phone: ${o.optInt("total")} saved · ${o.optInt("matched")} match your ${o.optInt("books")} books" + (if (o.optInt("orphans") > 0) " · ${o.optInt("orphans")} belong to books that changed" else "") + " · ${o.optInt("data")} pictures, ${o.optInt("links")} links"
+                // Only shown when something is wrong with the picture store.
+                val idb = o.optString("idb", "ok")
+                coverInfo = if (o.has("error")) "🖼️ Couldn't read the cover store: " + o.optString("error")
+                    else if (idb != "ok" && idb != "testing") "🖼️ Covers can't be saved on this phone right now ($idb). Tell Claude."
+                    else if (o.optInt("orphans") > 0) "🖼️ ${o.optInt("orphans")} saved cover(s) belong to books that changed." else ""
                 draw() } }
     }
     private var coverGen = 0

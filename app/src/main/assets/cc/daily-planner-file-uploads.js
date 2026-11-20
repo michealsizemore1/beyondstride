@@ -1,16 +1,4 @@
-function ouOpenDB(){
-  return new Promise(function(resolve,reject){
-    var req=indexedDB.open('OtherUploadsDB',1);
-    req.onupgradeneeded=function(e){
-      var db=e.target.result;
-      if(!db.objectStoreNames.contains('files')){
-        db.createObjectStore('files',{keyPath:'id',autoIncrement:true});
-      }
-    };
-    req.onsuccess=function(e){resolve(e.target.result);};
-    req.onerror=function(){reject(req.error);};
-  });
-}
+function ouOpenDB(){return ccIdbOpen('OtherUploadsDB');}
 
 function ouUpload(event){
   var files=Array.from(event.target.files||[]);

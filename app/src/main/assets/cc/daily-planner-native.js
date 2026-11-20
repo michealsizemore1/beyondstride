@@ -216,7 +216,7 @@
     return out.slice(0,150);
   }
   // 📁 Files (Uploads page): async — results come back through BSNative.files(json) / BSNative.file(name, type, base64).
-  function idb(name,store){return new Promise(function(res,rej){var r=indexedDB.open(name,1);r.onupgradeneeded=function(e){var db=e.target.result;if(!db.objectStoreNames.contains(store))db.createObjectStore(store,{keyPath:'id',autoIncrement:true});};r.onsuccess=function(e){res(e.target.result);};r.onerror=function(){rej(r.error);};});}
+  function idb(name,store){return window.ccIdbOpen?ccIdbOpen(name):Promise.reject(new Error('no store'));}
   function all(name,store){return idb(name,store).then(function(db){return new Promise(function(res){var q=db.transaction(store,'readonly').objectStore(store).getAll();q.onsuccess=function(){res(q.result||[]);};q.onerror=function(){res([]);};});}).catch(function(){return [];});}
   function back(fn,arg){try{if(window.BSNative&&BSNative[fn])BSNative[fn].apply(BSNative,arg);}catch(e){}}
   var FILES={ou:['OtherUploadsDB','files'],ja:['JournalArchiveDB','journals']};
@@ -295,7 +295,15 @@
     // Book covers check: how many pictures this phone has, how many match a book now, and the old ids they belong to.
     coverStats:function(){window._bsCovStats=null;try{getAllBookCovers().then(function(all){var ids={};getBooks().forEach(function(b){ids[String(b.id)]=1;});
       var m=0,o=0,h=0,d=0,orph=[];all.forEach(function(c){var k=String(c.bookId);if(ids[k])m++;else{o++;orph.push(k);}if(/^data:/.test(c.dataUrl||''))d++;else h++;});
-      window._bsCovStats={total:all.length,matched:m,orphans:o,orphanIds:orph.slice(0,40),data:d,links:h,books:Object.keys(ids).length};}).catch(function(e){window._bsCovStats={error:String(e)};});}catch(e){return 'err:'+e;}return true;},
+      var st={total:all.length,matched:m,orphans:o,orphanIds:orph.slice(0,40),data:d,links:h,books:Object.keys(ids).length,idb:'testing'};
+      // Can this page store anything in IndexedDB at all? (write, then read back)
+      try{var rq=indexedDB.open('BsIdbTest',1);rq.onupgradeneeded=function(e){e.target.result.createObjectStore('t');};
+        rq.onerror=function(){st.idb='open failed: '+(rq.error&&rq.error.name);window._bsCovStats=st;};rq.onblocked=function(){st.idb='blocked';window._bsCovStats=st;};
+        rq.onsuccess=function(e){var db=e.target.result;try{var tx=db.transaction('t','readwrite');tx.objectStore('t').put('x'+Date.now(),'k');
+          tx.oncomplete=function(){var g=db.transaction('t','readonly').objectStore('t').get('k');g.onsuccess=function(){st.idb=g.result?'ok':'read back nothing';window._bsCovStats=st;};g.onerror=function(){st.idb='read failed';window._bsCovStats=st;};};
+          tx.onerror=function(){st.idb='write failed: '+(tx.error&&tx.error.name);window._bsCovStats=st;};tx.onabort=function(){st.idb='write aborted: '+(tx.error&&tx.error.name);window._bsCovStats=st;};}catch(x){st.idb='error: '+x;window._bsCovStats=st;}};
+      }catch(x){st.idb='no IndexedDB: '+x;window._bsCovStats=st;}
+      setTimeout(function(){if(!window._bsCovStats){st.idb='no answer';window._bsCovStats=st;}},4000);}).catch(function(e){window._bsCovStats={error:String(e)};});}catch(e){return 'err:'+e;}return true;},
     coverStatsResult:function(){return window._bsCovStats?JSON.stringify(window._bsCovStats):'';},
     bookCovers:function(){window._bsCov=window._bsCov||{};window._bsCovWait=window._bsCovWait||{};var out={},pend=0;try{getBooks().forEach(function(b){var k=String(b.id);
       if(k in _bsCov){if(_bsCov[k])out[k]=_bsCov[k];if(_bsCovWait[k])pend++;}else{_bsCov[k]='';_bsCovWait[k]=1;pend++;getBookCover(b.id).then(function(d){_bsCov[k]=d||'';delete _bsCovWait[k];}).catch(function(){delete _bsCovWait[k];});}});}catch(e){}

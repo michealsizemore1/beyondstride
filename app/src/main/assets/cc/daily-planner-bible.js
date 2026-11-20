@@ -50,15 +50,7 @@ function clearBibleEntry(){
 
 // ── Book Covers IndexedDB ─────────────────────────────────────────────────────
 var _bookCoversDB=null;
-function openBookCoversDB(){
-  return new Promise(function(resolve,reject){
-    if(_bookCoversDB){resolve(_bookCoversDB);return;}
-    var req=indexedDB.open('BookCoversDB',1);
-    req.onupgradeneeded=function(e){e.target.result.createObjectStore('covers',{keyPath:'bookId'});};
-    req.onsuccess=function(e){_bookCoversDB=e.target.result;resolve(_bookCoversDB);};
-    req.onerror=function(){reject(req.error);};
-  });
-}
+function openBookCoversDB(){return ccIdbOpen('BookCoversDB').then(function(db){_bookCoversDB=db;return db;});}
 function setBookCover(bookId,dataUrl){
   return openBookCoversDB().then(function(db){
     return new Promise(function(resolve,reject){
@@ -121,19 +113,7 @@ function _storeBookCover(bookId,dataUrl){
 
 // ── Book Documents (IndexedDB) ───────────────────────────────────────────────
 var _bookDocsDB=null;
-function openBookDocsDB(){
-  return new Promise(function(resolve,reject){
-    if(_bookDocsDB){resolve(_bookDocsDB);return;}
-    var req=indexedDB.open('BookDocumentsDB',1);
-    req.onupgradeneeded=function(e){
-      var db=e.target.result;
-      if(!db.objectStoreNames.contains('docs'))
-        db.createObjectStore('docs',{keyPath:'id',autoIncrement:true});
-    };
-    req.onsuccess=function(e){_bookDocsDB=e.target.result;resolve(_bookDocsDB);};
-    req.onerror=function(){reject(req.error);};
-  });
-}
+function openBookDocsDB(){return ccIdbOpen('BookDocumentsDB').then(function(db){_bookDocsDB=db;return db;});}
 function addBookDocument(bookId,file){
   return new Promise(function(resolve,reject){
     var reader=new FileReader();
@@ -233,15 +213,7 @@ function toggleBookDocs(bookId){
 
 // ── Bible Images (IndexedDB) ─────────────────────────────────────────────────
 var _bibleDB=null;
-function openBibleDB(){
-  return new Promise(function(resolve,reject){
-    if(_bibleDB){resolve(_bibleDB);return;}
-    var req=indexedDB.open('BibleImagesDB',1);
-    req.onupgradeneeded=function(e){e.target.result.createObjectStore('images',{keyPath:'id',autoIncrement:true});};
-    req.onsuccess=function(e){_bibleDB=e.target.result;resolve(_bibleDB);};
-    req.onerror=function(){reject(req.error);};
-  });
-}
+function openBibleDB(){return ccIdbOpen('BibleImagesDB').then(function(db){_bibleDB=db;return db;});}
 function addBibleImages(ev){
   var files=Array.from(ev.target.files||[]);
   if(!files.length)return;
