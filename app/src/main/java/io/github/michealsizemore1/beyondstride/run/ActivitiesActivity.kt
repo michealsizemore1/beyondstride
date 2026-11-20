@@ -613,7 +613,7 @@ class ActivitiesActivity : Activity() {
             })
         }
         // 📊 Miles by day / week / month (moved here from Life → Weekly · Monthly · Yearly).
-        col.addView(WeekTables.MileageBreakdown(this, all, S.exMiles(this)).view)
+        WeekTables.mileageSections(this, all, S.exMiles(this)).forEach { col.addView(it) }
     }
 
     // ── Shoe tracker ──

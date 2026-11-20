@@ -56,8 +56,8 @@ object WeekTables {
     private fun nav(act: Activity, title: String, label: String, color: Int, shift: (Int) -> Unit): View {
         val d = { v: Int -> RunUi.dp(act, v) }
         return LinearLayout(act).apply { orientation = LinearLayout.VERTICAL
-            addView(RunUi.text(act, title, color, 15f, true))
-            addView(LinearLayout(act).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(0, d(4), 0, d(6))
+            if (title.isNotBlank()) addView(RunUi.text(act, title, color, 15f, true))
+            addView(LinearLayout(act).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(0, d(8), 0, d(6))
                 addView(RunUi.text(act, "‹", RunUi.ACCENT, 22f, true).apply { setPadding(d(4), 0, d(14), 0); setOnClickListener { shift(-1) } })
                 addView(RunUi.text(act, label, Color.WHITE, 14f, true).apply { gravity = Gravity.CENTER; setOnClickListener { shift(0) } }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
                 addView(RunUi.text(act, "›", RunUi.ACCENT, 22f, true).apply { setPadding(d(14), 0, d(4), 0); setOnClickListener { shift(1) } }) }) }
@@ -65,7 +65,7 @@ object WeekTables {
 
     /** 🍎 Nutrition + 🧪 Micronutrients, Mon–Sun, ‹ › for other weeks. */
     class NutritionWeek(private val act: Activity) {
-        val view = RunUi.card(act)
+        val view = LinearLayout(act).apply { orientation = LinearLayout.VERTICAL }
         private var off = 0
         init { draw() }
         fun draw() {
@@ -73,7 +73,7 @@ object WeekTables {
             val today = LocalDate.now(); val mon = today.minusDays((today.dayOfWeek.value - 1).toLong()).plusWeeks(off.toLong())
             val dates = (0..6).map { mon.plusDays(it.toLong()) }
             val byDate = try { io.github.michealsizemore1.beyondstride.NutritionStore.days(act).associateBy { it.date } } catch (e: Exception) { emptyMap() }
-            view.addView(nav(act, "🍎 By day", weekLabel(mon), RunUi.ACCENT) { s -> off = if (s == 0) 0 else minOf(0, off + s); draw() })
+            view.addView(nav(act, "", weekLabel(mon), RunUi.ACCENT) { s -> off = if (s == 0) 0 else minOf(0, off + s); draw() })
             fun lab(dt: LocalDate) = dt.format(DateTimeFormatter.ofPattern("EEE, M/d", Locale.US))
             fun qCell(q: Double, label: String) = if (q <= 0) dash() else { val c = if (q >= 7) GREEN else if (q >= 5) AMBER else RED; cell(Line(String.format(Locale.US, "%.1f", q), c, true), Line(label, c, true)) }
             // Nutrition: quality, calories vs target, protein / fat / carbs vs the macro ratio, fluids.
@@ -136,9 +136,8 @@ object WeekTables {
     }
 
     /** 🏃 Miles, pace, power and time — Week (by day) · Month (by week) · Year (by month), ‹ › to move. */
-    class MileageBreakdown(private val act: Activity, private val all: List<JSONObject>, private val exMiles: Map<String, Double>) {
-        val view = RunUi.card(act)
-        private var mode = act.getSharedPreferences("activitiesUi", 0).getString("bdMode", "week") ?: "week"
+    class MileageBreakdown(private val act: Activity, private val all: List<JSONObject>, private val exMiles: Map<String, Double>, private val mode: String) {
+        val view = LinearLayout(act).apply { orientation = LinearLayout.VERTICAL }
         private var off = 0
         init { draw() }
         private class B { var mi = 0.0; var pace = 0; var paceN = 0; var w = 0.0; var wN = 0; var sec = 0.0 }
@@ -170,12 +169,6 @@ object WeekTables {
             val covered = all.filter { S.num(it, "distance") > 0 }.map { S.str(it, "date").take(10) }.toSet()
             exMiles.forEach { (ds, m) -> if (ds !in covered) { val dt = try { LocalDate.parse(ds) } catch (e: Exception) { return@forEach }
                 periods.forEachIndexed { i, (_, s, e) -> if (!dt.isBefore(s) && !dt.isAfter(e)) bs[i].mi += m } } }
-            view.addView(LinearLayout(act).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
-                addView(RunUi.text(act, "📊 Breakdown", 0xFFE67E22.toInt(), 15f, true), LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
-                listOf("week" to "Week", "month" to "Month", "year" to "Year").forEach { (k, t) -> addView(RunUi.text(act, t, if (k == mode) Color.BLACK else Color.WHITE, 12f, true).apply {
-                    setPadding(d(10), d(5), d(10), d(5)); background = RunUi.rounded(if (k == mode) RunUi.ACCENT else 0xFF2A3430.toInt(), d(14).toFloat())
-                    setOnClickListener { if (mode != k) { mode = k; off = 0; act.getSharedPreferences("activitiesUi", 0).edit().putString("bdMode", k).apply(); draw() } } },
-                    LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { marginStart = d(6) }) } })
             view.addView(nav(act, "", label, Color.WHITE) { s -> off = if (s == 0) 0 else minOf(0, off + s); draw() })
             fun p(x: B) = if (x.paceN > 0) (x.pace / x.paceN).let { "${it / 60}:${String.format(Locale.US, "%02d", it % 60)}" } else "-"
             val rows = periods.mapIndexed { i, (l, _, _) -> val x = bs[i]
@@ -183,6 +176,84 @@ object WeekTables {
             val t = B(); bs.forEach { x -> t.mi += x.mi; t.pace += x.pace; t.paceN += x.paceN; t.w += x.w; t.wN += x.wN; t.sec += x.sec }
             view.addView(table(act, listOf("Period" to null, "Miles" to null, "Pace" to null, "Watts" to null, "Time" to null),
                 rows + ("TOTAL/AVG" to listOf(cell(Line(String.format(Locale.US, "%.1f", t.mi))), cell(Line(p(t))), cell(Line(if (t.wN > 0) "${Math.round(t.w / t.wN)}" else "-")), cell(Line(if (t.sec > 0) fmtT(t.sec) else "-"))))))
+        }
+    }
+
+    /** 📅 Weekly · 📆 Monthly · 🗓️ Yearly, each a card you open or close. */
+    fun mileageSections(act: Activity, all: List<JSONObject>, ex: Map<String, Double>): List<View> = listOf(
+        "week" to "📅 Weekly — by day", "month" to "📆 Monthly — by week", "year" to "🗓️ Yearly — by month").map { (k, t) ->
+        val dr = MileageBreakdown(act, all, ex, k)
+        LifeUi.Collapsible(act, "act_$k", t, 0xFFE67E22.toInt(), k == "week") { b -> if (dr.view.parent == null) b.addView(dr.view) }.view }
+
+    fun nutritionSections(act: Activity, onHistory: () -> Unit = {}): List<View> {
+        val wk = NutritionWeek(act)
+        val month = NutritionPeriod(act, "month"); val year = NutritionPeriod(act, "year")
+        // Older days come from the cloud copy of the day summaries; refresh now and then.
+        Thread { if (NutritionHistory.refresh(act.applicationContext)) act.runOnUiThread { month.draw(); year.draw(); onHistory() } }.start()
+        return listOf(
+            LifeUi.Collapsible(act, "nu_week", "📅 Weekly — by day", RunUi.ACCENT, true) { b -> if (wk.view.parent == null) b.addView(wk.view) }.view,
+            LifeUi.Collapsible(act, "nu_month", "📆 Monthly — by week", RunUi.ACCENT, false) { b -> if (month.view.parent == null) b.addView(month.view) }.view,
+            LifeUi.Collapsible(act, "nu_year", "🗓️ Yearly — by month", RunUi.ACCENT, false) { b -> if (year.view.parent == null) b.addView(year.view) }.view)
+    }
+
+    /** 🍎 Nutrition and 🧪 Micronutrients averaged per week (Monthly) or per month (Yearly), from the saved day summaries. */
+    class NutritionPeriod(private val act: Activity, private val kind: String) {
+        val view = LinearLayout(act).apply { orientation = LinearLayout.VERTICAL }
+        private var off = 0
+        init { draw() }
+        fun draw() {
+            view.removeAllViews()
+            val today = LocalDate.now()
+            val periods: List<Triple<String, LocalDate, LocalDate>>; val label: String
+            if (kind == "month") { val m1 = today.withDayOfMonth(1).plusMonths(off.toLong()); val last = m1.plusMonths(1).minusDays(1)
+                var w = m1.minusDays((m1.dayOfWeek.value - 1).toLong()); val ps = ArrayList<Triple<String, LocalDate, LocalDate>>(); val f = DateTimeFormatter.ofPattern("MMM d", Locale.US)
+                while (!w.isAfter(last)) { val e = w.plusDays(6); ps += Triple("Wk " + w.format(f) + "–" + (if (e.month == w.month) e.dayOfMonth.toString() else e.format(f)), maxOf(w, m1), minOf(e, last)); w = w.plusWeeks(1) }
+                periods = ps; label = m1.format(DateTimeFormatter.ofPattern("MMMM yyyy", Locale.US))
+            } else { val y = today.year + off
+                periods = (1..12).map { mo -> val st = LocalDate.of(y, mo, 1); Triple(st.format(DateTimeFormatter.ofPattern("MMM", Locale.US)), st, st.plusMonths(1).minusDays(1)) }; label = "$y" }
+            view.addView(nav(act, "", label, RunUi.ACCENT) { s -> off = if (s == 0) 0 else minOf(0, off + s); draw() })
+            val hist = NutritionHistory.days(act)
+            fun recs(s: LocalDate, e: LocalDate) = generateSequence(s) { it.plusDays(1) }.takeWhile { !it.isAfter(e) && !it.isAfter(today) }
+                .mapNotNull { hist.optJSONObject(it.toString())?.takeIf { n -> n.optInt("cal") > 0 } }.toList()
+            fun avg(l: List<JSONObject>, f: (JSONObject) -> Double) = l.map(f).filter { it > 0 }.let { if (it.isEmpty()) 0.0 else it.average() }
+            fun qCell(q: Double) = if (q <= 0) dash() else { val c = if (q >= 7) GREEN else if (q >= 5) AMBER else RED; cell(Line(String.format(Locale.US, "%.1f", q), c, true), Line(Food.label(q), c, true)) }
+            fun calCell(c: Double, t: Double) = if (c <= 0) dash() else if (t <= 0) cell(Line(n0(c))) else { val r = c / t; val col = if (r in 0.9..1.1) GREEN else if (r in 0.75..1.25) AMBER else RED
+                cell(Line(n0(c) + "  / " + n0(t), col, true), Line("${Math.round(r * 100)}% of target", col, true)) }
+            fun macroCell(l: List<JSONObject>, g: Double, name: String): List<Line> {
+                if (g <= 0) return dash()
+                val ms = l.mapNotNull { it.optJSONObject("macros")?.optJSONObject(name) }; if (ms.isEmpty()) return cell(Line(n0(g)))
+                val pct = ms.map { it.optDouble("pct") }.average(); val goal = ms.last().optInt("goal"); val diff = pct - goal
+                val st = if (diff < -3) "Low" else if (diff > 3) "High" else "On target"; val txt = String.format(Locale.US, "%.1f%% / %d%% · %s", pct, goal, st)
+                return if (st == "High") cell(Line(n0(g)), Line(txt, pill = true)) else cell(Line(n0(g)), Line(txt, if (st == "On target") GREEN else AMBER, true)) }
+            fun fluidCell(w: Double, t: Double) = if (w <= 0) dash() else if (t <= 0) cell(Line(n0(w))) else { val p = (w * 100 / t).toInt(); val c = if (p >= 100) GREEN else if (p >= 75) AMBER else RED; cell(Line(n0(w)), Line("$p% of ${n0(t)} oz", c, true)) }
+            val all = ArrayList<JSONObject>()
+            val rows = periods.map { (lab, s, e) -> val l = recs(s, e); all += l
+                lab to if (l.isEmpty()) List(6) { dash() } else listOf(qCell(avg(l) { it.optDouble("quality") }), calCell(avg(l) { it.optDouble("cal") }, avg(l) { it.optDouble("target") }),
+                    macroCell(l, avg(l) { it.optDouble("prot") }, "protein"), macroCell(l, avg(l) { it.optDouble("fat") }, "fat"), macroCell(l, avg(l) { it.optDouble("carbs") }, "carbs"),
+                    fluidCell(avg(l) { it.optDouble("water") }, avg(l) { it.optDouble("fluidTarget") })) }
+            val tot = "DAILY AVG" to if (all.isEmpty()) List(6) { dash() } else listOf(qCell(avg(all) { it.optDouble("quality") }), calCell(avg(all) { it.optDouble("cal") }, avg(all) { it.optDouble("target") }),
+                cell(Line(n0(avg(all) { it.optDouble("prot") }))), cell(Line(n0(avg(all) { it.optDouble("fat") }))), cell(Line(n0(avg(all) { it.optDouble("carbs") }))), fluidCell(avg(all) { it.optDouble("water") }, avg(all) { it.optDouble("fluidTarget") }))
+            view.addView(RunUi.text(act, "🍎 Nutrition — daily average", RunUi.ACCENT, 13f, true).apply { setPadding(0, RunUi.dp(act, 6), 0, RunUi.dp(act, 4)) })
+            view.addView(table(act, listOf("Period" to null, "Food Quality" to 0xFF4ADE80.toInt(), "Calories" to 0xFFF39C12.toInt(), "Protein (g)" to 0xFFF87171.toInt(), "Fat (g)" to 0xFF60A5FA.toInt(), "Carbs (g)" to 0xFFFBBF24.toInt(), "Fluids (oz)" to 0xFF38BDF8.toInt()), rows + tot))
+            if (all.isEmpty()) { view.addView(RunUi.text(act, if (hist.length() == 0) "Getting your earlier days… (needs the cloud copy turned on)" else "No food logged in this period.", RunUi.DIM, 11f)); return }
+            // Micronutrients: average per day in each period, with % of target and status (targets from the latest day).
+            val fields = LinkedHashMap<String, JSONObject>()
+            all.forEach { n -> n.optJSONObject("microTargets")?.let { mt -> mt.keys().forEach { k -> fields[k] = mt.optJSONObject(k) ?: JSONObject() } } }
+            if (fields.isEmpty()) return
+            fun mCell(v: Double, t: JSONObject?): List<Line> {
+                if (v <= 0) return dash()
+                val shown = if (v < 10) String.format(Locale.US, "%.1f", v) else n0(v)
+                val tg = t?.optDouble("t", 0.0) ?: 0.0; if (tg <= 0) return cell(Line(shown))
+                val mx = t?.optDouble("mx", 0.0) ?: 0.0; val pct = Math.floor(v / tg * 100).toInt()
+                val st = if (mx > 0 && v > mx) "High" else if (pct >= 100) "Met" else if (pct >= 75) "Close" else "Low"
+                return if (st == "High") cell(Line(shown), Line("$pct% · High", pill = true)) else cell(Line(shown), Line("$pct% · $st", if (st == "Met") GREEN else if (st == "Close") AMBER else RED, true)) }
+            fun mAvg(l: List<JSONObject>, f: String) = l.map { it.optJSONObject("micros")?.optDouble(f, 0.0) ?: 0.0 }.let { if (l.isEmpty()) 0.0 else it.sum() / l.size }
+            val mrows = periods.map { (lab, s, e) -> val l = recs(s, e)
+                lab to if (l.isEmpty()) List(fields.size + 1) { dash() } else (listOf(qCell(avg(l) { it.optDouble("microScore") })) + fields.map { (f, t) -> mCell(mAvg(l, f), t) }) }
+            val mtot = "DAILY AVG" to (listOf(qCell(avg(all) { it.optDouble("microScore") })) + fields.map { (f, t) -> mCell(mAvg(all, f), t) })
+            view.addView(RunUi.text(act, "🧪 Micronutrients — daily average", RunUi.ACCENT, 13f, true).apply { setPadding(0, RunUi.dp(act, 12), 0, RunUi.dp(act, 4)) })
+            view.addView(table(act, listOf("Period" to null, "Micro Quality" to 0xFF4ADE80.toInt()) + fields.map { (f, t) -> "${t.optString("n").ifBlank { f }} (${t.optString("u")})" to null }, mrows + mtot))
+            view.addView(RunUi.text(act, "Averages count only the days you logged food. Swipe a table sideways for more columns.", RunUi.DIM, 10f).apply { setPadding(0, RunUi.dp(act, 6), 0, 0) })
         }
     }
 }

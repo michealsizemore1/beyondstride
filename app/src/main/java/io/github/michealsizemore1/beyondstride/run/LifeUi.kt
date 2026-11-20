@@ -90,4 +90,23 @@ object LifeUi {
             if (v.isNotEmpty()) done(v) else if (tries > 1) ui.postDelayed({ poll(web, js, tries - 1, done) }, 700) else done(null) }
     }
     fun lp(top: Int = 0) = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = top }
+
+    /** A card with a title you tap to open or close (remembered); the body is drawn when it opens. */
+    class Collapsible(private val act: Activity, private val key: String, title: String, color: Int, defaultOpen: Boolean, private val onOpen: (LinearLayout) -> Unit) {
+        private val pr = act.getSharedPreferences("collapse", 0)
+        var open = pr.getBoolean(key, defaultOpen); private set
+        val body = LinearLayout(act).apply { orientation = LinearLayout.VERTICAL }
+        private val arrow = RunUi.text(act, "", RunUi.MUTED, 14f, true)
+        val view: LinearLayout = RunUi.card(act).apply {
+            addView(LinearLayout(act).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+                addView(RunUi.text(act, title, color, 15f, true), LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+                addView(arrow)
+                setOnClickListener { open = !open; pr.edit().putBoolean(key, open).apply(); show() } })
+            addView(body)
+        }
+        init { show() }
+        private fun show() { arrow.text = if (open) "▼" else "▶"; body.visibility = if (open) android.view.View.VISIBLE else android.view.View.GONE; if (open) refresh() }
+        /** Redraw the body (only while open). */
+        fun refresh() { if (open) onOpen(body) }
+    }
 }

@@ -456,8 +456,8 @@ class NutritionActivity : Activity() {
         }
 
         // 🍎 By day: Nutrition and Micronutrients tables (moved here from Life → Weekly), colored like the Command Center.
-        col.addView(RunUi.section(this, "BY DAY"))
-        col.addView(WeekTables.NutritionWeek(this).view)
+        col.addView(RunUi.section(this, "WEEKLY · MONTHLY · YEARLY"))
+        WeekTables.nutritionSections(this).forEach { col.addView(it) }
 
         // THIS WEEK: the Command Center's three charts (Mon–Sun).
         run {

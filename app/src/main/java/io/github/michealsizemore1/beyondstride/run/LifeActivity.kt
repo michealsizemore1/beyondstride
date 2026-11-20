@@ -65,6 +65,8 @@ class LifeActivity : Activity() {
     private var pickCb: ((Uri) -> Unit)? = null
     private var lifeLibrary: LifeLibrary? = null
     private var medHeader: LifeMeditate? = null
+    private var wellPeriods: PeriodTables? = null
+    private var biblePeriods: PeriodTables? = null
     private var bibleChecks: ChecksCard? = null
     private var meditCard: MeditCard? = null
     private lateinit var sectionCol: LinearLayout
@@ -140,7 +142,7 @@ class LifeActivity : Activity() {
             addView(View(this@LifeActivity).apply { setBackgroundColor(0x22FFFFFF) }, LinearLayout.LayoutParams(RunUi.dp(this@LifeActivity, 1), ViewGroup.LayoutParams.MATCH_PARENT))
             addView(android.widget.HorizontalScrollView(this@LifeActivity).apply { isHorizontalScrollBarEnabled = false
                 addView(LinearLayout(this@LifeActivity).apply { orientation = LinearLayout.HORIZONTAL
-                    listOf(tabToday, tabReviews, tabMonth, tabYear, tabReview).forEach { addView(it) } }) },
+                    listOf(tabToday, tabReview).forEach { addView(it) }   // Weekly / Monthly / Yearly now live in each area's section }) },
                 LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         }
         val box = LinearLayout(this).apply {
@@ -155,7 +157,7 @@ class LifeActivity : Activity() {
             }
         }
         buildNative()
-        showPage((savedInstanceState?.getInt("page") ?: 0).let { if (it == 3) 0 else it })
+        showPage((savedInstanceState?.getInt("page") ?: 0).let { if (it == 3 || it in 7..8) 0 else if (it == 1) 9 else it })
         setContentView(RunUi.tabbed(this, box, RunUi.TAB_LIFE))
     }
 
@@ -200,8 +202,8 @@ class LifeActivity : Activity() {
     /** A ☰ Tabs section as BeyondStride screens (Uploads still opens the Command Center's own page). */
     private fun openSection(name: String, title: String) {
         val views: List<View> = when (name) {
-            "wellness" -> listOfNotNull(wellCard?.view)
-            "bible" -> listOfNotNull(lifeBible?.view)
+            "wellness" -> listOfNotNull(wellCard?.view, wellPeriods?.view)
+            "bible" -> listOfNotNull(lifeBible?.view, biblePeriods?.view)
             "meditate" -> listOfNotNull(medHeader?.view, more.meditView)
             "library" -> listOfNotNull(lifeLibrary?.view)
             "habits2" -> listOfNotNull(habitsCard?.view)
@@ -222,7 +224,8 @@ class LifeActivity : Activity() {
         if (name == "habits2") habitsCard?.load()
         if (name == "dash") dashCard?.load()
         if (name == "meditate") { more.load(); more.loadSounds() }
-        if (name == "bible") lifeBible?.load()
+        if (name == "bible") { lifeBible?.load(); biblePeriods?.load() }
+        if (name == "wellness") wellPeriods?.load()
         if (name == "library") lifeLibrary?.load(true)
     }
     private fun openCcPage(name: String) {
@@ -230,7 +233,7 @@ class LifeActivity : Activity() {
         web.evaluateJavascript("(function(){var b=document.getElementById('hm-$name');if(b)b.click();else if(typeof hmSwitch==='function')hmSwitch('$name',{preventDefault:function(){}});window.scrollTo(0,0);})()", null)
     }
     private fun showReviews(p: Int) {
-        val v = when (p) { 1 -> listOfNotNull(weekTab?.view); 7 -> listOfNotNull(monthCard?.view); 8 -> listOfNotNull(yearCard?.view); else -> listOfNotNull(weekCard?.view) }
+        val v = listOfNotNull(weekTab?.view, weekCard?.view)   // 📝 Review: this week's goals, then the weekly review
         if (reviewsCol.childCount == v.size && v.withIndex().all { (i, x) -> reviewsCol.getChildAt(i) === x }) return
         reviewsCol.removeAllViews(); v.forEach { x -> (x.parent as? ViewGroup)?.removeView(x); reviewsCol.addView(x) }
         reviewsScroll.scrollTo(0, 0)
@@ -257,7 +260,7 @@ class LifeActivity : Activity() {
         val moreOn = p == 2 || p == 4 || p == 5 || p == 6
         tabTabs.setTextColor(if (moreOn) Color.WHITE else RunUi.MUTED); tabTabs.setBackgroundColor(if (moreOn) 0xFF2A3430.toInt() else 0xFF222B28.toInt())
         if (p == 0 || p == 1 || p == 6 || p in 7..9) reload.run()
-        if (p == 1) weekTab?.load()
+        if (p == 1 || p == 9) weekTab?.load()
         if (p == 7) monthCard?.load()
         if (p == 8) yearCard?.load()
     }
@@ -281,6 +284,8 @@ class LifeActivity : Activity() {
         lifeLibrary = LifeLibrary(this, web, { showPage(2) }) { type, cb -> pickCb = cb
             try { startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType(type), 43) } catch (e: Exception) { pickCb = null } }
         medHeader = LifeMeditate(this, web)
+        wellPeriods = PeriodTables("Wellness", "well")
+        biblePeriods = PeriodTables("Spirituality", "bible")
         reviewCard = ReviewCard().also { nativeCol.addView(it.view) }
         journalCard = JournalCard().also { nativeCol.addView(it.view) }
         // Weekly · Monthly · Yearly · Review each get their own page (showReviews puts the right card on it).
@@ -591,6 +596,37 @@ class LifeActivity : Activity() {
         return android.widget.HorizontalScrollView(this).apply { addView(t) }
     }
 
+    /**
+     * 📅 Weekly · 📆 Monthly · 🗓️ Yearly tables for one area (💚 Wellness or 📖 Spirituality & Reading), shown in that
+     * area's own section (they replaced the separate Weekly / Monthly / Yearly pages). Each opens and closes.
+     */
+    private inner class PeriodTables(private val keyword: String, private val tag: String) {
+        val view = LinearLayout(this@LifeActivity).apply { orientation = LinearLayout.VERTICAL }
+        private val offs = intArrayOf(0, 0, 0)
+        private fun d(v: Int) = RunUi.dp(this@LifeActivity, v)
+        private val parts = listOf(Triple("week", "📅 Weekly — by day", 0), Triple("monthly", "📆 Monthly — by week", 1), Triple("yearly", "🗓️ Yearly — by month", 2)).map { (k, t, i) ->
+            LifeUi.Collapsible(this@LifeActivity, "life_${tag}_$k", t, RunUi.ACCENT, k == "week") { b -> draw(k, i, b) } }
+        init { parts.forEach { view.addView(it.view) } }
+        fun load() { parts.forEach { it.refresh() } }
+        private fun draw(kind: String, i: Int, b: LinearLayout) {
+            val call = if (kind == "week") "ccNative.weekTab(${offs[i]})" else "ccNative.period('$kind',${offs[i]})"
+            web.evaluateJavascript("window.ccNative&&ccNative.period?$call:null") { r ->
+                val j = try { (JSONTokener(r).nextValue() as? String)?.let { JSONObject(it) } } catch (e: Exception) { null } ?: return@evaluateJavascript
+                b.removeAllViews()
+                b.addView(LinearLayout(this@LifeActivity).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL; setPadding(0, d(8), 0, d(4))
+                    addView(RunUi.text(this@LifeActivity, "‹", RunUi.ACCENT, 22f, true).apply { setPadding(d(4), 0, d(14), 0); setOnClickListener { offs[i]--; draw(kind, i, b) } })
+                    addView(RunUi.text(this@LifeActivity, j.optString("label"), Color.WHITE, 14f, true).apply { gravity = android.view.Gravity.CENTER; setOnClickListener { offs[i] = 0; draw(kind, i, b) } }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+                    addView(RunUi.text(this@LifeActivity, "›", RunUi.ACCENT, 22f, true).apply { setPadding(d(14), 0, d(4), 0); setOnClickListener { if (offs[i] < 0) { offs[i]++; draw(kind, i, b) } } }) })
+                val secs = j.optJSONArray("sections"); var any = false
+                if (secs != null) for (k in 0 until secs.length()) { val sec = secs.getJSONObject(k)
+                    if (!sec.optString("title").contains(keyword)) continue; any = true
+                    b.addView(ccTable(sec.optJSONArray("head"), sec.optJSONArray("rows"), sec.optJSONArray("cells"), sec.optJSONArray("headColors")))
+                }
+                if (!any) b.addView(RunUi.text(this@LifeActivity, "Nothing recorded for this period.", RunUi.MUTED, 12f))
+            }
+        }
+    }
+
     /** 📊 Weekly — goal progress bars (set your targets here), the week's numbers and its Fitness / Wellness / Spirituality / Nutrition tables. */
     private inner class WeekTabCard {
         val view = RunUi.card(this@LifeActivity)
@@ -630,7 +666,9 @@ class LifeActivity : Activity() {
             }
             j.optString("digest").takeIf { it.isNotBlank() }?.let { body.addView(RunUi.text(this@LifeActivity, it, RunUi.MUTED, 12f).apply { setPadding(0, d(10), 0, 0) }) }
             val secs = j.optJSONArray("sections") ?: return
-            body.addView(RunUi.text(this@LifeActivity, "🏃 Miles by day / week / month are in Activities → Mileage · 🍎 food by day is in Nutrition → By day.", RunUi.DIM, 11f).apply { setPadding(0, d(10), 0, 0) })
+            // The weekly / monthly / yearly tables now live in their own areas.
+            body.addView(RunUi.text(this@LifeActivity, "Weekly · Monthly · Yearly tables: 💚 Wellness and 📖 Spirituality in ☰ More → Wellness and Bible · 🏃 miles in Activities → Mileage · 🍎 food in Nutrition.", RunUi.DIM, 11f).apply { setPadding(0, d(10), 0, 0) })
+            if (secs.length() >= 0) return
             for (i in 0 until secs.length()) { val sec = secs.getJSONObject(i)
                 // Running numbers live in Activities and food in Nutrition now (each number in one place).
                 if (sec.optString("title").let { it.contains("Fitness") || it.contains("Nutrition") || it.contains("Micronutrients") }) continue
