@@ -54,7 +54,7 @@ class TodayLife(private val act: Activity) : CcEngine.Listener {
 
     /** Call from onResume (and it refreshes itself whenever the Command Center saves). */
     fun start() { CcEngine.add(this); CcEngine.get(act).onResume(); CcEngine.pushWellness(act); tries = 0; load() }
-    fun stop() { CcEngine.remove(this); ui.removeCallbacks(retry) }
+    fun stop() { CcEngine.remove(this); ui.removeCallbacks(retry); CcEngine.exportLife(act) }
     override fun changed() { ui.removeCallbacks(retry); ui.postDelayed(retry, 400) }
     private val retry = Runnable { load() }
 
@@ -63,7 +63,7 @@ class TodayLife(private val act: Activity) : CcEngine.Listener {
         web.evaluateJavascript("(window.ccNative&&ccNative.all&&typeof load==='function')?ccNative.all():null") { r ->
             val j = LifeUi.obj(r)
             if (j == null || !j.has("schedule")) { if (tries++ < 40) ui.postDelayed(retry, 1000); return@evaluateJavascript }
-            status.visibility = View.GONE; fill(j)
+            status.visibility = View.GONE; CcEngine.ready(act); fill(j)
         }
     }
     private fun js(call: String) = CcEngine.get(act).evaluateJavascript("window.ccNative&&$call", null)

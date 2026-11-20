@@ -363,6 +363,40 @@
     docEnd:function(id,name,type,size){var b=getBooks().find(function(x){return String(x.id)===String(id);});if(!b)return false;var data='data:'+(type||'application/octet-stream')+';base64,'+(window.__bsDoc||[]).join('');window.__bsDoc=null;
       window._bsDocs=window._bsDocs||{};delete _bsDocs[String(id)];
       putBookDocument({bookId:b.id,name:name,type:type,size:Number(size)||0,dataUrl:data,addedAt:new Date().toISOString()}).then(function(){ccNative.docsLoad(id);});return true;},
+    // ── 💾 Life data for BeyondStride's Backup: everything the Command Center keeps here (saved data + pictures/files),
+    // never the AI key or other secrets. Sent to the phone in parts (BSNative.lifePart / lifeDone). ──
+    lifeBackup:function(){
+      function safe(k){var l=String(k||'').toLowerCase();if(!l)return false;if(l==='ai_key'||l.indexOf('sb-')===0||l.indexOf('journal_cloud_')===0||l.indexOf('journal_google_')===0)return false;
+        return !/api[_-]?key|apikey|secret|token|password|service_role/.test(l);}
+      function dump(name){return new Promise(function(res){var made=false,r;try{r=indexedDB.open(name);}catch(e){res(null);return;}
+        r.onupgradeneeded=function(){made=true;try{r.transaction.abort();}catch(e){}};r.onerror=function(){res(null);};
+        r.onsuccess=function(){var db=r.result,out={};if(made){db.close();res(null);return;}var names=[].slice.call(db.objectStoreNames);if(!names.length){db.close();res(null);return;}
+          var left=names.length;names.forEach(function(st){var rows=[],tx;try{tx=db.transaction(st,'readonly');}catch(e){if(--left===0){db.close();res(out);}return;}
+            var c=tx.objectStore(st).openCursor();c.onsuccess=function(){var cur=c.result;if(cur){rows.push([cur.key,cur.value]);cur.continue();}else{out[st]=rows;if(--left===0){db.close();res(out);}}};
+            c.onerror=function(){if(--left===0){db.close();res(out);}};});};});}
+      (async function(){try{
+        var ls={},n=0;for(var i=0;i<localStorage.length;i++){var k=localStorage.key(i);if(!safe(k))continue;ls[k]=localStorage.getItem(k);n++;}
+        var names=['my_life_command_center_large_storage','BookCoversDB','BookDocumentsDB','BibleImagesDB','OtherUploadsDB','JournalArchiveDB'],idb={},files=0;
+        for(var j=0;j<names.length;j++){var d=await dump(names[j]);if(d){idb[names[j]]=d;Object.keys(d).forEach(function(st){files+=d[st].length;});}}
+        var json=JSON.stringify({format:'beyondstride-life-backup',version:1,createdAt:new Date().toISOString(),items:n,files:files,localStorage:ls,indexedDB:idb});
+        for(var p=0;p<json.length;p+=400000)BSNative.lifePart(json.slice(p,p+400000));
+        BSNative.lifeDone(n+' items · '+files+' pictures/files');
+      }catch(e){try{BSNative.lifeDone('error: '+e);}catch(x){}}})();
+      return true;},
+    // Restore from that backup (parts in, then lifeRestoreEnd). Replaces matching saved items; the page reloads after.
+    lifeRestoreStart:function(){window.__bsLife=[];return true;},
+    lifeRestorePart:function(s){window.__bsLife.push(s);return true;},
+    lifeRestoreEnd:function(){var o;try{o=JSON.parse((window.__bsLife||[]).join(''));}catch(e){return 'bad file';}window.__bsLife=null;
+      if(!o||o.format!=='beyondstride-life-backup')return 'not a Life backup';
+      var n=0;Object.keys(o.localStorage||{}).forEach(function(k){var l=k.toLowerCase();if(l==='ai_key')return;try{localStorage.setItem(k,o.localStorage[k]);n++;}catch(e){}});
+      var jobs=[];Object.keys(o.indexedDB||{}).forEach(function(name){var stores=o.indexedDB[name];
+        var opener=window.ccIdbOpen&&['BookCoversDB','BookDocumentsDB','BibleImagesDB','OtherUploadsDB','JournalArchiveDB'].indexOf(name)>=0?ccIdbOpen(name):new Promise(function(res,rej){var r=indexedDB.open(name);
+          r.onupgradeneeded=function(){Object.keys(stores).forEach(function(st){if(!r.result.objectStoreNames.contains(st))r.result.createObjectStore(st);});};r.onsuccess=function(){res(r.result);};r.onerror=function(){rej(r.error);};});
+        jobs.push(opener.then(function(db){return Promise.all(Object.keys(stores).map(function(st){return new Promise(function(res){if(!db.objectStoreNames.contains(st)){res();return;}
+          var tx=db.transaction(st,'readwrite'),os=tx.objectStore(st);(stores[st]||[]).forEach(function(kv){try{if(os.keyPath)os.put(kv[1]);else os.put(kv[1],kv[0]);}catch(e){}});
+          tx.oncomplete=res;tx.onerror=res;tx.onabort=res;});}));}).catch(function(){}));});
+      Promise.all(jobs).then(function(){setTimeout(function(){location.reload();},300);});
+      return 'ok:'+n;},
     habitsPage:function(off){return JSON.stringify(habitsPage(off));},
     /** On the Habits page's day: log / adjust / move / delete. */
     habitLogOn:function(off,id,status){try{var d=new Date();d.setDate(d.getDate()+(Number(off)||0));h2ViewDate=d;h2SetLog(id,status);}catch(e){return false;}return true;},

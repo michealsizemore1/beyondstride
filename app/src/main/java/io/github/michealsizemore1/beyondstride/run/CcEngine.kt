@@ -76,6 +76,9 @@ object CcEngine {
                     @JavascriptInterface fun changed() { post { listeners.toList().forEach { it.changed() } } }
                     @JavascriptInterface fun files(json: String) { post { listeners.toList().forEach { it.files(json) } } }
                     @JavascriptInterface fun file(name: String, type: String, b64: String) { post { listeners.toList().forEach { it.file(name, type, b64) } } }
+                    // 💾 Life data for BeyondStride's Backup, sent in parts.
+                    @JavascriptInterface fun lifePart(part: String) { synchronized(lifeBuf) { lifeBuf.append(part) } }
+                    @JavascriptInterface fun lifeDone(msg: String) { post { lifeFinished(context.applicationContext, msg) } }
                 }, "BSNative")
             }.also { web = it }
         }
@@ -114,6 +117,56 @@ object CcEngine {
                     if (r?.contains("wait") == true && n > 0) v.postDelayed({ tryPush(n - 1) }, 1000) } }
             }
             tryPush(30)
+        }.start()
+    }
+
+    // ── 💾 Life data in BeyondStride's Backup ──
+    // The Command Center keeps its data inside its page (saved items + pictures/files). A copy is written to
+    // life_backup.json (now and then, and when you leave Life or Today), and the Backup .zip includes that file.
+    // Never the AI key or other secrets. Restoring a backup puts it back the next time the page opens.
+    private val lifeBuf = StringBuilder()
+    private var lifeBusy = false
+    private var lifeCb: ((String) -> Unit)? = null
+    fun lifeFile(ctx: android.content.Context) = java.io.File(ctx.filesDir, "life_backup.json")
+    private fun lp(ctx: android.content.Context) = ctx.getSharedPreferences("lifebackup", 0)
+    fun lifeInfo(ctx: android.content.Context) = lp(ctx).getString("info", "") ?: ""
+    fun lifeAt(ctx: android.content.Context) = lp(ctx).getLong("at", 0L)
+    /** Saves a fresh copy of the Life data (at most every 20 minutes unless [force]). */
+    fun exportLife(act: Activity, force: Boolean = false, done: (String) -> Unit = {}) {
+        val now = System.currentTimeMillis()
+        if (lifeBusy || (!force && now - lifeAt(act) < 20 * 60_000L)) return
+        if (lp(act).getBoolean("pending", false)) return   // a restore is waiting: don't overwrite the restored copy
+        lifeBusy = true; lifeCb = done; synchronized(lifeBuf) { lifeBuf.setLength(0) }
+        val w = get(act)
+        w.evaluateJavascript("(window.ccNative&&ccNative.lifeBackup&&typeof load==='function')?ccNative.lifeBackup():'no'") { r -> if (r == null || r.contains("no")) { lifeBusy = false } }
+        w.postDelayed({ lifeBusy = false }, 120_000L)
+    }
+    private fun lifeFinished(ctx: android.content.Context, msg: String) {
+        val cb = lifeCb; lifeCb = null
+        if (msg.startsWith("error")) { lifeBusy = false; cb?.invoke(msg); return }
+        val txt = synchronized(lifeBuf) { lifeBuf.toString().also { lifeBuf.setLength(0) } }
+        Thread {
+            try {
+                val tmp = java.io.File(ctx.filesDir, "life_backup.json.tmp"); tmp.writeText(txt)
+                if (tmp.length() > 50) { tmp.renameTo(lifeFile(ctx)); lp(ctx).edit().putLong("at", System.currentTimeMillis()).putString("info", msg).apply() }
+            } catch (e: Exception) { }
+            lifeBusy = false
+            web?.post { cb?.invoke(msg) }
+        }.start()
+    }
+    /** After a backup was restored: put the Life data back into the page (once), then it reloads. */
+    fun markLifeRestorePending(ctx: android.content.Context) = lp(ctx).edit().putBoolean("pending", true).apply()
+    fun ready(act: Activity) {
+        if (!lp(act).getBoolean("pending", false)) return
+        lp(act).edit().putBoolean("pending", false).apply()
+        val app = act.applicationContext; val w = web ?: return
+        Thread {
+            val txt = try { lifeFile(app).readText() } catch (e: Exception) { return@Thread }
+            w.post {
+                w.evaluateJavascript("window.ccNative&&ccNative.lifeRestoreStart()", null)
+                var i = 0; while (i < txt.length) { w.evaluateJavascript("ccNative.lifeRestorePart(${org.json.JSONObject.quote(txt.substring(i, minOf(txt.length, i + 400_000)))})", null); i += 400_000 }
+                w.evaluateJavascript("ccNative.lifeRestoreEnd()") { r -> android.widget.Toast.makeText(app, if (r?.contains("ok") == true) "🌱 Life data restored from the backup" else "Couldn't restore the Life data: $r", android.widget.Toast.LENGTH_LONG).show() }
+            }
         }.start()
     }
 }

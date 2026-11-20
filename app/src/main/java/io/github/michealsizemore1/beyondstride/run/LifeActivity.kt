@@ -165,7 +165,7 @@ class LifeActivity : Activity() {
 
     override fun onResume() { super.onResume(); CcEngine.get(this); web.onResume(); CcEngine.pushWellness(this); Thread { try { CalendarReminders.refresh(applicationContext) } catch (e: Exception) { } }.start(); web.evaluateJavascript("window.ccSync&&ccSync.now()", null); if (!full) { ui.removeCallbacks(reload); ui.postDelayed(reload, 300) } }
     // Upload anything not yet sent before the app goes to the background.
-    override fun onPause() { study.stopReading(); more.pause(); web.evaluateJavascript("window.ccSync&&ccSync.now()", null); web.onPause(); super.onPause() }
+    override fun onPause() { study.stopReading(); more.pause(); CcEngine.exportLife(this); web.evaluateJavascript("window.ccSync&&ccSync.now()", null); web.onPause(); super.onPause() }
     override fun onSaveInstanceState(out: Bundle) { super.onSaveInstanceState(out); out.putInt("page", page) }
     override fun onDestroy() { ui.removeCallbacksAndMessages(null); study.destroy(); CcEngine.remove(ccListener); CcEngine.release(this); super.onDestroy() }
 
@@ -303,7 +303,7 @@ class LifeActivity : Activity() {
         web.evaluateJavascript("(window.ccNative&&typeof load==='function')?(ccNative.all?ccNative.all():ccNative.focus()):null") { r ->
             val json = try { (JSONTokener(r).nextValue() as? String)?.let { JSONObject(it) } } catch (e: Exception) { null }
             if (json == null) { focusCard?.loading(); if (tries++ < 60) ui.postDelayed(reload, 700) ; return@evaluateJavascript }
-            tries = 0; focusCard?.fill(json); if (page == 0) calendar?.load(); scheduleCard?.fill(json); checksCard?.fill(json); bibleChecks?.fill(json); meditCard?.fill(json); wellCard?.fill(json); bibleCard?.fill(json); libCard?.fill(json); if (page == 6 && section == "habits2") habitsCard?.load(); if (page == 6 && section == "bible") lifeBible?.load(); if (page == 6 && section == "library") lifeLibrary?.load(); medHeader?.fill(json); reviewCard?.fill(json); journalCard?.fill(json); weekCard?.fill(json)
+            tries = 0; CcEngine.ready(this@LifeActivity); focusCard?.fill(json); if (page == 0) calendar?.load(); scheduleCard?.fill(json); checksCard?.fill(json); bibleChecks?.fill(json); meditCard?.fill(json); wellCard?.fill(json); bibleCard?.fill(json); libCard?.fill(json); if (page == 6 && section == "habits2") habitsCard?.load(); if (page == 6 && section == "bible") lifeBible?.load(); if (page == 6 && section == "library") lifeLibrary?.load(); medHeader?.fill(json); reviewCard?.fill(json); journalCard?.fill(json); weekCard?.fill(json)
             // An older copy of the Command Center is still cached (the website updates before this screen can use the
             // new parts): fetch the newest once.
             if ((!json.has("checks") || !json.has("schedule") || !json.has("review") || !json.has("wellness") || !json.has("weekly") || !json.has("journal")) && !refreshed) { refreshed = true; web.clearCache(true); web.reload(); ui.postDelayed(reload, 2500) }

@@ -232,18 +232,18 @@ class RunSettingsActivity : Activity() {
             addView(RunUi.text(ctx, if (at == 0L) "No backup yet" else "Last backup: " +
                 java.text.SimpleDateFormat("EEE, MMM d · h:mm a", java.util.Locale.getDefault()).format(java.util.Date(at)), Color.WHITE, 15f, true))
             Backup.lastInfo(ctx).takeIf { it.isNotBlank() }?.let { addView(RunUi.text(ctx, it, RunUi.MUTED, 12f)) }
-            addView(RunUi.text(ctx, "Runs, workouts & plan, courses, settings, zones, LiveTrack, morning checks, sleep, personal bests, your nutrition history (with food photos, favorites and notes), Activities and training plans — in one file. Your Anthropic key is never included. " +
+            addView(RunUi.text(ctx, "Runs, workouts & plan, courses, settings, zones, LiveTrack, morning checks, sleep, personal bests, your nutrition history (with food photos, favorites and notes), Activities and training plans, and the 🌱 Life tab (habits, journal, reviews, schedule, calendar, books with covers and documents, Bible studies, files) — in one file. Your AI keys are never included. " +
                 "Save it to Google Drive so it's safe if the phone is lost.", RunUi.DIM, 12f).apply { setPadding(0, dp(6), 0, 0) })
-            addView(RunUi.button(ctx, if (Backup.uri(ctx) == null) "Back up now…" else "Back up now", RunUi.ACCENT) {
+            addView(RunUi.button(ctx, if (Backup.uri(ctx) == null) "Back up now…" else "Back up now", RunUi.ACCENT) { withLife {
                 val u = Backup.uri(ctx)
                 if (u == null) newBackup() else Thread {
                     val r = try { "Backed up: " + Backup.write(ctx, u) } catch (e: Exception) { null }
                     runOnUiThread { if (r == null) newBackup() else { Toast.makeText(ctx, r, Toast.LENGTH_LONG).show(); render() } }
                 }.start()
-            }.apply { layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(10) } })
+            } }.apply { layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(10) } })
             if (Backup.uri(ctx) != null) addView(RunUi.button(ctx, "Back up to a new file…", RunUi.CARD, Color.WHITE) { newBackup() }
                 .apply { layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(8) } })
-            addView(RunUi.button(ctx, "☁️ Share backup to OneDrive / Drive…", RunUi.CARD, Color.WHITE) {
+            addView(RunUi.button(ctx, "☁️ Share backup to OneDrive / Drive…", RunUi.CARD, Color.WHITE) { withLife {
                 Toast.makeText(ctx, "Making the backup…", Toast.LENGTH_SHORT).show()
                 Thread {
                     val f = try { java.io.File(cacheDir, "backup").apply { mkdirs(); listFiles()?.forEach { it.delete() } }.let { d ->
@@ -255,7 +255,7 @@ class RunSettingsActivity : Activity() {
                             .putExtra(Intent.EXTRA_SUBJECT, f.name).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION), "Save the backup to…"))
                     }
                 }.start()
-            }.apply { layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(8) } })
+            } }.apply { layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(8) } })
             addView(RunUi.button(ctx, "Restore from a backup…", RunUi.CARD, Color.WHITE) {
                 @Suppress("DEPRECATION") startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE)
                     .setType("*/*").putExtra(Intent.EXTRA_MIME_TYPES, arrayOf("application/zip", "application/octet-stream", "application/x-zip-compressed")), 82)
@@ -520,6 +520,15 @@ class RunSettingsActivity : Activity() {
         Toast.makeText(this, "Checking Health Connect…", Toast.LENGTH_SHORT).show()
         Thread { try { BpImport.sync(app, 14); DailySummary.publish(app, force = true) } catch (e: Exception) { }
             runOnUiThread { if (!isFinishing) { Toast.makeText(this, BpImport.lastInfo(app).substringAfter(" · ").ifBlank { "Done" }, Toast.LENGTH_LONG).show(); render() } } }.start()
+    }
+    /** A fresh copy of the 🌱 Life data first (so the backup has today's), then [go]. Waits at most 20 seconds. */
+    private fun withLife(go: () -> Unit) {
+        if (!LifeTab.on(this)) { go(); return }
+        var done = false
+        val fin = { if (!done) { done = true; go() } }
+        Toast.makeText(this, "Saving your Life data…", Toast.LENGTH_SHORT).show()
+        CcEngine.exportLife(this, force = true) { runOnUiThread { fin() } }
+        android.os.Handler(mainLooper).postDelayed({ fin() }, 20_000L)
     }
     private fun syncWeights() {
         val app = applicationContext
