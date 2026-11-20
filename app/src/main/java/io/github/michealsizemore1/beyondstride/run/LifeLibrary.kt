@@ -59,14 +59,18 @@ class LifeLibrary(private val act: Activity, private val web: WebView, private v
             draw(); loadCovers(3)
         }
     }
-    private fun loadCovers(tries: Int) {
+    private var coverGen = 0
+    /** Covers come from the page's picture store a moment after asking; keep asking until it says none are still loading. */
+    private fun loadCovers(tries: Int, gen: Int = ++coverGen) {
+        if (gen != coverGen) return
         web.evaluateJavascript("window.ccNative&&ccNative.bookCovers?ccNative.bookCovers():'{}'") { r ->
             val c = LifeUi.obj(r) ?: JSONObject()
+            val pending = c.optInt("__pending", 0)
             // Add or update only — a cover still loading in the page must not make one already shown disappear (removing is done by Remove Cover).
             var changed = false
-            c.keys().forEach { k -> val v = c.optString(k); if (v.isNotBlank() && covers.optString(k) != v) { covers.put(k, v); changed = true } }
+            c.keys().forEach { k -> if (k == "__pending") return@forEach; val v = c.optString(k); if (v.isNotBlank() && covers.optString(k) != v) { covers.put(k, v); changed = true } }
             if (changed) draw()
-            if (tries > 1) LifeUi.ui.postDelayed({ loadCovers(tries - 1) }, 700)
+            if ((pending > 0 && tries > -30) || tries > 1) LifeUi.ui.postDelayed({ loadCovers(tries - 1, gen) }, 600)
         }
     }
 

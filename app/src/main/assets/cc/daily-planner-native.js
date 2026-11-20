@@ -292,9 +292,10 @@
     bibleAI:function(kind){goRealDay();try{if(!journalAIKey())return 'nokey';}catch(e){return 'nokey';}
       try{if(kind==='suggest')aiDailyBread();else if(kind==='explain')meditVerseSummary();else if(kind==='worship')bibleWorshipAIPrompt();else if(kind==='prayer')meditAIPrompt('prayer');else return false;}catch(e){return false;}return true;},
     bibleHero:function(a){goRealDay();try{var b=document.getElementById('hm-bible');if(b)b.click();if(window.bibleStudy&&typeof bibleStudy[a]==='function'){bibleStudy[a]();return true;}}catch(e){}return false;},
-    bookCovers:function(){window._bsCov=window._bsCov||{};var out={};try{getBooks().forEach(function(b){var k=String(b.id);
-      if(k in _bsCov){if(_bsCov[k])out[k]=_bsCov[k];}else{_bsCov[k]='';getBookCover(b.id).then(function(d){_bsCov[k]=d||'';}).catch(function(){});}});}catch(e){}return JSON.stringify(out);},
-    bookCoversReset:function(){window._bsCov={};return true;},
+    bookCovers:function(){window._bsCov=window._bsCov||{};window._bsCovWait=window._bsCovWait||{};var out={},pend=0;try{getBooks().forEach(function(b){var k=String(b.id);
+      if(k in _bsCov){if(_bsCov[k])out[k]=_bsCov[k];if(_bsCovWait[k])pend++;}else{_bsCov[k]='';_bsCovWait[k]=1;pend++;getBookCover(b.id).then(function(d){_bsCov[k]=d||'';delete _bsCovWait[k];}).catch(function(){delete _bsCovWait[k];});}});}catch(e){}
+      out.__pending=pend;return JSON.stringify(out);},
+    bookCoversReset:function(){window._bsCov={};window._bsCovWait={};return true;},
     libraryPage:function(sort){return JSON.stringify(libraryPage(sort));},
     bookSave:function(id,title,author,date,rating,notes){title=String(title||'').trim();if(!title)return false;var books=getBooks(),i=id?bookIdx(books,id):-1;
       var f={title:title,author:String(author||'').trim(),dateCompleted:String(date||''),rating:Math.max(0,Math.min(5,Number(rating)||0)),notes:String(notes||'').trim()};
