@@ -17,7 +17,8 @@ class LifeClockIcon : Drawable() {
     override fun draw(c: Canvas) {
         val b = bounds; val s = min(b.width(), b.height()).toFloat()
         val ox = b.exactCenterX() - s / 2; val oy = b.exactCenterY() - s / 2
-        fun x(v: Float) = ox + v * s; fun y(v: Float) = oy + v * s
+        fun x(v: Float) = ox + v * s
+        fun y(v: Float) = oy + v * s
         val cx = x(0.47f); val cy = y(0.46f); val r = s * 0.36f
         // Face and ring
         p.style = Paint.Style.FILL; p.color = 0xFF0F2A33.toInt(); c.drawCircle(cx, cy, r, p)
