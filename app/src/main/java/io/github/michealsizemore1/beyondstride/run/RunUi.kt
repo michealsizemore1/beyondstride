@@ -143,7 +143,7 @@ object RunUi {
         val ids = listOfNotNull(TAB_TODAY, if (showLife) TAB_LIFE else null, TAB_FITNESS, TAB_NUTRITION, TAB_RUNS)
         val tabs = listOfNotNull<Triple<String, String, Class<*>?>>(
             Triple("Today", "☀", RunsActivity::class.java),
-            if (showLife) Triple("Life", "📓", LifeActivity::class.java) else null,
+            if (showLife) Triple("Life", "clock", LifeActivity::class.java) else null,
             Triple("Fitness", "♥", FitnessActivity::class.java),
             Triple("Nutrition", "🍎", NutritionActivity::class.java),
             Triple("Activities", "≡", ActivitiesActivity::class.java),
@@ -156,7 +156,12 @@ object RunUi {
                 val on = ids[i] == selected
                 addView(LinearLayout(act).apply {
                     orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER
-                    addView(text(act, glyph, if (on) Color.BLACK else MUTED, 20f, true).apply {
+                    if (glyph == "clock") addView(android.widget.ImageView(act).apply {
+                        setImageDrawable(LifeClockIcon()); scaleType = android.widget.ImageView.ScaleType.FIT_CENTER
+                        if (on) background = rounded(ACCENT, dp(act, 16).toFloat())
+                        setPadding(0, dp(act, 3), 0, dp(act, 3))
+                    }, LinearLayout.LayoutParams(dp(act, 54), dp(act, 33)))
+                    else addView(text(act, glyph, if (on) Color.BLACK else MUTED, 20f, true).apply {
                         gravity = Gravity.CENTER
                         if (on) background = rounded(ACCENT, dp(act, 16).toFloat())
                         setPadding(0, dp(act, 3), 0, dp(act, 3))
