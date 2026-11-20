@@ -75,8 +75,10 @@ class BibleStudyPage(private val act: Activity, private val web: WebView, privat
     private fun unwrap(r: String): String = try { JSONTokener(r).nextValue() as? String ?: "" } catch (e: Exception) { "" }
 
     /** Start (or continue) today's study. [onResult] gets "ok", "nokey", "noreading" or "" (Command Center not ready). */
-    fun open(onResult: (String) -> Unit) {
-        call("bibleStudy.nStart()") { r ->
+    fun open(onResult: (String) -> Unit) = open(null, onResult)
+    /** A past day's saved study (from the 🗂️ Journal); null = today. A past study never ticks today's boxes. */
+    fun open(date: String?, onResult: (String) -> Unit) {
+        call("bibleStudy.nStart(${if (date == null) "" else org.json.JSONObject.quote(date)})") { r ->
             val res = unwrap(r)
             if (res == "ok") { visible = true; sig = ""; refresh() }
             onResult(res)

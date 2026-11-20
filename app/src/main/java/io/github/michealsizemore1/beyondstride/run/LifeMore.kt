@@ -62,7 +62,10 @@ class LifeMore(private val act: Activity, private val web: WebView, private val 
         col.removeAllViews()
         meditView = meditCard()   // shown in ☰ Tabs → Meditate
         bpView = bpCard()   // shown in ☰ More → Wellness
-        col.addView(searchCard()); col.addView(askCard()); col.addView(filesCard()); col.addView(settingsCard())
+        col.addView(searchCard()); col.addView(askCard()); col.addView(filesCard())
+        // ⚙️ Command Center settings (AI key, sync) moved to BeyondStride's Settings → Life tab.
+        col.addView(RunUi.card(act).apply { title(this, "⚙️ Settings"); addView(note("The Life tab's AI key, journal access and sync are in BeyondStride's Settings → 📓 Life tab."))
+            addView(RunUi.button(act, "Open Settings › Life tab", 0xFF374151.toInt(), Color.WHITE) { act.startActivity(Intent(act, RunSettingsActivity::class.java).putExtra("page", "life")) }, lp()) })
     }
 
     // ── 🔍 Search ──

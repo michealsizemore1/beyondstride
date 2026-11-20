@@ -70,7 +70,8 @@
       .then(function(d){if(!d||d.error)throw new Error((d&&d.error&&d.error.message)||'AI unavailable');return String((d.content&&d.content[0]&&d.content[0].text)||'').trim();});
   }
   function json(t){var m=String(t).match(/\{[\s\S]*\}/);return JSON.parse(m?m[0]:t);}
-  function tick(key){try{var box=document.querySelector('.tri-check[data-key="'+key+'"]');if(!box)return;if(box.dataset.state!=='green'){applyTriState(box,'green');try{save();}catch(e){}try{renderDailyCheckOverview();}catch(e){}}}catch(e){}}
+  function tick(key){if(S&&S.date&&S.date!==todayKey())return;try{   // a past study (opened from the Journal) never ticks today's boxes
+var box=document.querySelector('.tri-check[data-key="'+key+'"]');if(!box)return;if(box.dataset.state!=='green'){applyTriState(box,'green');try{save();}catch(e){}try{renderDailyCheckOverview();}catch(e){}}}catch(e){}}
 
   // ── What to study for a date ──
   function readingFor(date,dayOverride){
@@ -368,9 +369,9 @@
   }
   // ── For BeyondStride's native Bible Study screen: the same session, driven without this page's overlay. ──
   // Same prompts, same saved session (bstudy_<date>), same checks ticked; the phone draws the screens.
-  function nStart(){
+  function nStart(date){
     if(!journalAIKey())return 'nokey';
-    var date=todayKey(),saved=ls(sessionKey(date));
+    date=date||todayKey();var saved=ls(sessionKey(date));   // a past date reopens that day's saved study (from the Journal)
     if(!S||S.date!==date){
       if(saved&&saved.segs)S=saved;
       else{var dp=(ls('bstudy_day')||{}).date===date?(ls('bstudy_day')||{}).day:'';var r=readingFor(date,dp);

@@ -41,7 +41,7 @@ class RunSettingsActivity : Activity() {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(16), dp(40), dp(16), dp(40))
         }
-        val titles = mapOf("run" to "Run options", "audio" to "Audio prompts", "zones" to "Zones & power", "cc" to "Command Center", "standalone" to "Stand-alone & cloud copy", "ai" to "AI food search", "backup" to "Backup", "about" to "About")
+        val titles = mapOf("run" to "Run options", "audio" to "Audio prompts", "zones" to "Zones & power", "cc" to "Command Center", "standalone" to "Stand-alone & cloud copy", "ai" to "AI food search", "backup" to "Backup", "life" to "🌱 Life tab", "about" to "About")
         col.addView(RunUi.text(this, page?.let { titles[it] } ?: "Settings", Color.WHITE, 26f, true))
         val classic = getSharedPreferences("runsettings", 0).getString("menuStyle", "cards") == "classic"
         if (page == null && !classic) { renderList(col); return }
@@ -298,6 +298,14 @@ class RunSettingsActivity : Activity() {
         }.apply { layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(10) } })
         }
 
+        if (on("life")) {
+            col.addView(RunUi.button(this, "Life tab: " + (if (LifeTab.on(ctx)) "On" else "Off") + "  (tap to " + (if (LifeTab.on(ctx)) "remove" else "add") + ")", RunUi.CARD, Color.WHITE) {
+                LifeTab.setOn(ctx, !LifeTab.on(ctx)); render()
+                android.widget.Toast.makeText(ctx, if (LifeTab.on(ctx)) "Life tab added" else "Life tab removed", android.widget.Toast.LENGTH_SHORT).show() }
+                .apply { layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(12) } })
+            if (LifeTab.on(ctx)) col.addView(LifeSettings.card(this))
+            col.addView(RunUi.text(this, "The Life tab is the Command Center inside the app (phone only — never on the watch). Its data is in your Backup.", RunUi.DIM, 12f).apply { setPadding(dp(4), dp(10), 0, 0) })
+        }
         if (on("about")) {
         col.addView(RunUi.text(this, "Phone app " + packageManager.getPackageInfo(packageName, 0).versionName, RunUi.MUTED, 13f)
             .apply { setPadding(dp(4), dp(6), 0, 0) })
@@ -388,9 +396,7 @@ class RunSettingsActivity : Activity() {
         row("✨", "AI food search", if (AiFood.hasKey(ctx)) "Key saved · AI search and label photos on" else "Add your Anthropic key") { page = "ai"; render() }
         row("⇪", "Backup", Backup.lastAt(ctx).takeIf { it > 0 }?.let { "Last: " + java.text.SimpleDateFormat("MMM d, h:mm a", java.util.Locale.getDefault()).format(java.util.Date(it)) +
             (if (Backup.auto(ctx) && Backup.uri(ctx) != null) " · auto" else "") } ?: "Not set up") { page = "backup"; render() }
-        row("📓", "Life tab", if (LifeTab.on(ctx)) "On · the Command Center inside the app · tap to remove" else "Off · tap to add the Command Center tab") {
-            LifeTab.setOn(ctx, !LifeTab.on(ctx)); render()
-            android.widget.Toast.makeText(ctx, if (LifeTab.on(ctx)) "Life tab added" else "Life tab removed", android.widget.Toast.LENGTH_SHORT).show() }
+        row("📓", "Life tab", if (LifeTab.on(ctx)) "On · Command Center settings, AI key, sync" else "Off · tap to add the Command Center tab") { page = "life"; render() }
         row("ⓘ", "About", "Phone app " + packageManager.getPackageInfo(packageName, 0).versionName) { page = "about"; render() }
         row("☰", "Menu style", "Cards · tap to switch back to classic (phone and watch)") { setMenuStyle("classic") }
         row("◐", "Background", if (io.github.michealsizemore1.beyondstride.Theme.light) "Lighter · tap for dark" else "Dark · tap for lighter") { toggleBg() }

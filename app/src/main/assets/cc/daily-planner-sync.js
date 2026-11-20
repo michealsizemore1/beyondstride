@@ -5,7 +5,8 @@
  *  - if the same item changed on two devices, the newer change wins (only that item).
  * The first copy uploaded must be a full one (20+ days) so a new, nearly-empty copy (like a fresh Life tab) can
  * never overwrite your real data: a new device always takes the cloud's version first.
- * Not synced: other Master App tools' data, AI keys, sign-ins, book files/covers (too big; they stay on the device).
+ * Book covers and book documents sync too (Nov 20 2026), one item each (__cover_<book>, __doc_<id>); a document over 3 MB stays on its device.
+ * Not synced: other Master App tools' data, AI keys, sign-ins.
  * Nothing is removed. */
 (function(){
   var META='ccsync_meta', DEV='ccsync_dev', IDB=['activities_data','bible_reading_archive'], SEED_DAYS=20;
@@ -23,6 +24,7 @@
   function syncable(k){
     if(!k||k===META||k===DEV||k.indexOf('ccsync_')===0||k==='beyondstride_sync'||k==='journal_cloud_dirty'||k==='last_backup_ts')return false;
     if(k.indexOf('__idb_')===0)return IDB.indexOf(k.slice(6))>=0;
+    if(k.indexOf('__cover_')===0||k.indexOf('__doc_')===0)return true;
     if(typeof window.journalCloudCanSyncKey==='function')return journalCloudCanSyncKey(k);
     var l=k.toLowerCase();return !(l==='ai_key'||l.indexOf('sb-')===0||l.indexOf('password')>=0);
   }
@@ -45,8 +47,28 @@
     w.__sync=true;window.journalLargeStoreSet=w;
   }
 
+  // ── 📚 Book covers and documents (picture stores): one synced item per cover / per document ──
+  var DOC_MAX=3e6;
+  function docUid(d){return d.uid||('d'+hash(String(d.bookId)+'|'+(d.name||'')+'|'+(d.size||0)+'|'+(d.addedAt||'')).replace(/[^0-9a-z]/gi,''));}
+  function bookIdOf(s){return /^\d+$/.test(s)?Number(s):s;}
+  function allCovers(){return typeof getAllBookCovers==='function'?getAllBookCovers().catch(function(){return [];}):Promise.resolve([]);}
+  function allDocs(){return typeof getAllBookDocuments==='function'?getAllBookDocuments().catch(function(){return [];}):Promise.resolve([]);}
+  function hookPictures(){
+    if(window.__ccPicHooked||typeof setBookCover!=='function')return;window.__ccPicHooked=true;
+    var sc=window.setBookCover,dc=window.deleteBookCover,pd=window.putBookDocument,ad=window.addBookDocument,dd=window.deleteBookDocument;
+    window.setBookCover=function(id,u){var p=sc.apply(this,arguments);if(!applying){dirty['__cover_'+id]=Date.now();soon();}return p;};
+    window.deleteBookCover=function(id){var p=dc.apply(this,arguments);if(!applying){dirty['__cover_'+id]=Date.now();soon();}return p;};
+    window.putBookDocument=function(rec){if(rec&&!rec.uid)rec.uid='d'+Date.now()+Math.floor(Math.random()*1e4);var p=pd.apply(this,arguments);
+      if(!applying&&rec&&String(rec.dataUrl||'').length<=DOC_MAX){dirty['__doc_'+rec.uid]=Date.now();soon();}return p;};
+    if(ad)window.addBookDocument=function(bookId,file){var p=ad.apply(this,arguments);return p.then(function(rec){if(!applying&&rec){var u=docUid(rec);if(String(rec.dataUrl||'').length<=DOC_MAX){dirty['__doc_'+u]=Date.now();soon();}}return rec;});};
+    window.deleteBookDocument=function(docId,bookId){var self=this,args=arguments;
+      return allDocs().then(function(all){var d=all.find(function(x){return x.id===docId;});if(d&&!applying){dirty['__doc_'+docUid(d)]=Date.now();soon();}return dd.apply(self,args);});};
+  }
   async function localValue(k){
     if(k.indexOf('__idb_')===0){var v=null;try{v=await window.journalLargeStoreGet(k.slice(6));}catch(e){}return v==null?null:JSON.stringify(v);}
+    if(k.indexOf('__cover_')===0){var id=k.slice(8),c=(await allCovers()).find(function(x){return String(x.bookId)===id;});return c&&c.dataUrl?c.dataUrl:null;}
+    if(k.indexOf('__doc_')===0){var u=k.slice(6),d=(await allDocs()).find(function(x){return docUid(x)===u;});if(!d)return null;
+      return JSON.stringify({bookId:d.bookId,name:d.name,type:d.type,size:d.size,addedAt:d.addedAt,dataUrl:d.dataUrl,uid:u});}
     return localStorage.getItem(k);
   }
   async function applyValue(k,v){
@@ -59,6 +81,13 @@
         try{if(typeof _activitiesLargeCache!=='undefined'&&name==='activities_data')_activitiesLargeCache=val;}catch(e){}
         try{if(typeof _bibleReadingArchiveLargeCache!=='undefined'&&name==='bible_reading_archive')_bibleReadingArchiveLargeCache=val;}catch(e){}
         var orig=window.journalLargeStoreSet;await orig(name,val);
+      }else if(k.indexOf('__cover_')===0){var bid=bookIdOf(k.slice(8));
+        if(v==null)await deleteBookCover(bid);else await setBookCover(bid,v);
+        try{if(window._bsCov)delete _bsCov[String(bid)];}catch(e){}
+      }else if(k.indexOf('__doc_')===0){var uid=k.slice(6),all=await allDocs(),ex=all.find(function(x){return docUid(x)===uid;});
+        if(v==null){if(ex){var db=await openBookDocsDB();await new Promise(function(r){var tx=db.transaction('docs','readwrite');tx.objectStore('docs').delete(ex.id);tx.oncomplete=r;tx.onerror=r;});}}
+        else{var rec=JSON.parse(v);rec.uid=uid;rec.bookId=bookIdOf(String(rec.bookId));if(ex)rec.id=ex.id;await putBookDocument(rec);}
+        try{if(window._bsDocs)delete _bsDocs[String(JSON.parse(v||'{}').bookId||'')];}catch(e){}
       }else if(v==null)removeItem.call(localStorage,k);
       else setItem.call(localStorage,k,v);
     }finally{applying=false;}
@@ -91,8 +120,15 @@
     for(var i=0;i<localStorage.length;i++){var k=localStorage.key(i);if(!syncable(k)||dirty[k])continue;
       var e=enc(k),h=hash(localStorage.getItem(k));if(!m[e]||m[e][1]!==h)dirty[k]=dirty[k]||1;}
     for(var j=0;j<IDB.length;j++){var key='__idb_'+IDB[j],v=await localValue(key);if(v==null)continue;var e2=enc(key);if(!m[e2]||m[e2][1]!==hash(v))dirty[key]=dirty[key]||1;}
+    try{(await allCovers()).forEach(function(c){if(!c||!c.dataUrl)return;var key='__cover_'+c.bookId,e3=enc(key);if(!m[e3]||m[e3][1]!==hash(c.dataUrl))dirty[key]=dirty[key]||1;});
+      (await allDocs()).forEach(function(d){if(!d||String(d.dataUrl||'').length>DOC_MAX)return;var u=docUid(d),key='__doc_'+u,v=JSON.stringify({bookId:d.bookId,name:d.name,type:d.type,size:d.size,addedAt:d.addedAt,dataUrl:d.dataUrl,uid:u}),e4=enc(key);
+        if(!m[e4]||m[e4][1]!==hash(v))dirty[key]=dirty[key]||1;});}catch(e){}
   }
 
+  // Covers / documents already on this device but never sent (e.g. added before this sync knew about them).
+  async function scanPictures(m){try{(await allCovers()).forEach(function(c){if(!c||!c.dataUrl)return;var key='__cover_'+c.bookId,e=enc(key);if(!m[e]||m[e][1]!==hash(c.dataUrl))dirty[key]=dirty[key]||1;});
+    (await allDocs()).forEach(function(d){if(!d||String(d.dataUrl||'').length>DOC_MAX)return;var u=docUid(d),key='__doc_'+u,v=JSON.stringify({bookId:d.bookId,name:d.name,type:d.type,size:d.size,addedAt:d.addedAt,dataUrl:d.dataUrl,uid:u}),e=enc(key);
+      if(!m[e]||m[e][1]!==hash(v))dirty[key]=dirty[key]||1;});}catch(e){}}
   async function push(m,keep){
     var keys=Object.keys(dirty);if(!keys.length)return 0;
     var vals={},times={},size=0,n=0,now=Date.now();
@@ -106,7 +142,8 @@
   async function run(){
     if(busy||!base()){return;}busy=true;
     try{
-      hookLarge();
+      hookLarge();hookPictures();
+      if(!window.__ccPicScanned&&Object.keys(meta()).length){window.__ccPicScanned=true;await scanPictures(meta());}
       var m=meta(),first=!Object.keys(m).length,remote=await get('/t')||{},changed=[];
       if(first)await scan(m);
       if(!Object.keys(remote).length){
@@ -160,7 +197,7 @@
   document.addEventListener('focusout',function(){if(pendingRefresh)setTimeout(function(){refresh([]);},300);});
 
   function start(){
-    if(started)return;started=true;hookLarge();
+    if(started)return;started=true;hookLarge();hookPictures();
     soon(1500);
     setInterval(function(){if(document.visibilityState==='visible'&&Date.now()-lastPull>25000)run();},5000);
     document.addEventListener('visibilitychange',function(){

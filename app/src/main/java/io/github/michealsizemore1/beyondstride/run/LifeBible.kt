@@ -17,7 +17,7 @@ import org.json.JSONObject
  * and ✨ AI Prayer (Guided Prayer), each with its check box.
  */
 class LifeBible(private val act: Activity, private val web: WebView, private val openFull: () -> Unit,
-                private val startStudy: () -> Unit, private val needKey: () -> Unit) {
+                private val startStudy: () -> Unit, private val needKey: () -> Unit, private val openStudy: (String) -> Unit = {}) {
     val view = LinearLayout(act).apply { orientation = LinearLayout.VERTICAL }
     private fun d(v: Int) = RunUi.dp(act, v)
     private val PURPLE = 0xFFC4B5FD.toInt(); private val HEAD = 0xFFA78BFA.toInt()
@@ -171,6 +171,7 @@ class LifeBible(private val act: Activity, private val web: WebView, private val
             else -> journal()
         }
     }
+    private var journalDlg: android.app.AlertDialog? = null
     private fun journal() = bs("nJournal()") { r ->
         val items = try { org.json.JSONArray(r) } catch (e: Exception) { org.json.JSONArray() }
         val list = LinearLayout(act).apply { orientation = LinearLayout.VERTICAL }
@@ -190,6 +191,8 @@ class LifeBible(private val act: Activity, private val web: WebView, private val
                         fun sec(t: String, v: String) { if (v.isBlank()) return; addView(RunUi.text(act, t, HEAD, 13f, true).apply { setPadding(0, d(8), 0, d(2)) }); addView(RunUi.text(act, v, Color.WHITE, 13f)) }
                         fun arr(k: String) = o.optJSONArray(k)?.let { a -> (0 until a.length()).joinToString("\n") { a.optString(it) } } ?: ""
                         sec("S — Scripture", o.optString("s")); sec("O — Observation", arr("o")); sec("A — Application", arr("a")); sec("P — Prayer", o.optString("p"))
+                        addView(LifeUi.pill(act, "📖 Open study", 0xFF7C3AED.toInt(), Color.WHITE, 12f) { journalDlg?.dismiss(); openStudy(o.optString("date")) },
+                            LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { topMargin = d(10) })
                     }
                     setOnClickListener { if (i in open) open.remove(i) else open.add(i); draw() } })
             }
@@ -201,7 +204,7 @@ class LifeBible(private val act: Activity, private val web: WebView, private val
             override fun afterTextChanged(s: android.text.Editable?) { draw() } })
         draw()
         val col = LinearLayout(act).apply { orientation = LinearLayout.VERTICAL; setPadding(d(16), d(8), d(16), d(8)); addView(search); addView(list) }
-        android.app.AlertDialog.Builder(act).setTitle("🗂️ Study Journal · ${items.length()} studies").setView(android.widget.ScrollView(act).apply { addView(col) })
+        journalDlg = android.app.AlertDialog.Builder(act).setTitle("🗂️ Study Journal · ${items.length()} studies").setView(android.widget.ScrollView(act).apply { addView(col) })
             .setPositiveButton("Close", null).show()
     }
 

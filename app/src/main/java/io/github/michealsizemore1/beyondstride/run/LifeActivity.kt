@@ -281,7 +281,8 @@ class LifeActivity : Activity() {
         meditCard = MeditCard()
         libCard = LibraryCard()
         habitsCard = LifeHabits(this, web, { showPage(2) }, { })
-        lifeBible = LifeBible(this, web, { showPage(2) }, { bibleCard?.go?.performClick() }, { needKey() })
+        lifeBible = LifeBible(this, web, { showPage(2) }, { bibleCard?.go?.performClick() }, { needKey() }) { date ->
+            study.open(date) { r -> when (r) { "ok" -> showPage(3); "nokey" -> needKey(); else -> android.widget.Toast.makeText(this, "Couldn't open that study", android.widget.Toast.LENGTH_SHORT).show() } } }
         lifeLibrary = LifeLibrary(this, web, { showPage(2) }) { type, cb -> pickCb = cb
             try { startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType(type), 43) } catch (e: Exception) { pickCb = null } }
         medHeader = LifeMeditate(this, web)
@@ -458,11 +459,11 @@ class LifeActivity : Activity() {
                 full -> "The Command Center's storage in this tab is full (${j.optInt("pct")}%), so the key couldn't be saved. " +
                     "Your data is safe (it's also in Chrome and the cloud copy). Tell Claude \"Life tab storage is full\" and it will make room."
                 else -> "This tab doesn't have the key yet. The key typed into Chrome doesn't carry over — add it here:\n\n" +
-                    "Open Settings below → AI Connection → Anthropic API key → paste → Save Settings (at the bottom).\n\n(BeyondStride's own key stays in the app and is never given to the Command Center.)"
+                    "Open Settings → 📓 Life tab → paste the key → Save key.\n\n(BeyondStride's own key stays in the app and is never given to the Command Center.)"
             }
             android.app.AlertDialog.Builder(this).setTitle(if (j.optBoolean("key")) "AI key found" else "AI key needed in the Command Center").setMessage(msg)
                 .setPositiveButton(if (j.optBoolean("key")) "OK" else "Open Settings") { _, _ ->
-                    if (!j.optBoolean("key")) { show(true); web.evaluateJavascript("try{openSettings();setTimeout(function(){var e=document.getElementById('journalAnthropicKey');if(e){e.scrollIntoView({block:'center'});e.focus();}},300)}catch(e){}", null) }
+                    if (!j.optBoolean("key")) startActivity(Intent(this, RunSettingsActivity::class.java).putExtra("page", "life"))
                 }.setNegativeButton("Not now", null).show()
         }
     }
