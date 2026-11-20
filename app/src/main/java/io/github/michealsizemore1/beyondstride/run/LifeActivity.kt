@@ -331,9 +331,25 @@ class LifeActivity : Activity() {
     }
 
     private fun needKey() {
-        android.app.AlertDialog.Builder(this).setTitle("AI key needed in the Command Center")
-            .setMessage("This uses the Command Center's own AI key, which stays in each browser and isn't synced. Add it once: 📓 Full Command Center → Settings → Anthropic API key.\n\n(BeyondStride's own key stays in the app and is never given to the Command Center.)")
-            .setPositiveButton("Open Full Command Center") { _, _ -> show(true) }.setNegativeButton("Not now", null).show()
+        // Check what the Command Center in this tab actually has, so the message can say why.
+        val diag = "(function(){var n=0;try{for(var i=0;i<localStorage.length;i++){var k=localStorage.key(i);n+=k.length+(localStorage.getItem(k)||'').length;}}catch(e){}" +
+            "var ok=false;try{localStorage.setItem('__bs_probe','x');localStorage.removeItem('__bs_probe');ok=true;}catch(e){}" +
+            "return JSON.stringify({key:!!String(localStorage.getItem('ai_key')||'').trim(),pct:Math.round(n/5242880*100),canSave:ok});})()"
+        web.evaluateJavascript(diag) { r ->
+            val j = try { JSONObject(JSONTokener(r).nextValue() as String) } catch (e: Exception) { JSONObject() }
+            val full = !j.optBoolean("canSave", true) || j.optInt("pct") >= 98
+            val msg = when {
+                j.optBoolean("key") -> "The key is saved here now — try again."
+                full -> "The Command Center's storage in this tab is full (${j.optInt("pct")}%), so the key couldn't be saved. " +
+                    "Your data is safe (it's also in Chrome and the cloud copy). Tell Claude \"Life tab storage is full\" and it will make room."
+                else -> "This tab doesn't have the key yet. The key typed into Chrome doesn't carry over — add it here:\n\n" +
+                    "Open Settings below → AI Connection → Anthropic API key → paste → Save Settings (at the bottom).\n\n(BeyondStride's own key stays in the app and is never given to the Command Center.)"
+            }
+            android.app.AlertDialog.Builder(this).setTitle(if (j.optBoolean("key")) "AI key found" else "AI key needed in the Command Center").setMessage(msg)
+                .setPositiveButton(if (j.optBoolean("key")) "OK" else "Open Settings") { _, _ ->
+                    if (!j.optBoolean("key")) { show(true); web.evaluateJavascript("try{openSettings();setTimeout(function(){var e=document.getElementById('journalAnthropicKey');if(e){e.scrollIntoView({block:'center'});e.focus();}},300)}catch(e){}", null) }
+                }.setNegativeButton("Not now", null).show()
+        }
     }
 
     /** 📖 Bible Study + 🧘 Meditation — today's reading, progress, memory verse; the guided session / timer open full screen. */
