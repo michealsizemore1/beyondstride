@@ -57,6 +57,7 @@ class LifeActivity : Activity() {
     private var wellCard: WellnessCard? = null
     private var bibleCard: BibleCard? = null
     private var weekCard: WeeklyCard? = null
+    private var journalCard: JournalCard? = null
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -152,6 +153,7 @@ class LifeActivity : Activity() {
         wellCard = WellnessCard().also { nativeCol.addView(it.view) }
         bibleCard = BibleCard().also { nativeCol.addView(it.view) }
         reviewCard = ReviewCard().also { nativeCol.addView(it.view) }
+        journalCard = JournalCard().also { nativeCol.addView(it.view) }
         weekCard = WeeklyCard().also { nativeCol.addView(it.view) }
         nativeCol.addView(RunUi.text(this, "Everything else is in 📓 Full Command Center (tap above). More sections will move here one at a time.", RunUi.DIM, 11f).apply { setPadding(0, RunUi.dp(this@LifeActivity, 12), 0, 0) })
     }
@@ -162,10 +164,10 @@ class LifeActivity : Activity() {
         web.evaluateJavascript("(window.ccNative&&typeof load==='function')?(ccNative.all?ccNative.all():ccNative.focus()):null") { r ->
             val json = try { (JSONTokener(r).nextValue() as? String)?.let { JSONObject(it) } } catch (e: Exception) { null }
             if (json == null) { focusCard?.loading(); if (tries++ < 60) ui.postDelayed(reload, 700) ; return@evaluateJavascript }
-            tries = 0; focusCard?.fill(json); scheduleCard?.fill(json); checksCard?.fill(json); wellCard?.fill(json); bibleCard?.fill(json); reviewCard?.fill(json); weekCard?.fill(json)
+            tries = 0; focusCard?.fill(json); scheduleCard?.fill(json); checksCard?.fill(json); wellCard?.fill(json); bibleCard?.fill(json); reviewCard?.fill(json); journalCard?.fill(json); weekCard?.fill(json)
             // An older copy of the Command Center is still cached (the website updates before this screen can use the
             // new parts): fetch the newest once.
-            if ((!json.has("checks") || !json.has("schedule") || !json.has("review") || !json.has("wellness") || !json.has("weekly")) && !refreshed) { refreshed = true; web.clearCache(true); web.reload(); ui.postDelayed(reload, 2500) }
+            if ((!json.has("checks") || !json.has("schedule") || !json.has("review") || !json.has("wellness") || !json.has("weekly") || !json.has("journal")) && !refreshed) { refreshed = true; web.clearCache(true); web.reload(); ui.postDelayed(reload, 2500) }
         }
     }
     private fun js(call: String) = web.evaluateJavascript("window.ccNative&&$call", null)
@@ -350,6 +352,35 @@ class LifeActivity : Activity() {
                 medLine.text = m.optString("line")
                 medWeek.text = "This week: ${m.optInt("weekSessions")} session${if (m.optInt("weekSessions") == 1) "" else "s"} · ${m.optInt("weekMins")} min"
             }
+        }
+    }
+
+    /** ✍️ Daily Journal — today's entry (the AI reviews read it too). */
+    private inner class JournalCard {
+        val view = RunUi.card(this@LifeActivity)
+        private val et = EditText(this@LifeActivity)
+        private fun d(v: Int) = RunUi.dp(this@LifeActivity, v)
+        init {
+            view.addView(RunUi.text(this@LifeActivity, "✍️ Daily Journal", Color.WHITE, 16f, true))
+            et.apply {
+                hint = "Write whatever's on your mind today…"; setTextColor(Color.WHITE); setHintTextColor(RunUi.DIM); textSize = 15f
+                minLines = 5; gravity = android.view.Gravity.TOP
+                background = RunUi.rounded(0xFF26302C.toInt(), d(10).toFloat()); setPadding(d(12), d(10), d(12), d(10))
+                val commit = Runnable { js("ccNative.setJournal(${JSONObject.quote(text.toString())})") }
+                addTextChangedListener(object : TextWatcher {
+                    override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+                    override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+                    override fun afterTextChanged(s: Editable?) { if (hasFocus()) { ui.removeCallbacks(commit); ui.postDelayed(commit, 1200) } }
+                })
+                setOnFocusChangeListener { _, has -> if (!has) { ui.removeCallbacks(commit); commit.run() } }
+            }
+            view.addView(et, LinearLayout.LayoutParams(MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = d(8) })
+            view.addView(RunUi.text(this@LifeActivity, "Saves as you type. Past entries, search and the archive are in 📓 Full Command Center.", RunUi.DIM, 10f).apply { setPadding(0, d(6), 0, 0) })
+        }
+        fun fill(j: JSONObject) {
+            if (!j.has("journal")) { view.visibility = View.GONE; return }
+            view.visibility = View.VISIBLE
+            val t = j.optString("journal"); if (!et.hasFocus() && et.text.toString() != t) et.setText(t)
         }
     }
 
