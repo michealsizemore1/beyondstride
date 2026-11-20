@@ -53,6 +53,7 @@ class LifeActivity : Activity() {
     private var focusCard: FocusCard? = null
     private var checksCard: ChecksCard? = null
     private var scheduleCard: ScheduleCard? = null
+    private var reviewCard: ReviewCard? = null
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -145,6 +146,7 @@ class LifeActivity : Activity() {
         focusCard = FocusCard().also { nativeCol.addView(it.view) }
         scheduleCard = ScheduleCard().also { nativeCol.addView(it.view) }
         checksCard = ChecksCard().also { nativeCol.addView(it.view) }
+        reviewCard = ReviewCard().also { nativeCol.addView(it.view) }
         nativeCol.addView(RunUi.text(this, "Everything else is in 📓 Full Command Center (tap above). More sections will move here one at a time.", RunUi.DIM, 11f).apply { setPadding(0, RunUi.dp(this@LifeActivity, 12), 0, 0) })
     }
 
@@ -154,10 +156,10 @@ class LifeActivity : Activity() {
         web.evaluateJavascript("(window.ccNative&&typeof load==='function')?(ccNative.all?ccNative.all():ccNative.focus()):null") { r ->
             val json = try { (JSONTokener(r).nextValue() as? String)?.let { JSONObject(it) } } catch (e: Exception) { null }
             if (json == null) { focusCard?.loading(); if (tries++ < 60) ui.postDelayed(reload, 700) ; return@evaluateJavascript }
-            tries = 0; focusCard?.fill(json); scheduleCard?.fill(json); checksCard?.fill(json)
+            tries = 0; focusCard?.fill(json); scheduleCard?.fill(json); checksCard?.fill(json); reviewCard?.fill(json)
             // An older copy of the Command Center is still cached (the website updates before this screen can use the
             // new parts): fetch the newest once.
-            if ((!json.has("checks") || !json.has("schedule")) && !refreshed) { refreshed = true; web.clearCache(true); web.reload(); ui.postDelayed(reload, 2500) }
+            if ((!json.has("checks") || !json.has("schedule") || !json.has("review")) && !refreshed) { refreshed = true; web.clearCache(true); web.reload(); ui.postDelayed(reload, 2500) }
         }
     }
     private fun js(call: String) = web.evaluateJavascript("window.ccNative&&$call", null)
@@ -233,6 +235,66 @@ class LifeActivity : Activity() {
                 }
                 body.addView(row)
             }
+        }
+    }
+
+    /** 🤖 Daily AI Review — Wins, What to Improve, Focus for Tomorrow, Lessons Learned, and the Command Center's AI Fill. */
+    private inner class ReviewCard {
+        val view = RunUi.card(this@LifeActivity)
+        private val note = RunUi.text(this@LifeActivity, "", RunUi.MUTED, 12f)
+        private val fill = RunUi.button(this@LifeActivity, "✨ AI Fill Day Review", 0xFF7C3AED.toInt(), Color.WHITE) { aiFill() }
+        private val save = RunUi.button(this@LifeActivity, "Save Review", RunUi.ACCENT) { js("ccNative.saveReview()"); ui.postDelayed(reload, 400) }
+        private val edits = LinkedHashMap<String, EditText>()
+        private var busy = false
+        private fun d(v: Int) = RunUi.dp(this@LifeActivity, v)
+        init {
+            view.addView(RunUi.text(this@LifeActivity, "🤖 Daily AI Review", Color.WHITE, 16f, true))
+            view.addView(note)
+            view.addView(fill, LinearLayout.LayoutParams(MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = d(8) })
+            listOf("dayRevWins" to "Wins Today", "dayRevImprove" to "What to Improve", "dayRevFocus" to "Focus for Tomorrow", "dayRevLessons" to "Lessons Learned").forEach { (id, label) ->
+                view.addView(RunUi.text(this@LifeActivity, label, RunUi.ACCENT, 13f, true).apply { setPadding(0, d(12), 0, d(2)) })
+                val et = EditText(this@LifeActivity).apply {
+                    setTextColor(Color.WHITE); setHintTextColor(RunUi.DIM); textSize = 14f; minLines = 2; gravity = android.view.Gravity.TOP
+                    hint = when (id) { "dayRevWins" -> "What went well today?"; "dayRevImprove" -> "Areas to work on…"; "dayRevFocus" -> "Top priorities…"; else -> "Key takeaways…" }
+                    background = RunUi.rounded(0xFF26302C.toInt(), d(10).toFloat()); setPadding(d(10), d(8), d(10), d(8))
+                    val commit = Runnable { js("ccNative.setReview(${JSONObject.quote(id)},${JSONObject.quote(text.toString())})") }
+                    addTextChangedListener(object : TextWatcher {
+                        override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+                        override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+                        override fun afterTextChanged(s: Editable?) { if (hasFocus()) { ui.removeCallbacks(commit); ui.postDelayed(commit, 1000) } }
+                    })
+                    setOnFocusChangeListener { _, has -> if (!has) { ui.removeCallbacks(commit); commit.run() } }
+                }
+                edits[id] = et; view.addView(et)
+            }
+            view.addView(save, LinearLayout.LayoutParams(MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = d(10) })
+            view.addView(RunUi.text(this@LifeActivity, "Typing saves on its own. After ✨ AI Fill, read it over and tap Save Review (same as the Command Center). It's still filled in automatically at night if you haven't.", RunUi.DIM, 10f).apply { setPadding(0, d(8), 0, 0) })
+        }
+        private fun aiFill() {
+            web.evaluateJavascript("window.ccNative&&ccNative.reviewFill?ccNative.reviewFill():false") { r ->
+                if (r.contains("nokey")) {
+                    android.app.AlertDialog.Builder(this@LifeActivity).setTitle("AI key needed in the Command Center")
+                        .setMessage("AI Fill uses the Command Center's own AI key, which stays in each browser and isn't synced. Add it once here: 📓 Full Command Center → Settings → Anthropic API key.\n\n(BeyondStride's own key stays in the app and is never given to the Command Center.)")
+                        .setPositiveButton("Open Full Command Center") { _, _ -> show(true) }.setNegativeButton("Not now", null).show()
+                    return@evaluateJavascript
+                }
+                if (r == "true") { busy = true; note.text = "✨ Writing your review…"; fill.isEnabled = false; ui.postDelayed(poll, 2000) }
+            }
+        }
+        private val poll: Runnable = Runnable { reload.run(); if (busy) ui.postDelayed(pollAgain, 2000) }
+        private val pollAgain: Runnable = Runnable { poll.run() }
+        fun fill(j: JSONObject) {
+            val r = j.optJSONObject("review") ?: return
+            val wasBusy = busy; busy = r.optBoolean("busy")
+            if (wasBusy && !busy) ui.removeCallbacks(pollAgain)
+            fill.isEnabled = !busy; fill.alpha = if (busy) 0.5f else 1f
+            val arr = r.optJSONArray("fields") ?: return
+            var unsaved = false
+            for (i in 0 until arr.length()) { val o = arr.getJSONObject(i); val et = edits[o.optString("id")] ?: continue
+                if (o.optBoolean("unsaved")) unsaved = true
+                if (!et.hasFocus() && et.text.toString() != o.optString("value")) et.setText(o.optString("value")) }
+            note.text = when { busy -> "✨ Writing your review…"; unsaved -> "Not saved yet — tap Save Review when it looks right."; !r.optBoolean("hasKey") -> "AI Fill needs the Command Center's AI key (one time)."; else -> "" }
+            note.visibility = if (note.text.isEmpty()) View.GONE else View.VISIBLE
         }
     }
 
