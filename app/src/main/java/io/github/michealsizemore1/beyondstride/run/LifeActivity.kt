@@ -54,6 +54,8 @@ class LifeActivity : Activity() {
     private lateinit var reviewsScroll: ScrollView
     private var page = 0          // 0 🎯 Today · 1 📊 Reviews · 2 📓 Full Command Center
     private var monthCard: PeriodCard? = null
+    private lateinit var study: BibleStudyPage
+    private lateinit var bar: LinearLayout
     private var yearCard: PeriodCard? = null
     private var full = false
     private var focusCard: FocusCard? = null
@@ -110,13 +112,15 @@ class LifeActivity : Activity() {
             addView(web, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
             addView(nativeScroll, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
             addView(reviewsScroll, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
+            study = BibleStudyPage(this@LifeActivity, web) { showPage(0) }
+            addView(study.view, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
         }
         fun pill(label: String, onClick: () -> Unit) = RunUi.text(this, label, Color.WHITE, 13f, true).apply {
             gravity = android.view.Gravity.CENTER; setPadding(0, RunUi.dp(this@LifeActivity, 8), 0, RunUi.dp(this@LifeActivity, 8))
             setOnClickListener { onClick() }
         }
         tabToday = pill("🎯 Today") { showPage(0) }; tabReviews = pill("📊 Reviews") { showPage(1) }; tabFull = pill("📓 Full") { showPage(2) }
-        val bar = LinearLayout(this).apply {
+        bar = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL; setBackgroundColor(RunUi.BG)
             setPadding(RunUi.dp(this@LifeActivity, 14), RunUi.dp(this@LifeActivity, 6), RunUi.dp(this@LifeActivity, 14), RunUi.dp(this@LifeActivity, 6))
             addView(tabToday, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginEnd = RunUi.dp(this@LifeActivity, 6) })
@@ -141,18 +145,21 @@ class LifeActivity : Activity() {
 
     override fun onResume() { super.onResume(); web.onResume(); web.evaluateJavascript("window.ccSync&&ccSync.now()", null); if (!full) { ui.removeCallbacks(reload); ui.postDelayed(reload, 300) } }
     // Upload anything not yet sent before the app goes to the background.
-    override fun onPause() { web.evaluateJavascript("window.ccSync&&ccSync.now()", null); web.onPause(); super.onPause() }
+    override fun onPause() { study.stopReading(); web.evaluateJavascript("window.ccSync&&ccSync.now()", null); web.onPause(); super.onPause() }
     override fun onSaveInstanceState(out: Bundle) { super.onSaveInstanceState(out); web.saveState(out); out.putInt("page", page) }
-    override fun onDestroy() { ui.removeCallbacksAndMessages(null); web.destroy(); super.onDestroy() }
+    override fun onDestroy() { ui.removeCallbacksAndMessages(null); study.destroy(); web.destroy(); super.onDestroy() }
 
     private fun show(f: Boolean) = showPage(if (f) 2 else 0)
     private fun showPage(p: Int) {
-        page = p; full = p == 2
+        val was = page; page = p; full = p == 2
+        if (was == 3 && p != 3) study.hide()
         nativeScroll.visibility = if (p == 0) View.VISIBLE else View.GONE   // the website stays loaded underneath either way
+        study.view.visibility = if (p == 3) View.VISIBLE else View.GONE
+        bar.visibility = if (p == 3) View.GONE else View.VISIBLE
         reviewsScroll.visibility = if (p == 1) View.VISIBLE else View.GONE
         fun style(t: TextView, on: Boolean) { t.background = RunUi.rounded(if (on) RunUi.ACCENT else RunUi.CARD, RunUi.dp(this, 20).toFloat()); t.setTextColor(if (on) Color.BLACK else Color.WHITE) }
         style(tabToday, p == 0); style(tabReviews, p == 1); style(tabFull, p == 2)
-        if (p != 2) reload.run()
+        if (p == 0 || p == 1) reload.run()
         if (p == 1) { monthCard?.load(); yearCard?.load() }
     }
 
@@ -336,7 +343,12 @@ class LifeActivity : Activity() {
         private val passages = RunUi.text(this@LifeActivity, "", Color.WHITE, 15f, true)
         private val memory = RunUi.text(this@LifeActivity, "", RunUi.MUTED, 12f)
         private val go = RunUi.button(this@LifeActivity, "Start study ›", 0xFF7C3AED.toInt(), Color.WHITE) {
-            web.evaluateJavascript("window.ccNative&&ccNative.bibleOpen?ccNative.bibleOpen():false") { r -> if (r.contains("nokey")) needKey() else if (r == "true") show(true) } }
+            study.open { r -> when (r) {
+                "ok" -> showPage(3)
+                "nokey" -> needKey()
+                // An older Command Center (or a reading it can't find): use its own screen.
+                else -> web.evaluateJavascript("window.ccNative&&ccNative.bibleOpen?ccNative.bibleOpen():false") { x -> if (x.contains("nokey")) needKey() else if (x == "true") show(true) }
+            } } }
         private val medLine = RunUi.text(this@LifeActivity, "", Color.WHITE, 14f)
         private val medWeek = RunUi.text(this@LifeActivity, "", RunUi.MUTED, 12f)
         private val medBox = TextView(this@LifeActivity)
@@ -345,7 +357,7 @@ class LifeActivity : Activity() {
             view.addView(RunUi.text(this@LifeActivity, "📖 Daily Bible Study", Color.WHITE, 16f, true))
             view.addView(status.apply { setPadding(0, d(4), 0, 0) }); view.addView(passages.apply { setPadding(0, d(2), 0, 0) }); view.addView(memory.apply { setPadding(0, d(4), 0, 0) })
             view.addView(go, LinearLayout.LayoutParams(MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = d(8) })
-            view.addView(RunUi.text(this@LifeActivity, "Prayer → Read & listen → Study → Worship → Prayer. Opens full screen; ticks your Bible checks as you go. Tap 🎯 Today to come back.", RunUi.DIM, 10f).apply { setPadding(0, d(6), 0, 0) })
+            view.addView(RunUi.text(this@LifeActivity, "Prayer → Read & listen → Study → Worship → Prayer, right here in the app. Ticks your Bible checks as you go.", RunUi.DIM, 10f).apply { setPadding(0, d(6), 0, 0) })
             view.addView(View(this@LifeActivity).apply { setBackgroundColor(0xFF2A3430.toInt()) }, LinearLayout.LayoutParams(MATCH_PARENT, d(1)).apply { topMargin = d(12); bottomMargin = d(10) })
             view.addView(LinearLayout(this@LifeActivity).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL
                 medBox.gravity = android.view.Gravity.CENTER; medBox.textSize = 14f
@@ -692,7 +704,7 @@ class LifeActivity : Activity() {
     @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
         if (full && web.canGoBack()) web.goBack()
-        else if (full || page == 1) show(false)
+        else if (full || page == 1 || page == 3) show(false)
         else @Suppress("DEPRECATION") super.onBackPressed()
     }
 }
