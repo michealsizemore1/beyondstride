@@ -57,7 +57,7 @@ class RunSettingsActivity : Activity() {
                 .apply { layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(12) } })
             col.addView(RunUi.button(this, "Background: " + (if (io.github.michealsizemore1.beyondstride.Theme.light) "Lighter" else "Dark") + "  (tap to switch)", RunUi.CARD, Color.WHITE) { toggleBg() }
                 .apply { layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(10) } })
-            col.addView(RunUi.button(this, "Life tab: " + (if (LifeTab.on(ctx)) "On" else "Off") + "  (tap to " + (if (LifeTab.on(ctx)) "remove" else "add") + ")", RunUi.CARD, Color.WHITE) { LifeTab.setOn(ctx, !LifeTab.on(ctx)); render() }
+            col.addView(RunUi.button(this, "📓 Life tab settings ›", RunUi.CARD, Color.WHITE) { page = "life"; render() }
                 .apply { layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(10) } })
             col.addView(RunUi.button(this, "Watch data screens ›", RunUi.ACCENT) { startActivity(Intent(ctx, ScreensActivity::class.java)) }
                 .apply { layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(10) } })
@@ -299,12 +299,19 @@ class RunSettingsActivity : Activity() {
         }
 
         if (on("life")) {
-            col.addView(RunUi.button(this, "Life tab: " + (if (LifeTab.on(ctx)) "On" else "Off") + "  (tap to " + (if (LifeTab.on(ctx)) "remove" else "add") + ")", RunUi.CARD, Color.WHITE) {
-                LifeTab.setOn(ctx, !LifeTab.on(ctx)); render()
-                android.widget.Toast.makeText(ctx, if (LifeTab.on(ctx)) "Life tab added" else "Life tab removed", android.widget.Toast.LENGTH_SHORT).show() }
-                .apply { layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(12) } })
             if (LifeTab.on(ctx)) col.addView(LifeSettings.card(this))
+            else col.addView(RunUi.button(this, "Show the Life tab", RunUi.ACCENT) { LifeTab.setOn(ctx, true); render()
+                android.widget.Toast.makeText(ctx, "Life tab is back", android.widget.Toast.LENGTH_SHORT).show() }
+                .apply { layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(12) } })
             col.addView(RunUi.text(this, "The Life tab is the Command Center inside the app (phone only — never on the watch). Its data is in your Backup.", RunUi.DIM, 12f).apply { setPadding(dp(4), dp(10), 0, 0) })
+            // Escape hatch, tucked at the bottom: hides the tab (nothing is deleted). Asks first, since a lot depends on it now.
+            if (LifeTab.on(ctx)) col.addView(RunUi.text(this, "Hide the Life tab…", 0xFFF87171.toInt(), 13f, true).apply { setPadding(dp(4), dp(28), 0, dp(8))
+                setOnClickListener {
+                    android.app.AlertDialog.Builder(ctx).setTitle("Hide the Life tab?")
+                        .setMessage("Nothing is deleted, and you can show it again here any time. While it's hidden:\n\n• the Life tab and the Today tab's Life section are gone\n• Wellness and its charts are hidden (resting HR goes back to Fitness)\n• the app stops syncing the Command Center with Chrome\n• your backup keeps the last Life copy but stops updating it\n\nCalendar reminders still come.")
+                        .setPositiveButton("Hide it") { _, _ -> LifeTab.setOn(ctx, false); render(); android.widget.Toast.makeText(ctx, "Life tab hidden", android.widget.Toast.LENGTH_SHORT).show() }
+                        .setNegativeButton("Keep it", null).show()
+                } })
         }
         if (on("about")) {
         col.addView(RunUi.text(this, "Phone app " + packageManager.getPackageInfo(packageName, 0).versionName, RunUi.MUTED, 13f)
@@ -396,7 +403,7 @@ class RunSettingsActivity : Activity() {
         row("✨", "AI food search", if (AiFood.hasKey(ctx)) "Key saved · AI search and label photos on" else "Add your Anthropic key") { page = "ai"; render() }
         row("⇪", "Backup", Backup.lastAt(ctx).takeIf { it > 0 }?.let { "Last: " + java.text.SimpleDateFormat("MMM d, h:mm a", java.util.Locale.getDefault()).format(java.util.Date(it)) +
             (if (Backup.auto(ctx) && Backup.uri(ctx) != null) " · auto" else "") } ?: "Not set up") { page = "backup"; render() }
-        row("📓", "Life tab", if (LifeTab.on(ctx)) "On · Command Center settings, AI key, sync" else "Off · tap to add the Command Center tab") { page = "life"; render() }
+        row("📓", "Life tab", if (LifeTab.on(ctx)) "Command Center settings, AI key, sync, storage" else "Hidden · tap to show it again") { page = "life"; render() }
         row("ⓘ", "About", "Phone app " + packageManager.getPackageInfo(packageName, 0).versionName) { page = "about"; render() }
         row("☰", "Menu style", "Cards · tap to switch back to classic (phone and watch)") { setMenuStyle("classic") }
         row("◐", "Background", if (io.github.michealsizemore1.beyondstride.Theme.light) "Lighter · tap for dark" else "Dark · tap for lighter") { toggleBg() }
