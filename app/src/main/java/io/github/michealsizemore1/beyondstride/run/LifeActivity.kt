@@ -60,6 +60,7 @@ class LifeActivity : Activity() {
     private var yearCard: PeriodCard? = null
     private var weekTab: WeekTabCard? = null
     private var libCard: LibraryCard? = null
+    private var habitsCard: HabitsCard? = null
     private var full = false
     private var focusCard: FocusCard? = null
     private var checksCard: ChecksCard? = null
@@ -177,6 +178,7 @@ class LifeActivity : Activity() {
         wellCard = WellnessCard().also { nativeCol.addView(it.view) }
         bibleCard = BibleCard().also { nativeCol.addView(it.view) }
         libCard = LibraryCard().also { nativeCol.addView(it.view) }
+        habitsCard = HabitsCard().also { nativeCol.addView(it.view) }
         reviewCard = ReviewCard().also { nativeCol.addView(it.view) }
         journalCard = JournalCard().also { nativeCol.addView(it.view) }
         reviewsCol.removeAllViews()
@@ -194,7 +196,7 @@ class LifeActivity : Activity() {
         web.evaluateJavascript("(window.ccNative&&typeof load==='function')?(ccNative.all?ccNative.all():ccNative.focus()):null") { r ->
             val json = try { (JSONTokener(r).nextValue() as? String)?.let { JSONObject(it) } } catch (e: Exception) { null }
             if (json == null) { focusCard?.loading(); if (tries++ < 60) ui.postDelayed(reload, 700) ; return@evaluateJavascript }
-            tries = 0; focusCard?.fill(json); if (page == 0) calendar?.load(); scheduleCard?.fill(json); checksCard?.fill(json); wellCard?.fill(json); bibleCard?.fill(json); libCard?.fill(json); reviewCard?.fill(json); journalCard?.fill(json); weekCard?.fill(json)
+            tries = 0; focusCard?.fill(json); if (page == 0) calendar?.load(); scheduleCard?.fill(json); checksCard?.fill(json); wellCard?.fill(json); bibleCard?.fill(json); libCard?.fill(json); if (page == 0) habitsCard?.load(); reviewCard?.fill(json); journalCard?.fill(json); weekCard?.fill(json)
             // An older copy of the Command Center is still cached (the website updates before this screen can use the
             // new parts): fetch the newest once.
             if ((!json.has("checks") || !json.has("schedule") || !json.has("review") || !json.has("wellness") || !json.has("weekly") || !json.has("journal")) && !refreshed) { refreshed = true; web.clearCache(true); web.reload(); ui.postDelayed(reload, 2500) }
@@ -615,6 +617,60 @@ class LifeActivity : Activity() {
                 if (!et.hasFocus() && et.text.toString() != o.optString("value")) et.setText(o.optString("value")) }
             note.text = when { busy -> "✨ Writing the week's review…"; unsaved -> "Not saved yet — tap Save Review when it looks right."; else -> "" }
             note.visibility = if (note.text.isEmpty()) View.GONE else View.VISIBLE
+        }
+    }
+
+    /** 🌱 Habits — today's habits with the same controls as the Habits tab (complete / partial / skip, − +, automatic ones). */
+    private inner class HabitsCard {
+        val view = RunUi.card(this@LifeActivity)
+        private val head = RunUi.text(this@LifeActivity, "", RunUi.MUTED, 13f, true)
+        private val body = LinearLayout(this@LifeActivity).apply { orientation = LinearLayout.VERTICAL }
+        private var sig = ""
+        private fun d(v: Int) = RunUi.dp(this@LifeActivity, v)
+        init {
+            view.addView(LinearLayout(this@LifeActivity).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL
+                addView(RunUi.text(this@LifeActivity, "🌱 Habits", Color.WHITE, 16f, true), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+                addView(head) })
+            view.addView(body)
+            view.addView(RunUi.text(this@LifeActivity, "Adding, editing and history are in 📓 Full → Habits.", RunUi.DIM, 10f).apply { setPadding(0, d(8), 0, 0) })
+        }
+        fun load() {
+            web.evaluateJavascript("window.ccNative&&ccNative.habits?ccNative.habits():null") { r ->
+                val j = try { (JSONTokener(r).nextValue() as? String)?.let { JSONObject(it) } } catch (e: Exception) { null } ?: run { view.visibility = View.GONE; return@evaluateJavascript }
+                fill(j)
+            }
+        }
+        private fun pill(t: String, on: Boolean, color: Int, click: () -> Unit) = RunUi.text(this@LifeActivity, t, if (on) Color.BLACK else Color.WHITE, 12f, true).apply {
+            setPadding(d(10), d(5), d(10), d(5)); background = RunUi.rounded(if (on) color else 0xFF2A3430.toInt(), d(14).toFloat()); setOnClickListener { click() } }
+        private fun act(js: String) { web.evaluateJavascript("window.ccNative&&$js") { load(); ui.postDelayed(reload, 300) } }
+        private fun fill(j: JSONObject) {
+            val list = j.optJSONArray("list") ?: org.json.JSONArray()
+            view.visibility = if (list.length() == 0) View.GONE else View.VISIBLE
+            head.text = "${j.optInt("done")}/${j.optInt("due")} today" + (if (j.optInt("best") > 0) " · 🔥 ${j.optInt("best")}" else "")
+            if (list.toString() == sig) return; sig = list.toString(); body.removeAllViews()
+            for (i in 0 until list.length()) { val h = list.getJSONObject(i); val id = JSONObject.quote(h.optString("id"))
+                val due = h.optBoolean("due"); val done = h.optBoolean("done"); val st = h.optString("status")
+                body.addView(LinearLayout(this@LifeActivity).apply { orientation = LinearLayout.VERTICAL; setPadding(0, d(10), 0, 0); alpha = if (due || done) 1f else 0.55f
+                    addView(LinearLayout(this@LifeActivity).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL
+                        addView(RunUi.text(this@LifeActivity, (if (done) "✓ " else "") + h.optString("name"), if (done) 0xFF22C55E.toInt() else Color.WHITE, 14f, true), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+                        if (h.optInt("streak") > 0) addView(RunUi.text(this@LifeActivity, "🔥 ${h.optInt("streak")}", RunUi.MUTED, 12f)) })
+                    addView(RunUi.text(this@LifeActivity, listOf(h.optString("category"), h.optString("schedule"), h.optString("type")).filter { it.isNotBlank() }.joinToString(" · ") + (if (!due && !done) " · not due today" else ""), RunUi.DIM, 11f))
+                    addView(LinearLayout(this@LifeActivity).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL; setPadding(0, d(5), 0, 0)
+                        when (h.optString("kind")) {
+                            "check" -> {
+                                addView(pill("✓ Complete", done, 0xFF22C55E.toInt()) { act("ccNative.habitLog($id,'done')") }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { marginEnd = d(6) })
+                                addView(pill("Partial", st == "partial", 0xFFA855F7.toInt()) { act("ccNative.habitLog($id,'partial')") }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { marginEnd = d(6) })
+                                addView(pill("Skip", st == "skip", 0xFF9AA3A0.toInt()) { act("ccNative.habitLog($id,'skip')") })
+                            }
+                            "count" -> {
+                                addView(pill("−", false, 0) { act("ccNative.habitAdjust($id,-1)") })
+                                addView(RunUi.text(this@LifeActivity, h.optString("value"), Color.WHITE, 13f, true).apply { setPadding(d(12), 0, d(12), 0) })
+                                addView(pill("+", false, 0) { act("ccNative.habitAdjust($id,1)") })
+                            }
+                            else -> addView(RunUi.text(this@LifeActivity, (h.optString("value").ifBlank { "Automatic" }) + " · fills in on its own", RunUi.MUTED, 12f))
+                        } })
+                })
+            }
         }
     }
 
