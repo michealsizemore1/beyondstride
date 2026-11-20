@@ -62,10 +62,18 @@ class LifeMore(private val act: Activity, private val web: WebView, private val 
         col.removeAllViews()
         meditView = meditCard()   // shown in ☰ Tabs → Meditate
         bpView = bpCard()   // shown in ☰ More → Wellness
-        col.addView(searchCard()); col.addView(askCard()); col.addView(filesCard())
         // ⚙️ Command Center settings (AI key, sync) moved to BeyondStride's Settings → Life tab.
-        col.addView(RunUi.card(act).apply { title(this, "⚙️ Settings"); addView(note("The Life tab's AI key, journal access and sync are in BeyondStride's Settings → 📓 Life tab."))
-            addView(RunUi.button(act, "Open Settings › Life tab", 0xFF374151.toInt(), Color.WHITE) { act.startActivity(Intent(act, RunSettingsActivity::class.java).putExtra("page", "life")) }, lp()) })
+        val settings = RunUi.card(act).apply { title(this, "⚙️ Settings"); addView(note("The Life tab's AI key, journal access and sync are in BeyondStride's Settings → 📓 Life tab."))
+            addView(RunUi.button(act, "Open Settings › Life tab", 0xFF374151.toInt(), Color.WHITE) { act.startActivity(Intent(act, RunSettingsActivity::class.java).putExtra("page", "life")) }, lp()) }
+        // Each Tools section opens and closes in place (joined rows, like the Activities tab); the card's own title is the row.
+        fun fold(key: String, label: String, card: LinearLayout) = LifeUi.Fold("tools_$key", label, false) { b ->
+            if (card.parent == null) { card.getChildAt(0)?.visibility = View.GONE; card.background = null; card.setPadding(0, 0, 0, 0)
+                card.layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT); b.addView(card) } }
+        col.addView(LifeUi.FoldGroup(act, listOf(
+            fold("search", "🔍 Search your journal", searchCard()),
+            fold("ask", "💬 Ask AI about your journal", askCard()),
+            fold("files", "📁 Files", filesCard()),
+            fold("settings", "⚙️ Settings", settings))).view)
     }
 
     // ── 🔍 Search ──
