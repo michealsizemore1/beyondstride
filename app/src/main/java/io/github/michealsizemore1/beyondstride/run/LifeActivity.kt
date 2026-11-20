@@ -52,6 +52,7 @@ class LifeActivity : Activity() {
     private var full = false
     private var focusCard: FocusCard? = null
     private var checksCard: ChecksCard? = null
+    private var scheduleCard: ScheduleCard? = null
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -142,6 +143,7 @@ class LifeActivity : Activity() {
         nativeCol.removeAllViews()
         nativeCol.addView(RunUi.text(this, "Your Command Center, as BeyondStride screens. Changes save to the Command Center right away and sync with Chrome and your computer.", RunUi.MUTED, 12f).apply { setPadding(0, RunUi.dp(this@LifeActivity, 6), 0, 0) })
         focusCard = FocusCard().also { nativeCol.addView(it.view) }
+        scheduleCard = ScheduleCard().also { nativeCol.addView(it.view) }
         checksCard = ChecksCard().also { nativeCol.addView(it.view) }
         nativeCol.addView(RunUi.text(this, "Everything else is in 📓 Full Command Center (tap above). More sections will move here one at a time.", RunUi.DIM, 11f).apply { setPadding(0, RunUi.dp(this@LifeActivity, 12), 0, 0) })
     }
@@ -152,10 +154,10 @@ class LifeActivity : Activity() {
         web.evaluateJavascript("(window.ccNative&&typeof load==='function')?(ccNative.all?ccNative.all():ccNative.focus()):null") { r ->
             val json = try { (JSONTokener(r).nextValue() as? String)?.let { JSONObject(it) } } catch (e: Exception) { null }
             if (json == null) { focusCard?.loading(); if (tries++ < 60) ui.postDelayed(reload, 700) ; return@evaluateJavascript }
-            tries = 0; focusCard?.fill(json); checksCard?.fill(json)
+            tries = 0; focusCard?.fill(json); scheduleCard?.fill(json); checksCard?.fill(json)
             // An older copy of the Command Center is still cached (the website updates before this screen can use the
             // new parts): fetch the newest once.
-            if (!json.has("checks") && !refreshed) { refreshed = true; web.clearCache(true); web.reload(); ui.postDelayed(reload, 2500) }
+            if ((!json.has("checks") || !json.has("schedule")) && !refreshed) { refreshed = true; web.clearCache(true); web.reload(); ui.postDelayed(reload, 2500) }
         }
     }
     private fun js(call: String) = web.evaluateJavascript("window.ccNative&&$call", null)
@@ -168,6 +170,71 @@ class LifeActivity : Activity() {
         b.text = if (st.isEmpty()) "" else "✓"; b.setTextColor(Color.WHITE)
     }
     private val CYCLE = listOf("", "green", "black", "purple", "red")
+
+    /** 🕒 My Schedule — today's timeline, progress and what's next, from the Command Center. */
+    private inner class ScheduleCard {
+        val view = RunUi.card(this@LifeActivity)
+        private val head = RunUi.text(this@LifeActivity, "", RunUi.MUTED, 13f, true)
+        private val nextLine = RunUi.text(this@LifeActivity, "", RunUi.ACCENT, 13f, true)
+        private val barFill = View(this@LifeActivity)
+        private val bar = FrameLayout(this@LifeActivity)
+        private val body = LinearLayout(this@LifeActivity).apply { orientation = LinearLayout.VERTICAL }
+        private var sig = ""
+        private fun d(v: Int) = RunUi.dp(this@LifeActivity, v)
+        init {
+            view.addView(LinearLayout(this@LifeActivity).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL
+                addView(RunUi.text(this@LifeActivity, "🕒 My Schedule", Color.WHITE, 16f, true), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+                addView(head) })
+            bar.background = RunUi.rounded(0xFF2A3430.toInt(), d(4).toFloat())
+            barFill.background = RunUi.rounded(RunUi.ACCENT, d(4).toFloat())
+            bar.addView(barFill, FrameLayout.LayoutParams(0, d(8)))
+            view.addView(bar, LinearLayout.LayoutParams(MATCH_PARENT, d(8)).apply { topMargin = d(8) })
+            view.addView(nextLine.apply { setPadding(0, d(8), 0, d(2)) })
+            view.addView(body)
+            view.addView(RunUi.text(this@LifeActivity, "Tap the circle: done → not done → not marked. Edit times, add or reorder items in 📓 Full Command Center.", RunUi.DIM, 10f).apply { setPadding(0, d(8), 0, 0) })
+        }
+        private fun paintDot(b: TextView, st: String, partial: Boolean) {
+            val c = when { st == "green" -> 0xFF22C55E; st == "red" -> 0xFFEF4444; partial -> 0xFFA855F7; else -> 0 }.toInt()
+            b.background = android.graphics.drawable.GradientDrawable().apply { shape = android.graphics.drawable.GradientDrawable.OVAL; setColor(c); setStroke(d(2), if (c == 0) RunUi.MUTED else c) }
+            b.text = when { st == "green" -> "✓"; st == "red" -> "✕"; partial -> "–"; else -> "" }; b.setTextColor(Color.WHITE)
+        }
+        fun fill(j: JSONObject) {
+            val arr = j.optJSONArray("schedule") ?: return
+            val items = (0 until arr.length()).map { arr.getJSONObject(it) }
+            val track = items.filter { !it.optBoolean("fixed") }; val done = track.count { it.optBoolean("done") }
+            head.text = "$done/${track.size}"
+            val pct = if (track.isEmpty()) 0f else done.toFloat() / track.size
+            bar.post { barFill.layoutParams = FrameLayout.LayoutParams((bar.width * pct).toInt(), d(8)); barFill.requestLayout() }
+            val nx = items.firstOrNull { it.optBoolean("next") }
+            nextLine.text = nx?.let { "Next: ${it.optString("time")} — ${it.optString("label")}" } ?: if (track.isNotEmpty() && done == track.size) "Schedule complete 🎉" else ""
+            val newSig = items.joinToString("|") { it.toString() }
+            if (newSig == sig) return; sig = newSig
+            body.removeAllViews()
+            items.forEach { o ->
+                val fixed = o.optBoolean("fixed"); val isNext = o.optBoolean("next")
+                val row = LinearLayout(this@LifeActivity).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL
+                    setPadding(d(8), d(7), d(8), d(7))
+                    if (isNext) background = RunUi.rounded(0xFF26302C.toInt(), d(10).toFloat()) }
+                row.addView(RunUi.text(this@LifeActivity, o.optString("time"), if (isNext) RunUi.ACCENT else RunUi.MUTED, 12f, true), LinearLayout.LayoutParams(d(68), ViewGroup.LayoutParams.WRAP_CONTENT))
+                row.addView(LinearLayout(this@LifeActivity).apply { orientation = LinearLayout.VERTICAL
+                    addView(RunUi.text(this@LifeActivity, o.optString("label"), if (fixed) RunUi.MUTED else Color.WHITE, 14f, true))
+                    o.optString("detail").takeIf { it.isNotBlank() }?.let { addView(RunUi.text(this@LifeActivity, it, RunUi.DIM, 11f)) }
+                    alpha = if (o.optBoolean("done") && !fixed) 0.65f else 1f
+                }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+                if (!fixed) {
+                    val dot = TextView(this@LifeActivity).apply { gravity = android.view.Gravity.CENTER; textSize = 13f; setTypeface(typeface, android.graphics.Typeface.BOLD) }
+                    paintDot(dot, o.optString("state"), o.optBoolean("partial"))
+                    val id = o.optString("id"); var st = o.optString("state")
+                    dot.setOnClickListener {
+                        st = when (st) { "green" -> "red"; "red" -> ""; else -> "green" }; paintDot(dot, st, false)
+                        js("ccNative.scheduleTap(${JSONObject.quote(id)})")
+                    }
+                    row.addView(dot, LinearLayout.LayoutParams(d(30), d(30)).apply { marginStart = d(8) })
+                }
+                body.addView(row)
+            }
+        }
+    }
 
     /** ✅ Daily Checks — Bible, Meditation, Listening, Wellness, Planning & Review: the Command Center's checkmarks. */
     private inner class ChecksCard {
