@@ -125,6 +125,7 @@ object Reminders {
     fun check(ctx: Context) {
         val now = LocalTime.now(); val today = LocalDate.now()
         try { NutritionSync.refreshIfStale(ctx, 30 * 60_000L) } catch (e: Exception) { }
+        try { CalendarReminders.refresh(ctx) } catch (e: Exception) { }
         try { Local.upkeep(ctx, hourly = true) } catch (e: Exception) { }
         try { Backup.daily(ctx); Backup.scheduleDaily(ctx) } catch (e: Exception) { }
         try { DayReviewAi.maybeRun(ctx); DayReviewAi.schedule(ctx) } catch (e: Exception) { }

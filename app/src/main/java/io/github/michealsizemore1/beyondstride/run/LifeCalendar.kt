@@ -33,6 +33,7 @@ class LifeCalendar(private val act: Activity, private val web: WebView) {
     private val grid = GridLayout(act).apply { columnCount = 7 }
     private val dayLabel = RunUi.text(act, "", RunUi.ACCENT, 13f, true)
     private val list = LinearLayout(act).apply { orientation = LinearLayout.VERTICAL }
+    private val remToggle = RunUi.text(act, "", RunUi.MUTED, 12f, true)
     private fun d(v: Int) = RunUi.dp(act, v)
     private val REM = listOf(-1 to "No reminder", 0 to "At event time", 15 to "15 minutes before", 30 to "30 minutes before", 60 to "1 hour before", 1440 to "1 day before")
 
@@ -52,7 +53,14 @@ class LifeCalendar(private val act: Activity, private val web: WebView) {
             addView(RunUi.text(act, "+ Add Event", 0xFFA78BFA.toInt(), 13f, true).apply { setPadding(d(8), d(4), 0, d(4)); setOnClickListener { edit(null) } })
         })
         view.addView(list)
+        view.addView(remToggle.apply { setPadding(0, d(10), 0, 0); setOnClickListener { CalendarReminders.setOn(act, !CalendarReminders.on(act)); paintRem() } })
+        paintRem()
     }
+    private fun paintRem() { val on = CalendarReminders.on(act)
+        remToggle.text = (if (on) "☑" else "☐") + "  Phone notifications for event reminders" + (if (on) " (works with the app closed)" else "")
+        remToggle.setTextColor(if (on) RunUi.ACCENT else RunUi.MUTED) }
+    /** After a change, let the Command Center upload it (~2 s), then reschedule the phone reminders. */
+    private fun resched() { val app = act.applicationContext; Thread { try { Thread.sleep(6000); CalendarReminders.refresh(app) } catch (e: Exception) { } }.start() }
     private fun arrow(t: String, on: () -> Unit) = RunUi.text(act, t, RunUi.ACCENT, 22f, true).apply { setPadding(d(14), 0, d(14), 0); setOnClickListener { on() } }
     private fun js(call: String, cb: (String) -> Unit) = web.evaluateJavascript("window.ccNative&&ccNative.calendar?$call:null") { r ->
         cb(try { JSONTokener(r).nextValue() as? String ?: "" } catch (e: Exception) { "" }) }
@@ -140,12 +148,12 @@ class LifeCalendar(private val act: Activity, private val web: WebView) {
             .setPositiveButton(if (e == null) "Save" else "Update") { _, _ ->
                 if (t.text.isBlank()) return@setPositiveButton
                 val id = e?.optString("id") ?: ""
-                web.evaluateJavascript("window.ccNative&&ccNative.saveEvent(${JSONObject.quote(id)},${JSONObject.quote(selected)},${JSONObject.quote(t.text.toString())},${JSONObject.quote(time)},${JSONObject.quote(note.text.toString())},${REM[rem.selectedItemPosition].first})") { load() }
+                web.evaluateJavascript("window.ccNative&&ccNative.saveEvent(${JSONObject.quote(id)},${JSONObject.quote(selected)},${JSONObject.quote(t.text.toString())},${JSONObject.quote(time)},${JSONObject.quote(note.text.toString())},${REM[rem.selectedItemPosition].first})") { load(); resched() }
             }
             .setNegativeButton("Cancel", null)
         if (e != null) dlg.setNeutralButton("Delete") { _, _ ->
             AlertDialog.Builder(act).setMessage("Delete \"${e.optString("title")}\"?").setPositiveButton("Delete") { _, _ ->
-                web.evaluateJavascript("window.ccNative&&ccNative.deleteEvent(${JSONObject.quote(e.optString("id"))})") { load() } }.setNegativeButton("Keep", null).show()
+                web.evaluateJavascript("window.ccNative&&ccNative.deleteEvent(${JSONObject.quote(e.optString("id"))})") { load(); resched() } }.setNegativeButton("Keep", null).show()
         }
         dlg.show()
     }

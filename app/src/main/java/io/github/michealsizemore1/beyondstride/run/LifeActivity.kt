@@ -144,7 +144,7 @@ class LifeActivity : Activity() {
         setContentView(RunUi.tabbed(this, box, RunUi.TAB_LIFE))
     }
 
-    override fun onResume() { super.onResume(); web.onResume(); web.evaluateJavascript("window.ccSync&&ccSync.now()", null); if (!full) { ui.removeCallbacks(reload); ui.postDelayed(reload, 300) } }
+    override fun onResume() { super.onResume(); web.onResume(); Thread { try { CalendarReminders.refresh(applicationContext) } catch (e: Exception) { } }.start(); web.evaluateJavascript("window.ccSync&&ccSync.now()", null); if (!full) { ui.removeCallbacks(reload); ui.postDelayed(reload, 300) } }
     // Upload anything not yet sent before the app goes to the background.
     override fun onPause() { study.stopReading(); web.evaluateJavascript("window.ccSync&&ccSync.now()", null); web.onPause(); super.onPause() }
     override fun onSaveInstanceState(out: Bundle) { super.onSaveInstanceState(out); web.saveState(out); out.putInt("page", page) }
