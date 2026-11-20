@@ -67,6 +67,7 @@ class LifeActivity : Activity() {
     private var medHeader: LifeMeditate? = null
     private var wellPeriods: PeriodTables? = null
     private var biblePeriods: PeriodTables? = null
+    private var libPeriods: PeriodTables? = null
     private var bibleChecks: ChecksCard? = null
     private var meditCard: MeditCard? = null
     private lateinit var sectionCol: LinearLayout
@@ -206,7 +207,7 @@ class LifeActivity : Activity() {
             "wellness" -> listOfNotNull(wellCard?.view, wellPeriods?.view)
             "bible" -> listOfNotNull(lifeBible?.view, biblePeriods?.view)
             "meditate" -> listOfNotNull(medHeader?.view, more.meditView)
-            "library" -> listOfNotNull(lifeLibrary?.view)
+            "library" -> listOfNotNull(lifeLibrary?.view, libPeriods?.view)
             "habits2" -> listOfNotNull(habitsCard?.view)
             "dash" -> listOfNotNull(dashCard?.view)
             else -> emptyList()
@@ -227,14 +228,14 @@ class LifeActivity : Activity() {
         if (name == "meditate") { more.load(); more.loadSounds() }
         if (name == "bible") { lifeBible?.load(); biblePeriods?.load() }
         if (name == "wellness") wellPeriods?.load()
-        if (name == "library") lifeLibrary?.load(true)
+        if (name == "library") { lifeLibrary?.load(true); libPeriods?.load() }
     }
     private fun openCcPage(name: String) {
         showPage(2)
         web.evaluateJavascript("(function(){var b=document.getElementById('hm-$name');if(b)b.click();else if(typeof hmSwitch==='function')hmSwitch('$name',{preventDefault:function(){}});window.scrollTo(0,0);})()", null)
     }
     private fun showReviews(p: Int) {
-        val v = listOfNotNull(weekTab?.view, weekCard?.view)   // 📝 Review: this week's goals, then the weekly review
+        val v = listOfNotNull(weekTab?.view, reviewCard?.view, weekCard?.view)   // 📝 Review: this week's goals, today's review, the weekly review
         if (reviewsCol.childCount == v.size && v.withIndex().all { (i, x) -> reviewsCol.getChildAt(i) === x }) return
         reviewsCol.removeAllViews(); v.forEach { x -> (x.parent as? ViewGroup)?.removeView(x); reviewsCol.addView(x) }
         reviewsScroll.scrollTo(0, 0)
@@ -286,8 +287,10 @@ class LifeActivity : Activity() {
             try { startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType(type), 43) } catch (e: Exception) { pickCb = null } }
         medHeader = LifeMeditate(this, web)
         wellPeriods = PeriodTables("Wellness", "well")
-        biblePeriods = PeriodTables("Spirituality", "bible")
-        reviewCard = ReviewCard().also { nativeCol.addView(it.view) }
+        val listening = { h: String -> h.contains("Reading") || h.contains("Audible") || h.contains("Audiobook") }
+        biblePeriods = PeriodTables("Spirituality", "bible", drop = listening)
+        libPeriods = PeriodTables("Spirituality", "lib", only = listening)
+        reviewCard = ReviewCard()   // on 📝 Review (looking back), not Daily (planning the day)
         journalCard = JournalCard().also { nativeCol.addView(it.view) }
         // Weekly · Monthly · Yearly · Review each get their own page (showReviews puts the right card on it).
         weekTab = WeekTabCard(); weekCard = WeeklyCard(); monthCard = PeriodCard("monthly"); yearCard = PeriodCard("yearly")
@@ -594,14 +597,14 @@ class LifeActivity : Activity() {
                 }
             })
         }
-        return android.widget.HorizontalScrollView(this).apply { addView(t) }
+        return LifeUi.pinFirstColumn(t)   // dates stay put while the other columns scroll
     }
 
     /**
      * 📅 Weekly · 📆 Monthly · 🗓️ Yearly tables for one area (💚 Wellness or 📖 Spirituality & Reading), shown in that
      * area's own section (they replaced the separate Weekly / Monthly / Yearly pages). Each opens and closes.
      */
-    private inner class PeriodTables(private val keyword: String, private val tag: String) {
+    private inner class PeriodTables(private val keyword: String, private val tag: String, private val only: ((String) -> Boolean)? = null, private val drop: ((String) -> Boolean)? = null) {
         val view = LinearLayout(this@LifeActivity).apply { orientation = LinearLayout.VERTICAL }
         private val offs = intArrayOf(0, 0, 0)
         private fun d(v: Int) = RunUi.dp(this@LifeActivity, v)
@@ -618,10 +621,26 @@ class LifeActivity : Activity() {
                     addView(RunUi.text(this@LifeActivity, "‹", RunUi.ACCENT, 22f, true).apply { setPadding(d(4), 0, d(14), 0); setOnClickListener { offs[i]--; draw(kind, i, b) } })
                     addView(RunUi.text(this@LifeActivity, j.optString("label"), Color.WHITE, 14f, true).apply { gravity = android.view.Gravity.CENTER; setOnClickListener { offs[i] = 0; draw(kind, i, b) } }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
                     addView(RunUi.text(this@LifeActivity, "›", RunUi.ACCENT, 22f, true).apply { setPadding(d(14), 0, d(4), 0); setOnClickListener { if (offs[i] < 0) { offs[i]++; draw(kind, i, b) } } }) })
+                // 🎧 Library: this week's audiobook goal bar (also on 📝 Review).
+                if (kind == "week" && tag == "lib") j.optJSONArray("goals")?.let { g -> for (q in 0 until g.length()) { val o = g.getJSONObject(q)
+                    if (!o.optString("label").contains("Audio")) continue
+                    b.addView(LinearLayout(this@LifeActivity).apply { orientation = LinearLayout.HORIZONTAL; setPadding(0, d(6), 0, d(3))
+                        addView(RunUi.text(this@LifeActivity, "🎧 " + o.optString("label") + " goal", Color.WHITE, 13f, true), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+                        addView(RunUi.text(this@LifeActivity, o.optString("value") + (if (o.optBoolean("reached")) "  ✓" else ""), if (o.optBoolean("reached")) 0xFF22C55E.toInt() else RunUi.MUTED, 12f, true)) })
+                    val bar = FrameLayout(this@LifeActivity).apply { background = RunUi.rounded(0xFF2A3430.toInt(), d(4).toFloat()) }
+                    val fillV = View(this@LifeActivity).apply { background = RunUi.rounded(if (o.optBoolean("reached")) 0xFF22C55E.toInt() else 0xFF818CF8.toInt(), d(4).toFloat()) }
+                    bar.addView(fillV, FrameLayout.LayoutParams(0, d(8))); b.addView(bar, LinearLayout.LayoutParams(MATCH_PARENT, d(8)))
+                    val pct = o.optInt("pct"); bar.post { fillV.layoutParams = FrameLayout.LayoutParams(bar.width * pct / 100, d(8)); fillV.requestLayout() } } }
                 val secs = j.optJSONArray("sections"); var any = false
                 if (secs != null) for (k in 0 until secs.length()) { val sec = secs.getJSONObject(k)
-                    if (!sec.optString("title").contains(keyword)) continue; any = true
-                    b.addView(ccTable(sec.optJSONArray("head"), sec.optJSONArray("rows"), sec.optJSONArray("cells"), sec.optJSONArray("headColors")))
+                    if (!sec.optString("title").contains(keyword)) continue
+                    // Keep the Period column plus the columns this area shows (Reading / Audible goes to Library, not Bible).
+                    val head = sec.optJSONArray("head") ?: org.json.JSONArray()
+                    val keep = (0 until head.length()).filter { c -> c == 0 || head.optString(c).let { h -> (only == null || only.invoke(h)) && (drop == null || !drop.invoke(h)) } }
+                    if (keep.size <= 1) continue; any = true
+                    fun pick(a: org.json.JSONArray?) = a?.let { arr -> org.json.JSONArray().apply { keep.forEach { put(arr.opt(it)) } } }
+                    fun pickRows(a: org.json.JSONArray?) = a?.let { arr -> org.json.JSONArray().apply { for (r in 0 until arr.length()) put(pick(arr.optJSONArray(r))) } }
+                    b.addView(ccTable(pick(head), pickRows(sec.optJSONArray("rows")), pickRows(sec.optJSONArray("cells")), pick(sec.optJSONArray("headColors"))))
                 }
                 if (!any) b.addView(RunUi.text(this@LifeActivity, "Nothing recorded for this period.", RunUi.MUTED, 12f))
             }
@@ -653,6 +672,10 @@ class LifeActivity : Activity() {
         }
         private fun fill(j: JSONObject) {
             label.text = j.optString("label"); targets = j.optJSONObject("targets") ?: JSONObject(); body.removeAllViews()
+            // One weekly miles goal: Activities → Mileage's goal is the one; the Command Center's "Miles" follows it.
+            run { val act = ActivityStore.goal(this@LifeActivity, "week"); val cc = targets.optDouble("Miles", 0.0).let { if (it.isNaN()) 0.0 else it }
+                if (act > 0 && kotlin.math.abs(act - cc) > 0.01) { web.evaluateJavascript("window.ccNative&&ccNative.setGoals(${JSONObject.quote(JSONObject().put("Miles", act).toString())})") { load() }; return }
+                if (act <= 0 && cc > 0) ActivityStore.saveSettings(this@LifeActivity, JSONObject().put("goal_week", cc)) }
             val g = j.optJSONArray("goals")
             if (g == null || g.length() == 0) body.addView(RunUi.text(this@LifeActivity, "Tap ⚙️ Goals to set weekly targets (miles, Bible days, prayer days, run days, audiobook minutes).", RunUi.MUTED, 12f).apply { setPadding(0, d(6), 0, 0) })
             else for (i in 0 until g.length()) { val o = g.getJSONObject(i); val pct = o.optInt("pct")
@@ -679,7 +702,7 @@ class LifeActivity : Activity() {
         }
         private fun goals() {
             val box = LinearLayout(this@LifeActivity).apply { orientation = LinearLayout.VERTICAL; setPadding(d(20), d(8), d(20), 0) }
-            val fields = listOf("Miles" to "Miles / week", "Bible" to "Bible days (of 7)", "Prayer" to "Prayer days (of 7)", "Exercise" to "Run days (your plan's count is used when there is one)", "Audible" to "Audiobook minutes / week")
+            val fields = listOf("Miles" to "Miles / week (same goal as Activities → Mileage)", "Bible" to "Bible days (of 7)", "Prayer" to "Prayer days (of 7)", "Exercise" to "Run days (your plan's count is used when there is one)", "Audible" to "Audiobook minutes / week")
             val edits = fields.map { (k, l) ->
                 box.addView(RunUi.text(this@LifeActivity, l, Color.GRAY, 12f).apply { setPadding(0, d(8), 0, 0) })
                 EditText(this@LifeActivity).apply { inputType = android.text.InputType.TYPE_CLASS_NUMBER or android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL
@@ -688,6 +711,7 @@ class LifeActivity : Activity() {
             android.app.AlertDialog.Builder(this@LifeActivity).setTitle("Weekly goals").setView(android.widget.ScrollView(this@LifeActivity).apply { addView(box) })
                 .setPositiveButton("Save") { _, _ ->
                     val o = JSONObject(); edits.forEach { (et, k) -> o.put(k, et.text.toString().toDoubleOrNull() ?: 0.0) }
+                    ActivityStore.saveSettings(this@LifeActivity, JSONObject().put("goal_week", o.optDouble("Miles", 0.0)))   // same goal as Activities → Mileage
                     web.evaluateJavascript("window.ccNative&&ccNative.setGoals(${JSONObject.quote(o.toString())})") { load() }
                 }.setNegativeButton("Cancel", null).show()
         }

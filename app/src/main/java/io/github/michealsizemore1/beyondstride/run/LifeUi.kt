@@ -153,4 +153,33 @@ object LifeUi {
             }
         }
     }
+
+    /**
+     * A table whose first column (dates / weeks / months) stays put while the other columns scroll sideways.
+     * Takes a built table and splits off its first column; row heights are matched after layout.
+     */
+    fun pinFirstColumn(t: android.widget.TableLayout): View {
+        val ctx = t.context
+        val left = android.widget.TableLayout(ctx)
+        val pairs = ArrayList<Pair<android.widget.TableRow, android.widget.TableRow>>()
+        for (i in 0 until t.childCount) {
+            val r = t.getChildAt(i) as? android.widget.TableRow ?: continue
+            val first = r.getChildAt(0) ?: continue
+            r.removeViewAt(0)
+            val lr = android.widget.TableRow(ctx); lr.addView(first); left.addView(lr); pairs += lr to r
+        }
+        val scroll = android.widget.HorizontalScrollView(ctx).apply { addView(t); isHorizontalScrollBarEnabled = true }
+        val box = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL
+            addView(left, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+            addView(scroll, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)) }
+        // Match each row's height on both sides (a cell with two lines on one side makes that row taller).
+        box.viewTreeObserver.addOnGlobalLayoutListener(object : android.view.ViewTreeObserver.OnGlobalLayoutListener {
+            override fun onGlobalLayout() {
+                var changed = false
+                pairs.forEach { (l, r) -> val h = maxOf(l.height, r.height); if (h > 0 && (l.minimumHeight != h || r.minimumHeight != h)) { l.minimumHeight = h; r.minimumHeight = h; changed = true } }
+                if (changed) box.requestLayout() else if (pairs.all { it.first.height > 0 }) box.viewTreeObserver.removeOnGlobalLayoutListener(this)
+            }
+        })
+        return box
+    }
 }

@@ -49,7 +49,7 @@ object WeekTables {
                     } }) }
             })
         }
-        return HorizontalScrollView(act).apply { addView(t) }
+        return LifeUi.pinFirstColumn(t)   // dates stay put while the other columns scroll
     }
     private fun n0(v: Double) = String.format(Locale.US, "%,d", Math.round(v))
     private fun weekLabel(mon: LocalDate): String { val f = DateTimeFormatter.ofPattern("MMM d", Locale.US); return mon.format(f) + " – " + mon.plusDays(6).format(f) }
