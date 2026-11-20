@@ -59,6 +59,7 @@ class LifeActivity : Activity() {
     private lateinit var bar: LinearLayout
     private var yearCard: PeriodCard? = null
     private var weekTab: WeekTabCard? = null
+    private var libCard: LibraryCard? = null
     private var full = false
     private var focusCard: FocusCard? = null
     private var checksCard: ChecksCard? = null
@@ -175,6 +176,7 @@ class LifeActivity : Activity() {
         checksCard = ChecksCard().also { nativeCol.addView(it.view) }
         wellCard = WellnessCard().also { nativeCol.addView(it.view) }
         bibleCard = BibleCard().also { nativeCol.addView(it.view) }
+        libCard = LibraryCard().also { nativeCol.addView(it.view) }
         reviewCard = ReviewCard().also { nativeCol.addView(it.view) }
         journalCard = JournalCard().also { nativeCol.addView(it.view) }
         reviewsCol.removeAllViews()
@@ -192,7 +194,7 @@ class LifeActivity : Activity() {
         web.evaluateJavascript("(window.ccNative&&typeof load==='function')?(ccNative.all?ccNative.all():ccNative.focus()):null") { r ->
             val json = try { (JSONTokener(r).nextValue() as? String)?.let { JSONObject(it) } } catch (e: Exception) { null }
             if (json == null) { focusCard?.loading(); if (tries++ < 60) ui.postDelayed(reload, 700) ; return@evaluateJavascript }
-            tries = 0; focusCard?.fill(json); if (page == 0) calendar?.load(); scheduleCard?.fill(json); checksCard?.fill(json); wellCard?.fill(json); bibleCard?.fill(json); reviewCard?.fill(json); journalCard?.fill(json); weekCard?.fill(json)
+            tries = 0; focusCard?.fill(json); if (page == 0) calendar?.load(); scheduleCard?.fill(json); checksCard?.fill(json); wellCard?.fill(json); bibleCard?.fill(json); libCard?.fill(json); reviewCard?.fill(json); journalCard?.fill(json); weekCard?.fill(json)
             // An older copy of the Command Center is still cached (the website updates before this screen can use the
             // new parts): fetch the newest once.
             if ((!json.has("checks") || !json.has("schedule") || !json.has("review") || !json.has("wellness") || !json.has("weekly") || !json.has("journal")) && !refreshed) { refreshed = true; web.clearCache(true); web.reload(); ui.postDelayed(reload, 2500) }
@@ -616,6 +618,77 @@ class LifeActivity : Activity() {
         }
     }
 
+    /** 🎧 Library — today's audiobook (what + time; 30+ min checks it off), the finish-by plan and your finished books. */
+    private inner class LibraryCard {
+        val view = RunUi.card(this@LifeActivity)
+        private val box = TextView(this@LifeActivity)
+        private var st = ""
+        private val what = EditText(this@LifeActivity); private val time = EditText(this@LifeActivity)
+        private val plan = RunUi.text(this@LifeActivity, "", RunUi.MUTED, 12f)
+        private val books = LinearLayout(this@LifeActivity).apply { orientation = LinearLayout.VERTICAL }
+        private val booksHead = RunUi.text(this@LifeActivity, "", RunUi.ACCENT, 13f, true)
+        private var sig = ""
+        private fun d(v: Int) = RunUi.dp(this@LifeActivity, v)
+        private fun field(et: EditText, hint: String, id: String, number: Boolean) = et.apply {
+            this.hint = hint; setTextColor(Color.WHITE); setHintTextColor(RunUi.DIM); textSize = 14f; isSingleLine = true
+            background = RunUi.rounded(0xFF26302C.toInt(), d(8).toFloat()); setPadding(d(10), d(7), d(10), d(7))
+            if (number) inputType = android.text.InputType.TYPE_CLASS_DATETIME
+            imeOptions = EditorInfo.IME_ACTION_DONE
+            val commit = Runnable { js("ccNative.setListen(${JSONObject.quote(id)},${JSONObject.quote(text.toString())})") }
+            addTextChangedListener(object : TextWatcher {
+                override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+                override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+                override fun afterTextChanged(s: Editable?) { if (hasFocus()) { ui.removeCallbacks(commit); ui.postDelayed(commit, 900) } }
+            })
+            setOnFocusChangeListener { _, has -> if (!has) { ui.removeCallbacks(commit); commit.run(); ui.postDelayed(reload, 9000) } }
+            setOnEditorActionListener { v, _, _ -> v.clearFocus(); false }
+        }
+        init {
+            view.addView(LinearLayout(this@LifeActivity).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL
+                box.gravity = android.view.Gravity.CENTER; box.textSize = 14f
+                box.setOnClickListener { st = CYCLE[(CYCLE.indexOf(st) + 1) % CYCLE.size]; paintBox(box, st); js("ccNative.setCheck('gaAudiobook',${JSONObject.quote(st)})") }
+                addView(box, LinearLayout.LayoutParams(d(28), d(28)))
+                addView(RunUi.text(this@LifeActivity, "🎧 Today's Listening", Color.WHITE, 16f, true).apply { setPadding(d(10), 0, 0, 0) }) })
+            view.addView(field(what, "What are you listening to?", "gaAudiobookText", false), LinearLayout.LayoutParams(MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = d(8) })
+            view.addView(field(time, "Time listened today (45 or 1:10:00)", "gaAudiobookTime", true), LinearLayout.LayoutParams(MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = d(6) })
+            view.addView(RunUi.text(this@LifeActivity, "30+ minutes checks it off (and goals like \"Audible for 30 minutes\").", RunUi.DIM, 10f).apply { setPadding(0, d(4), 0, 0) })
+            view.addView(plan.apply { setPadding(0, d(8), 0, 0) })
+            view.addView(LinearLayout(this@LifeActivity).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL; setPadding(0, d(12), 0, d(2))
+                addView(booksHead, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+                addView(RunUi.text(this@LifeActivity, "+ Add Book", 0xFFA78BFA.toInt(), 13f, true).apply { setPadding(d(8), d(4), 0, d(4)); setOnClickListener { addBook() } }) })
+            view.addView(books)
+        }
+        fun fill(j: JSONObject) {
+            val l = j.optJSONObject("library") ?: run { view.visibility = View.GONE; return }
+            view.visibility = View.VISIBLE
+            st = l.optString("state"); paintBox(box, st)
+            if (!what.hasFocus() && what.text.toString() != l.optString("text")) what.setText(l.optString("text"))
+            if (!time.hasFocus() && time.text.toString() != l.optString("time")) time.setText(l.optString("time"))
+            plan.text = l.optString("plan").takeIf { it.isNotBlank() }?.let { "📅 $it" } ?: ""; plan.visibility = if (plan.text.isEmpty()) View.GONE else View.VISIBLE
+            booksHead.text = "📚 Books finished: ${l.optInt("year")} this year · ${l.optInt("count")} in your library"
+            val rec = l.optJSONArray("recent") ?: org.json.JSONArray()
+            if (rec.toString() == sig) return; sig = rec.toString(); books.removeAllViews()
+            for (i in 0 until rec.length()) { val b = rec.getJSONObject(i)
+                books.addView(LinearLayout(this@LifeActivity).apply { orientation = LinearLayout.HORIZONTAL; setPadding(0, d(5), 0, d(5))
+                    addView(LinearLayout(this@LifeActivity).apply { orientation = LinearLayout.VERTICAL
+                        addView(RunUi.text(this@LifeActivity, b.optString("title"), Color.WHITE, 14f, true))
+                        addView(RunUi.text(this@LifeActivity, listOf(b.optString("author"), b.optString("date")).filter { it.isNotBlank() }.joinToString(" · "), RunUi.MUTED, 11f)) },
+                        LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+                    addView(RunUi.text(this@LifeActivity, "★".repeat(b.optInt("rating").coerceIn(0, 5)), 0xFFF59E0B.toInt(), 13f)) })
+            }
+        }
+        private fun addBook() {
+            val b = LinearLayout(this@LifeActivity).apply { orientation = LinearLayout.VERTICAL; setPadding(d(20), d(8), d(20), 0) }
+            val t = EditText(this@LifeActivity).apply { hint = "Title" }; val a = EditText(this@LifeActivity).apply { hint = "Author" }
+            val date = EditText(this@LifeActivity).apply { hint = "Date finished (yyyy-mm-dd)"; setText(java.time.LocalDate.now().toString()) }
+            val stars = android.widget.RatingBar(this@LifeActivity).apply { numStars = 5; stepSize = 1f }
+            b.addView(t); b.addView(a); b.addView(date); b.addView(stars, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+            android.app.AlertDialog.Builder(this@LifeActivity).setTitle("Add a finished book").setView(b)
+                .setPositiveButton("Save") { _, _ -> if (t.text.isNotBlank()) web.evaluateJavascript("window.ccNative&&ccNative.addBook(${JSONObject.quote(t.text.toString())},${JSONObject.quote(a.text.toString())},${JSONObject.quote(date.text.toString())},${stars.rating.toInt()})") { reload.run() } }
+                .setNegativeButton("Cancel", null).show()
+        }
+    }
+
     /** 💚 Wellness — BP, meds, weight, sleep, dog walk, steps, bike: the check and its numbers, like the Wellness tab. */
     private inner class WellnessCard {
         val view = RunUi.card(this@LifeActivity)
@@ -697,7 +770,7 @@ class LifeActivity : Activity() {
         fun fill(j: JSONObject) {
             val arr = j.optJSONArray("checks") ?: run { summary.text = "Getting the newest Command Center…"; return }
             val hasWell = j.has("wellness")   // Wellness has its own card (with the numbers) below
-            val items = (0 until arr.length()).map { arr.getJSONObject(it) }.filter { !(hasWell && it.optString("group").contains("Wellness")) }
+            val items = (0 until arr.length()).map { arr.getJSONObject(it) }.filter { !(hasWell && it.optString("group").contains("Wellness")) && !(j.has("library") && it.optString("group").contains("Listening")) }
             val n = { st: String -> items.count { it.optString("state") == st } }
             summary.text = "${n("green")} done · ${n("purple")} partly · ${n("red")} not done · ${n("black")} N/A · ${n("")} not marked"
             val newSig = items.joinToString("|") { it.optString("key") + it.optString("id") + ":" + it.optString("state") + ":" + it.optString("label") }
