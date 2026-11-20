@@ -136,7 +136,7 @@ class LifeActivity : Activity() {
         }
         tabTabs = tab("☰ More") { showPage(5) }; tabToday = tab("Daily") { showPage(0) }; tabReviews = tab("Weekly") { showPage(1) }
         tabMonth = tab("Monthly") { showPage(7) }; tabYear = tab("Yearly") { showPage(8) }; tabReview = tab("Review") { showPage(9) }
-        tabMore = tab("🗂️ Tools") { showPage(4) }; tabFull = tab("📓 Full") { showPage(2) }   // reached from ☰ More
+        tabMore = tab("Tools") { showPage(4) }; tabFull = tab("📓 Full") { showPage(2) }   // Full is reached from ☰ More
         bar = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL; background = RunUi.rounded(RunUi.CARD, 0f)
             addView(tabTabs, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT))
@@ -144,7 +144,7 @@ class LifeActivity : Activity() {
             addView(android.widget.HorizontalScrollView(this@LifeActivity).apply { isHorizontalScrollBarEnabled = false
                 addView(LinearLayout(this@LifeActivity).apply { orientation = LinearLayout.HORIZONTAL
                     // Weekly / Monthly / Yearly now live in each area's section.
-                    listOf(tabToday, tabReview).forEach { addView(it) } }) },
+                    listOf(tabToday, tabReview, tabMore).forEach { addView(it) } }) },
                 LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         }
         val box = LinearLayout(this).apply {
@@ -183,7 +183,6 @@ class LifeActivity : Activity() {
             Triple("📚", "Library", "library") to "Books, audiobooks, finish plan",
             Triple("🧘", "Meditate", "meditate") to "Guided timer, scripture, session log",
             Triple("❤️", "Wellness", "wellness") to "BP, meds, weight, sleep, movement",
-            Triple("🗂️", "Tools", "tools") to "Search, Ask AI, BP report, files, settings",
             Triple("📓", "Full Command Center", "full") to "The whole website, as it looks in Chrome")
         items.chunked(2).forEach { row ->
             col.addView(LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; setPadding(0, d(8), 0, 0)
@@ -258,8 +257,8 @@ class LifeActivity : Activity() {
             t.background = if (on) android.graphics.drawable.LayerDrawable(arrayOf(android.graphics.drawable.ColorDrawable(0), android.graphics.drawable.ColorDrawable(RunUi.ACCENT))).apply {
                 setLayerInset(1, 0, 0, 0, 0); setLayerGravity(1, android.view.Gravity.BOTTOM); setLayerHeight(1, RunUi.dp(this@LifeActivity, 3)) } else null
         }
-        style(tabToday, p == 0); style(tabReviews, p == 1); style(tabMonth, p == 7); style(tabYear, p == 8); style(tabReview, p == 9)
-        val moreOn = p == 2 || p == 4 || p == 5 || p == 6
+        style(tabToday, p == 0); style(tabReviews, p == 1); style(tabMonth, p == 7); style(tabYear, p == 8); style(tabReview, p == 9); style(tabMore, p == 4)
+        val moreOn = p == 2 || p == 5 || p == 6
         tabTabs.setTextColor(if (moreOn) Color.WHITE else RunUi.MUTED); tabTabs.setBackgroundColor(if (moreOn) 0xFF2A3430.toInt() else 0xFF222B28.toInt())
         if (p == 0 || p == 1 || p == 6 || p in 7..9) reload.run()
         if (p == 1 || p == 9) weekTab?.load()
@@ -295,7 +294,7 @@ class LifeActivity : Activity() {
         // Weekly · Monthly · Yearly · Review each get their own page (showReviews puts the right card on it).
         weekTab = WeekTabCard(); weekCard = WeeklyCard(); monthCard = PeriodCard("monthly"); yearCard = PeriodCard("yearly")
         dashCard = LifeDashboard(this, web)   // no longer shown: its charts moved under Wellness
-        nativeCol.addView(RunUi.text(this, "Bible, Habits, Library, Meditate, Wellness, Tools (search, Ask AI, BP report, files, settings) and the full Command Center are in ☰ More. Your journal and the day's and week's reviews are in 📝 Review.", RunUi.DIM, 11f).apply { setPadding(0, RunUi.dp(this@LifeActivity, 12), 0, 0) })
+        nativeCol.addView(RunUi.text(this, "Bible, Habits, Library, Meditate, Wellness and the full Command Center are in ☰ More; search, Ask AI, BP report, files and settings are in Tools. Your journal and the day's and week's reviews are in 📝 Review.", RunUi.DIM, 11f).apply { setPadding(0, RunUi.dp(this@LifeActivity, 12), 0, 0) })
     }
 
     private var tries = 0
