@@ -49,6 +49,12 @@ class LifeActivity : Activity() {
     private lateinit var nativeCol: LinearLayout
     private lateinit var tabToday: TextView
     private lateinit var tabFull: TextView
+    private lateinit var tabReviews: TextView
+    private lateinit var reviewsCol: LinearLayout
+    private lateinit var reviewsScroll: ScrollView
+    private var page = 0          // 0 🎯 Today · 1 📊 Reviews · 2 📓 Full Command Center
+    private var monthCard: PeriodCard? = null
+    private var yearCard: PeriodCard? = null
     private var full = false
     private var focusCard: FocusCard? = null
     private var checksCard: ChecksCard? = null
@@ -98,20 +104,24 @@ class LifeActivity : Activity() {
         // Native sections (BeyondStride screens on the Command Center's own data) over the full website.
         nativeCol = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(RunUi.dp(this@LifeActivity, 14), 0, RunUi.dp(this@LifeActivity, 14), RunUi.dp(this@LifeActivity, 24)) }
         nativeScroll = ScrollView(this).apply { setBackgroundColor(RunUi.BG); isFillViewport = true; addView(nativeCol) }
+        reviewsCol = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(RunUi.dp(this@LifeActivity, 14), 0, RunUi.dp(this@LifeActivity, 14), RunUi.dp(this@LifeActivity, 24)) }
+        reviewsScroll = ScrollView(this).apply { setBackgroundColor(RunUi.BG); isFillViewport = true; addView(reviewsCol) }
         val stack = FrameLayout(this).apply {
             addView(web, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
             addView(nativeScroll, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
+            addView(reviewsScroll, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
         }
         fun pill(label: String, onClick: () -> Unit) = RunUi.text(this, label, Color.WHITE, 13f, true).apply {
             gravity = android.view.Gravity.CENTER; setPadding(0, RunUi.dp(this@LifeActivity, 8), 0, RunUi.dp(this@LifeActivity, 8))
             setOnClickListener { onClick() }
         }
-        tabToday = pill("🎯 Today") { show(false) }; tabFull = pill("📓 Full Command Center") { show(true) }
+        tabToday = pill("🎯 Today") { showPage(0) }; tabReviews = pill("📊 Reviews") { showPage(1) }; tabFull = pill("📓 Full") { showPage(2) }
         val bar = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL; setBackgroundColor(RunUi.BG)
             setPadding(RunUi.dp(this@LifeActivity, 14), RunUi.dp(this@LifeActivity, 6), RunUi.dp(this@LifeActivity, 14), RunUi.dp(this@LifeActivity, 6))
             addView(tabToday, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginEnd = RunUi.dp(this@LifeActivity, 6) })
-            addView(tabFull, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1.4f))
+            addView(tabReviews, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1.1f).apply { marginEnd = RunUi.dp(this@LifeActivity, 6) })
+            addView(tabFull, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 0.9f))
         }
         val box = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -125,22 +135,25 @@ class LifeActivity : Activity() {
             }
         }
         buildNative()
-        show(savedInstanceState?.getBoolean("full") ?: false)
+        showPage(savedInstanceState?.getInt("page") ?: 0)
         setContentView(RunUi.tabbed(this, box, RunUi.TAB_LIFE))
     }
 
     override fun onResume() { super.onResume(); web.onResume(); web.evaluateJavascript("window.ccSync&&ccSync.now()", null); if (!full) { ui.removeCallbacks(reload); ui.postDelayed(reload, 300) } }
     // Upload anything not yet sent before the app goes to the background.
     override fun onPause() { web.evaluateJavascript("window.ccSync&&ccSync.now()", null); web.onPause(); super.onPause() }
-    override fun onSaveInstanceState(out: Bundle) { super.onSaveInstanceState(out); web.saveState(out); out.putBoolean("full", full) }
+    override fun onSaveInstanceState(out: Bundle) { super.onSaveInstanceState(out); web.saveState(out); out.putInt("page", page) }
     override fun onDestroy() { ui.removeCallbacksAndMessages(null); web.destroy(); super.onDestroy() }
 
-    private fun show(f: Boolean) {
-        full = f
-        nativeScroll.visibility = if (f) View.GONE else View.VISIBLE   // the website stays loaded underneath either way
+    private fun show(f: Boolean) = showPage(if (f) 2 else 0)
+    private fun showPage(p: Int) {
+        page = p; full = p == 2
+        nativeScroll.visibility = if (p == 0) View.VISIBLE else View.GONE   // the website stays loaded underneath either way
+        reviewsScroll.visibility = if (p == 1) View.VISIBLE else View.GONE
         fun style(t: TextView, on: Boolean) { t.background = RunUi.rounded(if (on) RunUi.ACCENT else RunUi.CARD, RunUi.dp(this, 20).toFloat()); t.setTextColor(if (on) Color.BLACK else Color.WHITE) }
-        style(tabToday, !f); style(tabFull, f)
-        if (!f) reload.run()
+        style(tabToday, p == 0); style(tabReviews, p == 1); style(tabFull, p == 2)
+        if (p != 2) reload.run()
+        if (p == 1) { monthCard?.load(); yearCard?.load() }
     }
 
     // ── Native sections ──
@@ -154,8 +167,12 @@ class LifeActivity : Activity() {
         bibleCard = BibleCard().also { nativeCol.addView(it.view) }
         reviewCard = ReviewCard().also { nativeCol.addView(it.view) }
         journalCard = JournalCard().also { nativeCol.addView(it.view) }
-        weekCard = WeeklyCard().also { nativeCol.addView(it.view) }
-        nativeCol.addView(RunUi.text(this, "Everything else is in 📓 Full Command Center (tap above). More sections will move here one at a time.", RunUi.DIM, 11f).apply { setPadding(0, RunUi.dp(this@LifeActivity, 12), 0, 0) })
+        reviewsCol.removeAllViews()
+        weekCard = WeeklyCard().also { reviewsCol.addView(it.view) }
+        monthCard = PeriodCard("monthly").also { reviewsCol.addView(it.view) }
+        yearCard = PeriodCard("yearly").also { reviewsCol.addView(it.view) }
+        reviewsCol.addView(RunUi.text(this, "Charts, the dashboard and the injury roll-up are in 📓 Full.", RunUi.DIM, 11f).apply { setPadding(0, RunUi.dp(this@LifeActivity, 12), 0, 0) })
+        nativeCol.addView(RunUi.text(this, "Weekly, monthly and yearly reviews are in 📊 Reviews. Everything else is in 📓 Full. More sections will move here one at a time.", RunUi.DIM, 11f).apply { setPadding(0, RunUi.dp(this@LifeActivity, 12), 0, 0) })
     }
 
     private var tries = 0
@@ -381,6 +398,61 @@ class LifeActivity : Activity() {
             if (!j.has("journal")) { view.visibility = View.GONE; return }
             view.visibility = View.VISIBLE
             val t = j.optString("journal"); if (!et.hasFocus() && et.text.toString() != t) et.setText(t)
+        }
+    }
+
+    /** 📆 Monthly / 📅 Yearly — the habit heat map (month) and the Fitness / Wellness / Spirituality tables, ‹ › to move. */
+    private inner class PeriodCard(val kind: String) {
+        val view = RunUi.card(this@LifeActivity)
+        private var off = 0
+        private val label = RunUi.text(this@LifeActivity, "", Color.WHITE, 14f, true).apply { gravity = android.view.Gravity.CENTER }
+        private val body = LinearLayout(this@LifeActivity).apply { orientation = LinearLayout.VERTICAL }
+        private fun d(v: Int) = RunUi.dp(this@LifeActivity, v)
+        private fun arrow(t: String, n: Int) = RunUi.text(this@LifeActivity, t, RunUi.ACCENT, 22f, true).apply { setPadding(d(14), 0, d(14), 0); setOnClickListener { off += n; load() } }
+        init {
+            view.addView(RunUi.text(this@LifeActivity, if (kind == "monthly") "📆 Monthly" else "🗓️ Yearly", Color.WHITE, 16f, true))
+            view.addView(LinearLayout(this@LifeActivity).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL; setPadding(0, d(4), 0, 0)
+                addView(arrow("‹", -1)); addView(label, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)); addView(arrow("›", 1)) })
+            view.addView(body)
+        }
+        fun load() {
+            web.evaluateJavascript("window.ccNative&&ccNative.period?ccNative.period('$kind',$off):null") { r ->
+                val j = try { (JSONTokener(r).nextValue() as? String)?.let { JSONObject(it) } } catch (e: Exception) { null } ?: return@evaluateJavascript
+                fill(j)
+            }
+        }
+        private fun fill(j: JSONObject) {
+            label.text = j.optString("label"); body.removeAllViews()
+            j.optString("heat").takeIf { it.isNotEmpty() }?.let { heat(it) }
+            val secs = j.optJSONArray("sections") ?: return
+            for (i in 0 until secs.length()) { val sec = secs.getJSONObject(i)
+                body.addView(RunUi.text(this@LifeActivity, sec.optString("title"), RunUi.ACCENT, 13f, true).apply { setPadding(0, d(12), 0, d(4)) })
+                body.addView(table(sec.optJSONArray("head"), sec.optJSONArray("rows")))
+            }
+        }
+        private fun heat(h: String) {
+            body.addView(RunUi.text(this@LifeActivity, "Habit completion (Bible audio · prayer · exercise)", RunUi.MUTED, 12f).apply { setPadding(0, d(8), 0, d(4)) })
+            val grid = android.widget.GridLayout(this@LifeActivity).apply { columnCount = 7 }
+            listOf("M", "T", "W", "T", "F", "S", "S").forEach { grid.addView(RunUi.text(this@LifeActivity, it, RunUi.DIM, 11f, true).apply { gravity = android.view.Gravity.CENTER }, android.widget.GridLayout.LayoutParams().apply { width = d(40); height = d(20) }) }
+            var day = 0
+            h.forEach { c ->
+                val cell = TextView(this@LifeActivity).apply { gravity = android.view.Gravity.CENTER; textSize = 11f }
+                if (c != 'e') { day++; cell.text = day.toString() }
+                val col = when (c) { 'e' -> 0; 'f' -> 0xFF1F2725.toInt(); '1' -> 0xFF365314.toInt(); '2' -> 0xFF65A30D.toInt(); '3' -> 0xFFA3E635.toInt(); else -> 0xFF2A3430.toInt() }
+                cell.setTextColor(if (c == '3') Color.BLACK else if (c == 'f') RunUi.DIM else Color.WHITE)
+                if (col != 0) cell.background = RunUi.rounded(col, d(6).toFloat())
+                grid.addView(cell, android.widget.GridLayout.LayoutParams().apply { width = d(36); height = d(30); setMargins(d(2), d(2), d(2), d(2)) })
+            }
+            body.addView(grid)
+        }
+        private fun table(head: org.json.JSONArray?, rows: org.json.JSONArray?): View {
+            val t = android.widget.TableLayout(this@LifeActivity)
+            fun row(cells: org.json.JSONArray, header: Boolean, total: Boolean) = android.widget.TableRow(this@LifeActivity).apply {
+                for (k in 0 until cells.length()) addView(RunUi.text(this@LifeActivity, cells.optString(k), if (header) RunUi.MUTED else if (k == 0 || total) RunUi.ACCENT else Color.WHITE, 12f, header || total || k == 0).apply { setPadding(d(6), d(4), d(10), d(4)) })
+            }
+            head?.let { t.addView(row(it, true, false)) }
+            if (rows != null) for (i in 0 until rows.length()) { val r = rows.getJSONArray(i); t.addView(row(r, false, r.optString(0).startsWith("TOTAL"))) }
+            return android.widget.HorizontalScrollView(this@LifeActivity).apply { addView(t) }
         }
     }
 
@@ -620,7 +692,7 @@ class LifeActivity : Activity() {
     @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
         if (full && web.canGoBack()) web.goBack()
-        else if (full) show(false)
+        else if (full || page == 1) show(false)
         else @Suppress("DEPRECATION") super.onBackPressed()
     }
 }
