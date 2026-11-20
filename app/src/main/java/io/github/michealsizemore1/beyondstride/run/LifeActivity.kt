@@ -858,66 +858,118 @@ class LifeActivity : Activity() {
         }
     }
 
-    /** 💚 Wellness — BP, meds, weight, sleep, dog walk, steps, bike: the check and its numbers, like the Wellness tab. */
+    /**
+     * ❤️ Wellness — laid out like the Command Center's Wellness page: BP (💓 pulse, 🫀 morning HR), Meds, Weight, Sleep
+     * (⌛ score + 😴 BeyondStride's night), 🧘 Daily Movement (dog walk, steps), then the 60-day BP & pulse and weight charts.
+     */
     private inner class WellnessCard {
-        val view = RunUi.card(this@LifeActivity)
-        private val body = LinearLayout(this@LifeActivity).apply { orientation = LinearLayout.VERTICAL }
+        val view = LinearLayout(this@LifeActivity).apply { orientation = LinearLayout.VERTICAL }
+        private val card = RunUi.card(this@LifeActivity)
         private val boxes = HashMap<String, TextView>(); private val states = HashMap<String, String>(); private val edits = HashMap<String, EditText>()
-        private var built = ""
-        private val count = RunUi.text(this@LifeActivity, "", RunUi.MUTED, 13f, true)
+        private val dateText = RunUi.text(this@LifeActivity, "", RunUi.MUTED, 12f)
+        private val sleepDetail = RunUi.text(this@LifeActivity, "", RunUi.MUTED, 12f)
+        private val moveCount = RunUi.text(this@LifeActivity, "", RunUi.MUTED, 13f, true)
+        private val charts = LinearLayout(this@LifeActivity).apply { orientation = LinearLayout.VERTICAL }
+        private var built = false
+        private var chartsAt = 0L
         private fun d(v: Int) = RunUi.dp(this@LifeActivity, v)
+        private val RED = 0xFFF87171.toInt(); private val GREEN = 0xFF4ADE80.toInt()
         init {
-            view.addView(LinearLayout(this@LifeActivity).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL
-                addView(RunUi.text(this@LifeActivity, "💚 Wellness", Color.WHITE, 16f, true), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-                addView(count) })
-            view.addView(body)
-            view.addView(RunUi.text(this@LifeActivity, "Typing a value checks it off on its own (BP, weight, sleep, dog walk, 10,000+ steps) — same as the Command Center. Meds stays manual: tap its box.", RunUi.DIM, 10f).apply { setPadding(0, d(8), 0, 0) })
+            card.addView(LinearLayout(this@LifeActivity).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL
+                addView(RunUi.text(this@LifeActivity, "❤️ Wellness", RED, 18f, true), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+                addView(dateText) })
+            view.addView(card); view.addView(charts)
+        }
+        private fun field(id: String, hint: String, number: Boolean) = EditText(this@LifeActivity).apply {
+            this.hint = hint; setTextColor(Color.WHITE); setHintTextColor(RunUi.DIM); textSize = 15f; isSingleLine = true
+            inputType = if (number) android.text.InputType.TYPE_CLASS_NUMBER else android.text.InputType.TYPE_CLASS_TEXT
+            imeOptions = EditorInfo.IME_ACTION_DONE
+            background = RunUi.rounded(0xFF26302C.toInt(), d(8).toFloat()); setPadding(d(10), d(6), d(10), d(6))
+            val commit = Runnable { js("ccNative.setField(${JSONObject.quote(id)},${JSONObject.quote(text.toString())})") }
+            addTextChangedListener(object : TextWatcher {
+                override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+                override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+                override fun afterTextChanged(s: Editable?) { if (hasFocus()) { ui.removeCallbacks(commit); ui.postDelayed(commit, 900) } }
+            })
+            setOnFocusChangeListener { _, has -> if (!has) { ui.removeCallbacks(commit); commit.run(); ui.postDelayed(reload, 1200) } }
+            setOnEditorActionListener { v, _, _ -> v.clearFocus(); false }
+        }.also { edits[id] = it }
+        /** A row: [box] Label: [field] — or, for a sub-row (no box), indented with its icon. */
+        private fun row(key: String?, label: String, labelColor: Int, id: String, hint: String, number: Boolean = false) {
+            card.addView(LinearLayout(this@LifeActivity).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL; setPadding(if (key == null) d(38) else 0, d(5), 0, d(5))
+                if (key != null) {
+                    val box = TextView(this@LifeActivity).apply { gravity = android.view.Gravity.CENTER; textSize = 14f; setTypeface(typeface, android.graphics.Typeface.BOLD)
+                        setOnClickListener { val n = CYCLE[(CYCLE.indexOf(states[key] ?: "") + 1) % CYCLE.size]; states[key] = n; paintBox(this, n); js("ccNative.setCheck(${JSONObject.quote(key)},${JSONObject.quote(n)})") } }
+                    boxes[key] = box; paintBox(box, ""); addView(box, LinearLayout.LayoutParams(d(28), d(28)).apply { marginEnd = d(10) })
+                }
+                addView(RunUi.text(this@LifeActivity, label, labelColor, if (key == null) 14f else 15f, key != null).apply { setPadding(0, 0, d(8), 0) })
+                addView(field(id, hint, number), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)) })
+        }
+        private fun build() {
+            built = true
+            row("wBP", "BP:", Color.WHITE, "wBPVal", "120/80")
+            row(null, "💓 Pulse:", RunUi.MUTED, "wPulseVal", "bpm", true)
+            row(null, "🫀 Morning HR:", RunUi.MUTED, "wRestHRVal", "bpm", true)
+            row("wMeds", "Meds:", Color.WHITE, "wMedsVal", "HCTZ, Vitamins…")
+            row("wWght", "Weight:", Color.WHITE, "wWghtVal", "lbs")
+            row("wSleep", "Sleep:", Color.WHITE, "wSleepVal", "hrs (7.5 or 6:30)")
+            row(null, "⌛ Sleep Score:", RunUi.MUTED, "wSleepScore", "0-100", true)
+            card.addView(sleepDetail.apply { setPadding(d(38), d(2), 0, d(6)) })
+            card.addView(View(this@LifeActivity).apply { setBackgroundColor(0xFF2A3430.toInt()) }, LinearLayout.LayoutParams(MATCH_PARENT, d(1)).apply { topMargin = d(8); bottomMargin = d(8) })
+            card.addView(LinearLayout(this@LifeActivity).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL
+                addView(RunUi.text(this@LifeActivity, "🧘 Daily Movement", GREEN, 15f, true).apply { setPadding(0, 0, d(8), 0) }); addView(moveCount) })
+            row("exDogWalk", "Dog Walk:", Color.WHITE, "exDogWalkVal", "Duration/notes…")
+            row("exStepsCheck", "Steps today:", Color.WHITE, "exSteps", "Goal 10,000", true)
+            card.addView(RunUi.text(this@LifeActivity, "Typing a value checks it off on its own (BP, weight, sleep, dog walk, 10,000+ steps). Meds stays manual: tap its box.", RunUi.DIM, 10f).apply { setPadding(0, d(8), 0, 0) })
         }
         fun fill(j: JSONObject) {
-            val arr = j.optJSONArray("wellness") ?: run { view.visibility = View.GONE; return }
-            view.visibility = View.VISIBLE
-            val rows = (0 until arr.length()).map { arr.getJSONObject(it) }.filter { it.optString("key") != "exBike" }   // Bike left off (Micheal, Nov 2026)
-            val shape = rows.joinToString("|") { r -> r.optString("key") + ":" + (0 until r.getJSONArray("fields").length()).joinToString(",") { r.getJSONArray("fields").getJSONObject(it).optString("id") } }
-            if (shape != built) { built = shape; build(rows) }
+            val arr = j.optJSONArray("wellness") ?: return
+            if (!built) build()
+            dateText.text = java.time.LocalDate.now().format(java.time.format.DateTimeFormatter.ofPattern("EEEE, MMM d", java.util.Locale.US))
+            val rows = (0 until arr.length()).map { arr.getJSONObject(it) }
             rows.forEach { r ->
                 val key = r.optString("key"); states[key] = r.optString("state"); boxes[key]?.let { paintBox(it, r.optString("state")) }
                 val f = r.getJSONArray("fields")
                 for (i in 0 until f.length()) { val o = f.getJSONObject(i); edits[o.optString("id")]?.let { if (!it.hasFocus() && it.text.toString() != o.optString("value")) it.setText(o.optString("value")) } }
             }
-            count.text = "${rows.count { it.optString("state") == "green" }}/${rows.size}"
+            moveCount.text = "${listOf("exDogWalk", "exStepsCheck").count { states[it] == "green" }}/2"
+            val sd = j.optString("sleepDetail"); sleepDetail.text = sd; sleepDetail.visibility = if (sd.isBlank()) View.GONE else View.VISIBLE
+            if (System.currentTimeMillis() - chartsAt > 60_000) { chartsAt = System.currentTimeMillis(); loadCharts() }
         }
-        private fun build(rows: List<JSONObject>) {
-            body.removeAllViews(); boxes.clear(); edits.clear()
-            rows.forEach { r ->
-                val key = r.optString("key")
-                val box = TextView(this@LifeActivity).apply { gravity = android.view.Gravity.CENTER; textSize = 14f; setTypeface(typeface, android.graphics.Typeface.BOLD)
-                    setOnClickListener { val n = CYCLE[(CYCLE.indexOf(states[key] ?: "") + 1) % CYCLE.size]; states[key] = n; paintBox(this, n); js("ccNative.setCheck(${JSONObject.quote(key)},${JSONObject.quote(n)})") } }
-                boxes[key] = box
-                body.addView(LinearLayout(this@LifeActivity).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL; setPadding(0, d(10), 0, d(2))
-                    addView(box, LinearLayout.LayoutParams(d(28), d(28)))
-                    addView(RunUi.text(this@LifeActivity, r.optString("label"), Color.WHITE, 14f, true).apply { setPadding(d(10), 0, 0, 0) }) })
-                val f = r.getJSONArray("fields")
-                val line = LinearLayout(this@LifeActivity).apply { orientation = LinearLayout.HORIZONTAL; setPadding(d(38), d(2), 0, 0) }
-                for (i in 0 until f.length()) { val o = f.getJSONObject(i); val id = o.optString("id")
-                    val et = EditText(this@LifeActivity).apply {
-                        hint = if (f.length() > 1) o.optString("label") + " · " + o.optString("hint") else o.optString("hint")
-                        setTextColor(Color.WHITE); setHintTextColor(RunUi.DIM); textSize = 14f; isSingleLine = true
-                        inputType = if (o.optBoolean("number")) android.text.InputType.TYPE_CLASS_NUMBER else android.text.InputType.TYPE_CLASS_TEXT
-                        imeOptions = EditorInfo.IME_ACTION_DONE
-                        background = RunUi.rounded(0xFF26302C.toInt(), d(8).toFloat()); setPadding(d(10), d(7), d(10), d(7))
-                        val commit = Runnable { js("ccNative.setField(${JSONObject.quote(id)},${JSONObject.quote(text.toString())})") }
-                        addTextChangedListener(object : TextWatcher {
-                            override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
-                            override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
-                            override fun afterTextChanged(s: Editable?) { if (hasFocus()) { ui.removeCallbacks(commit); ui.postDelayed(commit, 900) } }
-                        })
-                        setOnFocusChangeListener { _, has -> if (!has) { ui.removeCallbacks(commit); commit.run(); ui.postDelayed(reload, 1200) } }
-                        setOnEditorActionListener { v, _, _ -> v.clearFocus(); false }
-                    }
-                    edits[id] = et
-                    line.addView(et, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { if (i > 0) marginStart = d(6) })
-                }
-                body.addView(line)
+        /** ❤️ Blood Pressure & Pulse and ⚖️ Weight — last 60 days, like the Command Center's Wellness charts. */
+        private fun loadCharts() {
+            web.evaluateJavascript("window.ccNative&&ccNative.dash?ccNative.dash(60):null") { r ->
+                val arr = try { org.json.JSONArray(JSONTokener(r).nextValue() as String) } catch (e: Exception) { null } ?: return@evaluateJavascript
+                val days = (0 until arr.length()).map { arr.getJSONObject(it) }
+                val labels = days.map { it.optString("d") }
+                fun ser(k: String) = days.map { it.optDouble(k, 0.0).takeIf { v -> v > 0 } }
+                charts.removeAllViews()
+                val bp = RunUi.card(this@LifeActivity)
+                bp.addView(RunUi.text(this@LifeActivity, "❤️ Blood Pressure & Pulse — Last 60 Days", RED, 15f, true))
+                bp.addView(LinearLayout(this@LifeActivity).apply { orientation = LinearLayout.HORIZONTAL; setPadding(0, d(6), 0, d(4))
+                    listOf("● Systolic" to 0xFFEF4444.toInt(), "● Diastolic" to 0xFF60A5FA.toInt(), "● Pulse" to 0xFFF97316.toInt()).forEach { (t, c) ->
+                        addView(RunUi.text(this@LifeActivity, t, c, 13f, true).apply { setPadding(0, 0, d(14), 0) }) } })
+                val sys = ser("sys"); val dia = ser("dia"); val pul = ser("pulse")
+                if (sys.any { it != null }) {
+                    bp.addView(LifeDashboard.Chart(this@LifeActivity, listOf(sys to 0xFFEF4444.toInt(), dia to 0xFF60A5FA.toInt(), pul to 0xFFF97316.toInt()), false, labels), LinearLayout.LayoutParams(MATCH_PARENT, d(170)))
+                    val n = sys.count { it != null }; val ps = pul.filterNotNull()
+                    bp.addView(RunUi.text(this@LifeActivity, "60-day avg — BP: ${sys.filterNotNull().average().toInt()}/${dia.filterNotNull().average().toInt()} mmHg" +
+                        (if (ps.isNotEmpty()) " • Pulse: ${ps.average().toInt()} bpm" else "") + " ($n readings)", RunUi.MUTED, 12f).apply { gravity = android.view.Gravity.CENTER; setPadding(0, d(6), 0, 0) })
+                } else bp.addView(RunUi.text(this@LifeActivity, "No readings in the last 60 days.", RunUi.MUTED, 12f))
+                bp.addView(RunUi.button(this@LifeActivity, "🖨️ Print BP Report", 0xFF334155.toInt(), Color.WHITE) { more.printReport(60) },
+                    LinearLayout.LayoutParams(MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = d(8) })
+                charts.addView(bp)
+                val wc = RunUi.card(this@LifeActivity)
+                wc.addView(LinearLayout(this@LifeActivity).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL
+                    addView(RunUi.text(this@LifeActivity, "⚖️ Weight — Last 60 Days", RED, 15f, true), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+                    addView(RunUi.text(this@LifeActivity, "● Weight (lbs)", 0xFFC084FC.toInt(), 12f, true)) })
+                val w = ser("weight")
+                if (w.any { it != null }) {
+                    wc.addView(LifeDashboard.Chart(this@LifeActivity, listOf(w to 0xFFC084FC.toInt()), false, labels), LinearLayout.LayoutParams(MATCH_PARENT, d(150)).apply { topMargin = d(6) })
+                    val ws = w.filterNotNull()
+                    wc.addView(RunUi.text(this@LifeActivity, String.format(java.util.Locale.US, "60-day avg: %.1f lbs • Range: %.1f – %.1f lbs (%d readings)", ws.average(), ws.min(), ws.max(), ws.size), RunUi.MUTED, 12f).apply { gravity = android.view.Gravity.CENTER; setPadding(0, d(6), 0, 0) })
+                } else wc.addView(RunUi.text(this@LifeActivity, "No weigh-ins in the last 60 days.", RunUi.MUTED, 12f))
+                charts.addView(wc)
             }
         }
     }

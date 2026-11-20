@@ -76,7 +76,8 @@ class LifeDashboard(private val act: Activity, private val web: WebView) {
     }
 
     /** A small line (or bar) chart: min / max on the left, first and last date along the bottom. */
-    private class Chart(ctx: Context, val lines: List<Pair<List<Double?>, Int>>, val bars: Boolean, val labels: List<String>) : View(ctx) {
+    /** Also used by the Wellness section's 60-day charts. */
+    class Chart(ctx: Context, val lines: List<Pair<List<Double?>, Int>>, val bars: Boolean, val labels: List<String>) : View(ctx) {
         private val dens = ctx.resources.displayMetrics.density
         private val p = Paint(Paint.ANTI_ALIAS_FLAG)
         override fun onDraw(c: Canvas) {

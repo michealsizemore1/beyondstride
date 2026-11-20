@@ -307,7 +307,7 @@
     reviewFill:function(){goRealDay();var b=document.getElementById('aiFillDayReviewBtn');if(!b||b.disabled)return false;
       if(!(typeof journalAIKey==='function'&&journalAIKey()))return 'nokey';aiFillEntireDayReview(b);return true;},
     /** Everything the native Today screen shows: {date, focus:[…], checks:[{key|id, group, label, state}]} */
-    all:function(){goRealDay();var f=JSON.parse(window.ccNative.focus());f.checks=checks();f.schedule=schedule();f.review=review();f.wellness=wellness();f.bible=bible();f.meditation=meditation();f.weekly=weekly();f.journal=journalText();f.library=library();return JSON.stringify(f);},
+    all:function(){goRealDay();var f=JSON.parse(window.ccNative.focus());f.checks=checks();f.schedule=schedule();f.review=review();f.wellness=wellness();try{var sd=document.getElementById('bsSleepDetail');f.sleepDetail=sd&&sd.style.display!=='none'?sd.textContent:'';}catch(e){f.sleepDetail='';}f.bible=bible();f.meditation=meditation();f.weekly=weekly();f.journal=journalText();f.library=library();return JSON.stringify(f);},
     /** My Schedule: tap cycles done → not done → not marked, exactly like the Command Center's own button. */
     scheduleTap:function(id){goRealDay();try{renderJournalSchedule();journalScheduleCycleStatus(null,id);}catch(e){return false;}refresh();try{if(window.BSNative&&BSNative.changed)BSNative.changed();}catch(e){}return true;},
     /** Set a daily check (tri-check key like 'wBP') to '', green, black, purple or red. */

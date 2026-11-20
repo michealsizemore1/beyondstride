@@ -199,6 +199,16 @@ class LifeMore(private val act: Activity, private val web: WebView, private val 
         addView(RunUi.button(act, "Show report", 0xFF374151.toInt(), Color.WHITE) { loadBP() }, lp())
         addView(bpBody)
     }
+    /** 🖨️ Print the BP report for the last [days] days straight away (Wellness section button). */
+    fun printReport(days: Int) {
+        bpDays = days
+        web.evaluateJavascript("window.ccNative&&ccNative.dash?ccNative.dash($days):null") { r ->
+            val arr = try { JSONArray(str(r)) } catch (e: Exception) { JSONArray() }
+            bpRows = (0 until arr.length()).map { arr.getJSONObject(it) }.filter { it.optInt("sys") > 0 }.reversed()
+            if (bpRows.isEmpty()) return@evaluateJavascript
+            printBP(bpRows.map { it.optInt("sys") }.average(), bpRows.map { it.optInt("dia") }.average())
+        }
+    }
     private fun loadBP() {
         web.evaluateJavascript("window.ccNative&&ccNative.dash?ccNative.dash($bpDays):null") { r ->
             val arr = try { JSONArray(str(r)) } catch (e: Exception) { JSONArray() }
