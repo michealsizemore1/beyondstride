@@ -44,6 +44,7 @@ object LifeTab {
 class LifeActivity : Activity() {
     private lateinit var web: WebView
     private var fileCb: ValueCallback<Array<Uri>>? = null
+    private val bundled: Set<String> by lazy { (try { assets.list("cc")?.toSet() } catch (e: Exception) { null }) ?: emptySet() }
     private val ui = Handler(Looper.getMainLooper())
     private lateinit var nativeScroll: ScrollView
     private lateinit var nativeCol: LinearLayout
@@ -92,6 +93,20 @@ class LifeActivity : Activity() {
                     try { startActivity(Intent(Intent.ACTION_VIEW, u)) } catch (e: Exception) { }
                     return true
                 }
+                // The Command Center now lives inside the app (assets/cc): its page and scripts are served from here,
+                // at the same web address — so your saved data stays put, and it works offline and after the website
+                // version is retired. Anything else (other Master App tools, Scripture, AI) still comes from the internet.
+                override fun shouldInterceptRequest(view: WebView, req: WebResourceRequest): android.webkit.WebResourceResponse? {
+                    val u = req.url
+                    if (u.host != "michealsizemore1.github.io") return null
+                    val path = u.path ?: return null
+                    if (!path.startsWith(CC_DIR)) return null
+                    val name = path.removePrefix(CC_DIR)
+                    if (name !in bundled) return null
+                    val mime = if (name.endsWith(".html")) "text/html" else "application/javascript"
+                    return try { android.webkit.WebResourceResponse(mime, "utf-8", assets.open("cc/$name")).apply {
+                        responseHeaders = mapOf("Cache-Control" to "no-store", "Access-Control-Allow-Origin" to "*") } } catch (e: Exception) { null }
+                }
             }
             webChromeClient = object : WebChromeClient() {   // also shows the page's alert / confirm boxes
                 override fun onShowFileChooser(v: WebView, cb: ValueCallback<Array<Uri>>, params: FileChooserParams): Boolean {
@@ -110,7 +125,7 @@ class LifeActivity : Activity() {
         else {
             // The #app=bs link part tells the Command Center where BeyondStride's daily summaries are (same as
             // Settings → Link the Command Center review), so the review, steps and wellness work here too.
-            val base = RunSettings.ccUrl(this).substringBefore("#")
+            val base = CC_PAGE   // always the built-in copy (see shouldInterceptRequest)
             web.loadUrl(base + (NutritionSync.linkPart(this).takeIf { it.isNotEmpty() }?.let { "#app=bs$it" } ?: ""))
         }
         // Native sections (BeyondStride screens on the Command Center's own data) over the full website.
@@ -941,5 +956,10 @@ class LifeActivity : Activity() {
         if (full && web.canGoBack()) web.goBack()
         else if (full || page == 1 || page == 3 || page == 4) show(false)
         else @Suppress("DEPRECATION") super.onBackPressed()
+    }
+
+    companion object {
+        const val CC_DIR = "/ChatGPT-The-Master-App/"
+        const val CC_PAGE = "https://michealsizemore1.github.io/ChatGPT-The-Master-App/daily-planner.html"
     }
 }
