@@ -1911,6 +1911,7 @@ function aiFillEntireReview(btn){
   // BeyondStride's day-by-day training / nutrition / recovery for the week (read-only), fetched first.
   if(typeof window.bsReviewFetch==='function'&&!btn.__bsReady){btn.disabled=true;window.bsReviewFetch(dk(ws),dk(we),function(t){btn.__bsText=t||'';btn.__bsReady=true;btn.disabled=false;aiFillEntireReview(btn);});return;}
   const bsText=noTonightInput(btn.__bsText);btn.__bsReady=false;btn.__bsText='';
+  const revKey=dk(today);   // the day this review is for — the page may move to another day before the AI answers
   const weekLabel=ws.toLocaleDateString('en-US',{month:'short',day:'numeric'})+' - '+we.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
   const journal=getReviewWeekJournalText()+(typeof window.bibleStudyWeekText==='function'?window.bibleStudyWeekText(dk(ws),dk(we)):'');
   const injuries=reviewInjuryText();
@@ -2141,6 +2142,12 @@ function aiFillEntireDayReview(btn){
       var cleaned=String(text||'').trim().replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,'');
       var start=cleaned.indexOf('{'),end=cleaned.lastIndexOf('}');if(start>=0&&end>=start)cleaned=cleaned.slice(start,end+1);
       var result=JSON.parse(cleaned),map={wins:'dayRevWins',improve:'dayRevImprove',focus:'dayRevFocus',lessons:'dayRevLessons'};
+      // The page moved to another day while the AI was writing (midnight rollover, or BeyondStride's Today screen):
+      // never put this review — or its red checks — on that other day. An automatic review is saved to its own day.
+      if(dk(today)!==revKey){
+        if(btn.__auto){try{var o={};Object.keys(map).forEach(function(k2){o[map[k2]]=result[k2]!=null?noTonightOutput(result[k2]):'';});localStorage.setItem('dayreview_'+revKey,JSON.stringify(o));}catch(eW){}}
+        btn.__auto=false;btn.__fallback=null;btn.disabled=false;btn.innerHTML=original;return;
+      }
       Object.keys(map).forEach(function(key){var el=document.getElementById(map[key]);if(el&&result[key]!=null){el.value=noTonightOutput(result[key]);el.dispatchEvent(new Event('input'));}});
       try{if(typeof window.autoTickReviewWritten==='function')window.autoTickReviewWritten();}catch(eT){}
       if(btn.__auto){saveDayReview(true);try{localStorage.setItem('autoRevText_'+dk(today),dayRevJoined());}catch(eS){}btn.__fallback=null;v26Toast('🌙 Day Review filled and saved automatically');}

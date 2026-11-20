@@ -40,6 +40,9 @@
   window.autoTickReviewWritten=function(){
     try{
       var d=dayKey();if(!d)return;var changed=false;
+      // Never mark today's blanks red before 9 PM — the day isn't over (an early AI Fill, or a review finishing
+      // just after midnight, used to turn this morning's checks red).
+      if(d===dk(new Date())&&new Date().getHours()<21)return;
       // Every blank Wellness / Movement / Audiobook check that isn't done → red. Meds stays yours.
       ITEMS.concat([['gaAudiobook','',function(){return window.audiobookDone&&window.audiobookDone();}]]).forEach(function(it){
         var box=document.querySelector('.tri-check[data-key="'+it[0]+'"]');if(!box||box.dataset.state)return;
@@ -53,6 +56,20 @@
       if(changed)refresh();
     }catch(e){}
   };
+  // Undo red checks that were put on today too early (only ones the automatic rule set, still red, before 9 PM).
+  function undoEarlyRed(){
+    try{
+      var d=dayKey();if(!d||d!==dk(new Date())||new Date().getHours()>=21)return;var fixed=false;
+      ITEMS.concat([['gaAudiobook']]).forEach(function(it){
+        var flag='autoRed_'+d+'_'+it[0];if(!localStorage.getItem(flag))return;
+        var box=document.querySelector('.tri-check[data-key="'+it[0]+'"]');
+        if(box&&box.dataset.state==='red'){applyTriState(box,'');fixed=true;}
+        localStorage.removeItem(flag);
+      });
+      if(fixed)refresh();
+    }catch(e){}
+  }
+  setTimeout(undoEarlyRed,2500);setInterval(undoEarlyRed,60000);
   var t=null;function soon(){clearTimeout(t);t=setTimeout(check,400);}
   document.addEventListener('input',function(e){if(e.target&&ITEMS.some(function(it){return it[1]===e.target.id;}))soon();},true);
   document.addEventListener('change',function(e){if(e.target&&ITEMS.some(function(it){return it[1]===e.target.id;}))soon();},true);
