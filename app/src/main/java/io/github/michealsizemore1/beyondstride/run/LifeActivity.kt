@@ -216,7 +216,6 @@ class LifeActivity : Activity() {
             Triple("📚", "Library", "library") to "Books, audiobooks, finish plan",
             Triple("🧘", "Meditate", "meditate") to "Guided timer, scripture, session log",
             Triple("❤️", "Wellness", "wellness") to "BP, meds, weight, sleep, movement",
-            Triple("📈", "Dashboard", "dash") to "Weight, BP, sleep, miles, steps charts",
             Triple("🗂️", "Tools", "tools") to "Search, Ask AI, BP report, files, settings",
             Triple("📓", "Full Command Center", "full") to "The whole website, as it looks in Chrome")
         items.chunked(2).forEach { row ->
@@ -323,7 +322,7 @@ class LifeActivity : Activity() {
         journalCard = JournalCard().also { nativeCol.addView(it.view) }
         // Weekly · Monthly · Yearly · Review each get their own page (showReviews puts the right card on it).
         weekTab = WeekTabCard(); weekCard = WeeklyCard(); monthCard = PeriodCard("monthly"); yearCard = PeriodCard("yearly")
-        dashCard = LifeDashboard(this, web)   // ☰ More → Dashboard
+        dashCard = LifeDashboard(this, web)   // no longer shown: its charts moved under Wellness
         nativeCol.addView(RunUi.text(this, "Bible, Habits, Library, Meditate, Wellness, Dashboard, Tools (search, Ask AI, BP report, files, settings) and the full Command Center are in ☰ More.", RunUi.DIM, 11f).apply { setPadding(0, RunUi.dp(this@LifeActivity, 12), 0, 0) })
     }
 
@@ -1003,40 +1002,67 @@ class LifeActivity : Activity() {
             val sd = j.optString("sleepDetail"); sleepDetail.text = sd; sleepDetail.visibility = if (sd.isBlank()) View.GONE else View.VISIBLE
             if (System.currentTimeMillis() - chartsAt > 60_000) { chartsAt = System.currentTimeMillis(); loadCharts() }
         }
-        /** ❤️ Blood Pressure & Pulse and ⚖️ Weight — last 60 days, like the Command Center's Wellness charts. */
+        /**
+         * Charts under Wellness (they replaced the separate Dashboard): ❤️ BP & Pulse, ⚖️ Weight, 🫀 Morning HR, 😴 Sleep,
+         * ⌛ Sleep Score and 👟 Steps, over 7 / 30 / 60 / 90 days (60 like the Command Center's Wellness charts).
+         */
+        private var range = 60
         private fun loadCharts() {
-            web.evaluateJavascript("window.ccNative&&ccNative.dash?ccNative.dash(60):null") { r ->
+            web.evaluateJavascript("window.ccNative&&ccNative.dash?ccNative.dash($range):null") { r ->
                 val arr = try { org.json.JSONArray(JSONTokener(r).nextValue() as String) } catch (e: Exception) { null } ?: return@evaluateJavascript
                 val days = (0 until arr.length()).map { arr.getJSONObject(it) }
                 val labels = days.map { it.optString("d") }
                 fun ser(k: String) = days.map { it.optDouble(k, 0.0).takeIf { v -> v > 0 } }
+                val L = "Last $range Days"
                 charts.removeAllViews()
-                val bp = RunUi.card(this@LifeActivity)
-                bp.addView(RunUi.text(this@LifeActivity, "❤️ Blood Pressure & Pulse — Last 60 Days", RED, 15f, true))
+                // Range switch
+                charts.addView(LinearLayout(this@LifeActivity).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL; setPadding(0, d(14), 0, 0)
+                    addView(RunUi.text(this@LifeActivity, "📈 Charts", Color.WHITE, 15f, true), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+                    listOf(7, 30, 60, 90).forEach { n -> addView(RunUi.text(this@LifeActivity, "${n}d", if (n == range) Color.BLACK else Color.WHITE, 12f, true).apply {
+                        setPadding(d(10), d(5), d(10), d(5)); background = RunUi.rounded(if (n == range) RunUi.ACCENT else 0xFF2A3430.toInt(), d(14).toFloat())
+                        setOnClickListener { if (range != n) { range = n; chartsAt = System.currentTimeMillis(); loadCharts() } } }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { marginStart = d(6) }) } })
+                fun avg(l: List<Double?>) = l.filterNotNull().let { if (it.isEmpty()) 0.0 else it.average() }
+                fun chartCard(title: String, legend: String?, legendColor: Int, lines: List<Pair<List<Double?>, Int>>, empty: String, bars: Boolean = false, summary: () -> String): LinearLayout {
+                    val c = RunUi.card(this@LifeActivity)
+                    c.addView(LinearLayout(this@LifeActivity).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL
+                        addView(RunUi.text(this@LifeActivity, title, RED, 15f, true), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+                        if (legend != null) addView(RunUi.text(this@LifeActivity, legend, legendColor, 12f, true)) })
+                    if (lines.first().first.any { it != null }) {
+                        c.addView(LifeDashboard.Chart(this@LifeActivity, lines, bars, labels), LinearLayout.LayoutParams(MATCH_PARENT, d(150)).apply { topMargin = d(6) })
+                        c.addView(RunUi.text(this@LifeActivity, summary(), RunUi.MUTED, 12f).apply { gravity = android.view.Gravity.CENTER; setPadding(0, d(6), 0, 0) })
+                    } else c.addView(RunUi.text(this@LifeActivity, empty, RunUi.MUTED, 12f).apply { setPadding(0, d(6), 0, 0) })
+                    charts.addView(c); return c
+                }
+                // ❤️ Blood Pressure & Pulse
+                val sys = ser("sys"); val dia = ser("dia"); val pul = ser("pulse")
+                val bp = chartCard("❤️ Blood Pressure & Pulse — $L", null, 0, listOf(sys to 0xFFEF4444.toInt(), dia to 0xFF60A5FA.toInt(), pul to 0xFFF97316.toInt()), "No readings in the last $range days.") {
+                    val ps = pul.filterNotNull()
+                    "$range-day avg — BP: ${avg(sys).toInt()}/${avg(dia).toInt()} mmHg" + (if (ps.isNotEmpty()) " • Pulse: ${ps.average().toInt()} bpm" else "") + " (${sys.count { it != null }} readings)" }
                 bp.addView(LinearLayout(this@LifeActivity).apply { orientation = LinearLayout.HORIZONTAL; setPadding(0, d(6), 0, d(4))
                     listOf("● Systolic" to 0xFFEF4444.toInt(), "● Diastolic" to 0xFF60A5FA.toInt(), "● Pulse" to 0xFFF97316.toInt()).forEach { (t, c) ->
-                        addView(RunUi.text(this@LifeActivity, t, c, 13f, true).apply { setPadding(0, 0, d(14), 0) }) } })
-                val sys = ser("sys"); val dia = ser("dia"); val pul = ser("pulse")
-                if (sys.any { it != null }) {
-                    bp.addView(LifeDashboard.Chart(this@LifeActivity, listOf(sys to 0xFFEF4444.toInt(), dia to 0xFF60A5FA.toInt(), pul to 0xFFF97316.toInt()), false, labels), LinearLayout.LayoutParams(MATCH_PARENT, d(170)))
-                    val n = sys.count { it != null }; val ps = pul.filterNotNull()
-                    bp.addView(RunUi.text(this@LifeActivity, "60-day avg — BP: ${sys.filterNotNull().average().toInt()}/${dia.filterNotNull().average().toInt()} mmHg" +
-                        (if (ps.isNotEmpty()) " • Pulse: ${ps.average().toInt()} bpm" else "") + " ($n readings)", RunUi.MUTED, 12f).apply { gravity = android.view.Gravity.CENTER; setPadding(0, d(6), 0, 0) })
-                } else bp.addView(RunUi.text(this@LifeActivity, "No readings in the last 60 days.", RunUi.MUTED, 12f))
-                bp.addView(RunUi.button(this@LifeActivity, "🖨️ Print BP Report", 0xFF334155.toInt(), Color.WHITE) { more.printReport(60) },
+                        addView(RunUi.text(this@LifeActivity, t, c, 13f, true).apply { setPadding(0, 0, d(14), 0) }) } }, 1)
+                bp.addView(RunUi.button(this@LifeActivity, "🖨️ Print BP Report", 0xFF334155.toInt(), Color.WHITE) { more.printReport(range) },
                     LinearLayout.LayoutParams(MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = d(8) })
-                charts.addView(bp)
-                val wc = RunUi.card(this@LifeActivity)
-                wc.addView(LinearLayout(this@LifeActivity).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL
-                    addView(RunUi.text(this@LifeActivity, "⚖️ Weight — Last 60 Days", RED, 15f, true), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-                    addView(RunUi.text(this@LifeActivity, "● Weight (lbs)", 0xFFC084FC.toInt(), 12f, true)) })
+                // ⚖️ Weight
                 val w = ser("weight")
-                if (w.any { it != null }) {
-                    wc.addView(LifeDashboard.Chart(this@LifeActivity, listOf(w to 0xFFC084FC.toInt()), false, labels), LinearLayout.LayoutParams(MATCH_PARENT, d(150)).apply { topMargin = d(6) })
-                    val ws = w.filterNotNull()
-                    wc.addView(RunUi.text(this@LifeActivity, String.format(java.util.Locale.US, "60-day avg: %.1f lbs • Range: %.1f – %.1f lbs (%d readings)", ws.average(), ws.min(), ws.max(), ws.size), RunUi.MUTED, 12f).apply { gravity = android.view.Gravity.CENTER; setPadding(0, d(6), 0, 0) })
-                } else wc.addView(RunUi.text(this@LifeActivity, "No weigh-ins in the last 60 days.", RunUi.MUTED, 12f))
-                charts.addView(wc)
+                chartCard("⚖️ Weight — $L", "● Weight (lbs)", 0xFFC084FC.toInt(), listOf(w to 0xFFC084FC.toInt()), "No weigh-ins in the last $range days.") {
+                    val ws = w.filterNotNull(); String.format(java.util.Locale.US, "$range-day avg: %.1f lbs • Range: %.1f – %.1f lbs (%d readings)", ws.average(), ws.min(), ws.max(), ws.size) }
+                // 🫀 Morning HR
+                val hr = ser("restHR")
+                chartCard("🫀 Morning HR — $L", "● bpm", 0xFFF472B6.toInt(), listOf(hr to 0xFFF472B6.toInt()), "No morning heart rates in the last $range days.") {
+                    val hs = hr.filterNotNull(); "$range-day avg: ${hs.average().toInt()} bpm • Range: ${hs.min().toInt()} – ${hs.max().toInt()} bpm" }
+                // 😴 Sleep
+                val sl = ser("sleep")
+                chartCard("😴 Sleep — $L", "● hours", 0xFFA78BFA.toInt(), listOf(sl to 0xFFA78BFA.toInt()), "No sleep in the last $range days.") {
+                    val ss = sl.filterNotNull(); String.format(java.util.Locale.US, "$range-day avg: %.1f h • Range: %.1f – %.1f h", ss.average(), ss.min(), ss.max()) }
+                // ⌛ Sleep Score
+                val sc = ser("sleepScore")
+                chartCard("⌛ Sleep Score — $L", "● 0-100", 0xFF818CF8.toInt(), listOf(sc to 0xFF818CF8.toInt()), "No sleep scores in the last $range days.") {
+                    val xs = sc.filterNotNull(); "$range-day avg: ${xs.average().toInt()} • Range: ${xs.min().toInt()} – ${xs.max().toInt()}" }
+                // 👟 Steps (Daily Movement)
+                val st = ser("steps")
+                chartCard("👟 Steps — $L", "● steps", GREEN, listOf(st to GREEN), "No steps in the last $range days.", bars = true) {
+                    val xs = st.filterNotNull(); String.format(java.util.Locale.US, "$range-day avg: %,d steps • 10,000+ on %d of %d days", xs.average().toLong(), xs.count { it >= 10000 }, xs.size) }
             }
         }
     }
