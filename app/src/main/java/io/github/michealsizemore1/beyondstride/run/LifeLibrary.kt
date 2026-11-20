@@ -57,7 +57,17 @@ class LifeLibrary(private val act: Activity, private val web: WebView, private v
             data = LifeUi.obj(r) ?: return@evaluateJavascript
             if (listOf(what, time, pBook, pAuthor, pHours, pMins, pStart, pEnd).any { it.hasFocus() }) return@evaluateJavascript   // don't pull the field out from under the keyboard
             draw(); loadCovers(3)
+            if (fresh) checkCovers()
         }
+    }
+    /** 🖼️ A short line under the book list: covers saved on this phone and whether they match your books (to track down missing covers). */
+    private var coverInfo = ""
+    private fun checkCovers() {
+        web.evaluateJavascript("window.ccNative&&ccNative.coverStats&&ccNative.coverStats()") {
+            LifeUi.poll(web, "ccNative.coverStatsResult()", 20) { r -> val o = try { JSONObject(r ?: "") } catch (e: Exception) { return@poll }
+                coverInfo = if (o.has("error")) "🖼️ Couldn't read the cover store: " + o.optString("error") else
+                    "🖼️ Covers on this phone: ${o.optInt("total")} saved · ${o.optInt("matched")} match your ${o.optInt("books")} books" + (if (o.optInt("orphans") > 0) " · ${o.optInt("orphans")} belong to books that changed" else "") + " · ${o.optInt("data")} pictures, ${o.optInt("links")} links"
+                draw() } }
     }
     private var coverGen = 0
     /** Covers come from the page's picture store a moment after asking; keep asking until it says none are still loading. */
@@ -130,6 +140,7 @@ class LifeLibrary(private val act: Activity, private val web: WebView, private v
         })
         if (books.length() == 0) view.addView(RunUi.text(act, "No books yet — tap + Add Book to log your first completed audiobook.", RunUi.MUTED, 14f).apply { gravity = Gravity.CENTER; setPadding(d(20), d(30), d(20), d(30)) }, LifeUi.lp())
         for (i in 0 until books.length()) view.addView(bookCard(books.getJSONObject(i)))
+        if (coverInfo.isNotBlank()) view.addView(RunUi.text(act, coverInfo, RunUi.DIM, 11f).apply { setPadding(d(4), d(10), d(4), 0) })
     }
 
     private fun planCard(p: JSONObject?) = card().apply {

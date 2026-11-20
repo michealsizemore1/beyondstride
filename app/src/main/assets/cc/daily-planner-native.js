@@ -292,6 +292,11 @@
     bibleAI:function(kind){goRealDay();try{if(!journalAIKey())return 'nokey';}catch(e){return 'nokey';}
       try{if(kind==='suggest')aiDailyBread();else if(kind==='explain')meditVerseSummary();else if(kind==='worship')bibleWorshipAIPrompt();else if(kind==='prayer')meditAIPrompt('prayer');else return false;}catch(e){return false;}return true;},
     bibleHero:function(a){goRealDay();try{var b=document.getElementById('hm-bible');if(b)b.click();if(window.bibleStudy&&typeof bibleStudy[a]==='function'){bibleStudy[a]();return true;}}catch(e){}return false;},
+    // Book covers check: how many pictures this phone has, how many match a book now, and the old ids they belong to.
+    coverStats:function(){window._bsCovStats=null;try{getAllBookCovers().then(function(all){var ids={};getBooks().forEach(function(b){ids[String(b.id)]=1;});
+      var m=0,o=0,h=0,d=0,orph=[];all.forEach(function(c){var k=String(c.bookId);if(ids[k])m++;else{o++;orph.push(k);}if(/^data:/.test(c.dataUrl||''))d++;else h++;});
+      window._bsCovStats={total:all.length,matched:m,orphans:o,orphanIds:orph.slice(0,40),data:d,links:h,books:Object.keys(ids).length};}).catch(function(e){window._bsCovStats={error:String(e)};});}catch(e){return 'err:'+e;}return true;},
+    coverStatsResult:function(){return window._bsCovStats?JSON.stringify(window._bsCovStats):'';},
     bookCovers:function(){window._bsCov=window._bsCov||{};window._bsCovWait=window._bsCovWait||{};var out={},pend=0;try{getBooks().forEach(function(b){var k=String(b.id);
       if(k in _bsCov){if(_bsCov[k])out[k]=_bsCov[k];if(_bsCovWait[k])pend++;}else{_bsCov[k]='';_bsCovWait[k]=1;pend++;getBookCover(b.id).then(function(d){_bsCov[k]=d||'';delete _bsCovWait[k];}).catch(function(){delete _bsCovWait[k];});}});}catch(e){}
       out.__pending=pend;return JSON.stringify(out);},
