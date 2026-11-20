@@ -55,6 +55,7 @@ class LifeActivity : Activity() {
     private var page = 0          // 0 🎯 Today · 1 📊 Reviews · 2 📓 Full Command Center
     private var monthCard: PeriodCard? = null
     private lateinit var study: BibleStudyPage
+    private var calendar: LifeCalendar? = null
     private lateinit var bar: LinearLayout
     private var yearCard: PeriodCard? = null
     private var full = false
@@ -167,6 +168,7 @@ class LifeActivity : Activity() {
     private fun buildNative() {
         nativeCol.removeAllViews()
         nativeCol.addView(RunUi.text(this, "Your Command Center, as BeyondStride screens. Changes save to the Command Center right away and sync with Chrome and your computer.", RunUi.MUTED, 12f).apply { setPadding(0, RunUi.dp(this@LifeActivity, 6), 0, 0) })
+        calendar = LifeCalendar(this, web).also { nativeCol.addView(it.view) }
         focusCard = FocusCard().also { nativeCol.addView(it.view) }
         scheduleCard = ScheduleCard().also { nativeCol.addView(it.view) }
         checksCard = ChecksCard().also { nativeCol.addView(it.view) }
@@ -188,7 +190,7 @@ class LifeActivity : Activity() {
         web.evaluateJavascript("(window.ccNative&&typeof load==='function')?(ccNative.all?ccNative.all():ccNative.focus()):null") { r ->
             val json = try { (JSONTokener(r).nextValue() as? String)?.let { JSONObject(it) } } catch (e: Exception) { null }
             if (json == null) { focusCard?.loading(); if (tries++ < 60) ui.postDelayed(reload, 700) ; return@evaluateJavascript }
-            tries = 0; focusCard?.fill(json); scheduleCard?.fill(json); checksCard?.fill(json); wellCard?.fill(json); bibleCard?.fill(json); reviewCard?.fill(json); journalCard?.fill(json); weekCard?.fill(json)
+            tries = 0; focusCard?.fill(json); if (page == 0) calendar?.load(); scheduleCard?.fill(json); checksCard?.fill(json); wellCard?.fill(json); bibleCard?.fill(json); reviewCard?.fill(json); journalCard?.fill(json); weekCard?.fill(json)
             // An older copy of the Command Center is still cached (the website updates before this screen can use the
             // new parts): fetch the newest once.
             if ((!json.has("checks") || !json.has("schedule") || !json.has("review") || !json.has("wellness") || !json.has("weekly") || !json.has("journal")) && !refreshed) { refreshed = true; web.clearCache(true); web.reload(); ui.postDelayed(reload, 2500) }
