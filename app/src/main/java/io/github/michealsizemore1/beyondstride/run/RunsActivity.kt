@@ -23,6 +23,8 @@ open class RunsActivity : Activity() {
     private var wrongDevice = false
 
     private val ui get() = RunUi
+    /** 🌱 The Command Center's day (schedule, focus, checks) — phone only, same page as the Life tab. */
+    private var todayLife: TodayLife? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -39,6 +41,9 @@ open class RunsActivity : Activity() {
         // Clear the sign-in left from the removed Strava connection.
         try { deleteSharedPreferences("strava") } catch (e: Exception) { }
     }
+
+    override fun onPause() { todayLife?.stop(); super.onPause() }
+    override fun onDestroy() { todayLife?.stop(); CcEngine.release(this); super.onDestroy() }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
@@ -58,6 +63,7 @@ open class RunsActivity : Activity() {
         }
         WorkoutStore.pushToWatch(this)   // keeps the watch's "today" plan current
         render()
+        todayLife?.start()
         // New BeyondStride build out? (asks GitHub at most every 3 hours)
         Thread {
             val had = io.github.michealsizemore1.beyondstride.Updater.available(this)?.build
@@ -406,6 +412,14 @@ open class RunsActivity : Activity() {
         })
 
         CcStatus.line(this).let { (t, c) -> col.addView(RunUi.text(this, t, c, 12f, true).apply { setPadding(dp(2), dp(6), 0, 0) }) }
+
+        // 🌱 Life: My Schedule (next items), Today's Focus and today's checks — the morning screen's Command Center part.
+        if (this !is AllRunsActivity && LifeTab.on(this)) {
+            val tl = todayLife ?: TodayLife(this).also { todayLife = it }
+            (tl.view.parent as? android.view.ViewGroup)?.removeView(tl.view)
+            col.addView(RunUi.section(this, "LIFE"))
+            col.addView(tl.view)
+        }
 
         // 3. THIS WEEK: miles, runs, training load.
         val cal = java.util.Calendar.getInstance()

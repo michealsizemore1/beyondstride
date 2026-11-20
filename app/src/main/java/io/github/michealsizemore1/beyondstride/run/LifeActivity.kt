@@ -44,7 +44,6 @@ object LifeTab {
 class LifeActivity : Activity() {
     private lateinit var web: WebView
     private var fileCb: ValueCallback<Array<Uri>>? = null
-    private val bundled: Set<String> by lazy { (try { assets.list("cc")?.toSet() } catch (e: Exception) { null }) ?: emptySet() }
     private val ui = Handler(Looper.getMainLooper())
     private lateinit var nativeScroll: ScrollView
     private lateinit var nativeCol: LinearLayout
@@ -90,58 +89,22 @@ class LifeActivity : Activity() {
     private var weekCard: WeeklyCard? = null
     private var journalCard: JournalCard? = null
 
+    private val ccListener = object : CcEngine.Listener {
+        override fun changed() { ui.removeCallbacks(reload); ui.postDelayed(reload, 400) }
+        override fun files(json: String) { if (::more.isInitialized) more.onFiles(json) }
+        override fun file(name: String, type: String, b64: String) { if (::more.isInitialized) more.onFile(name, type, b64) }
+    }
+
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        web = WebView(this).apply {
-            settings.javaScriptEnabled = true
-            settings.domStorageEnabled = true      // the Command Center keeps its data in localStorage
-            @Suppress("DEPRECATION") settings.databaseEnabled = true
-            settings.mediaPlaybackRequiresUserGesture = false
-            setBackgroundColor(RunUi.BG)
-            webViewClient = object : WebViewClient() {
-                // Command Center pages stay here; other sites open in the browser.
-                override fun shouldOverrideUrlLoading(view: WebView, req: WebResourceRequest): Boolean {
-                    val u = req.url
-                    if (u.host == "michealsizemore1.github.io") return false
-                    try { startActivity(Intent(Intent.ACTION_VIEW, u)) } catch (e: Exception) { }
-                    return true
-                }
-                // The Command Center now lives inside the app (assets/cc): its page and scripts are served from here,
-                // at the same web address — so your saved data stays put, and it works offline and after the website
-                // version is retired. Anything else (other Master App tools, Scripture, AI) still comes from the internet.
-                override fun shouldInterceptRequest(view: WebView, req: WebResourceRequest): android.webkit.WebResourceResponse? {
-                    val u = req.url
-                    if (u.host != "michealsizemore1.github.io") return null
-                    val path = u.path ?: return null
-                    if (!path.startsWith(CC_DIR)) return null
-                    val name = path.removePrefix(CC_DIR)
-                    if (name !in bundled) return null
-                    val mime = if (name.endsWith(".html")) "text/html" else "application/javascript"
-                    return try { android.webkit.WebResourceResponse(mime, "utf-8", assets.open("cc/$name")).apply {
-                        responseHeaders = mapOf("Cache-Control" to "no-store", "Access-Control-Allow-Origin" to "*") } } catch (e: Exception) { null }
-                }
-            }
-            webChromeClient = object : WebChromeClient() {   // also shows the page's alert / confirm boxes
-                override fun onShowFileChooser(v: WebView, cb: ValueCallback<Array<Uri>>, params: FileChooserParams): Boolean {
-                    fileCb?.onReceiveValue(null); fileCb = cb
-                    return try { startActivityForResult(params.createIntent(), 41); true } catch (e: Exception) { fileCb = null; false }
-                }
-            }
+        // The one shared Command Center page (the Today tab's Life card uses the same one — never two copies).
+        web = CcEngine.get(this).also { CcEngine.detachFromParent(it) }
+        CcEngine.fileChooser = { cb, params ->
+            fileCb?.onReceiveValue(null); fileCb = cb
+            try { startActivityForResult(params.createIntent(), 41); true } catch (e: Exception) { fileCb = null; false }
         }
-        // The Command Center tells us when it saves (auto-checks, edits in the full view) so the native screens update.
-        web.addJavascriptInterface(object {
-            @JavascriptInterface fun changed() { ui.removeCallbacks(reload); ui.postDelayed(reload, 400) }
-            @JavascriptInterface fun files(json: String) { if (::more.isInitialized) more.onFiles(json) }
-            @JavascriptInterface fun file(name: String, type: String, b64: String) { if (::more.isInitialized) more.onFile(name, type, b64) }
-        }, "BSNative")
-        if (savedInstanceState != null) web.restoreState(savedInstanceState)
-        else {
-            // The #app=bs link part tells the Command Center where BeyondStride's daily summaries are (same as
-            // Settings → Link the Command Center review), so the review, steps and wellness work here too.
-            val base = CC_PAGE   // always the built-in copy (see shouldInterceptRequest)
-            web.loadUrl(base + (NutritionSync.linkPart(this).takeIf { it.isNotEmpty() }?.let { "#app=bs$it" } ?: ""))
-        }
+        CcEngine.add(ccListener)
         // Native sections (BeyondStride screens on the Command Center's own data) over the full website.
         nativeCol = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(RunUi.dp(this@LifeActivity, 14), 0, RunUi.dp(this@LifeActivity, 14), RunUi.dp(this@LifeActivity, 24)) }
         nativeScroll = ScrollView(this).apply { setBackgroundColor(RunUi.BG); isFillViewport = true; addView(nativeCol) }
@@ -196,11 +159,11 @@ class LifeActivity : Activity() {
         setContentView(RunUi.tabbed(this, box, RunUi.TAB_LIFE))
     }
 
-    override fun onResume() { super.onResume(); web.onResume(); Thread { try { CalendarReminders.refresh(applicationContext) } catch (e: Exception) { } }.start(); web.evaluateJavascript("window.ccSync&&ccSync.now()", null); if (!full) { ui.removeCallbacks(reload); ui.postDelayed(reload, 300) } }
+    override fun onResume() { super.onResume(); CcEngine.get(this); web.onResume(); Thread { try { CalendarReminders.refresh(applicationContext) } catch (e: Exception) { } }.start(); web.evaluateJavascript("window.ccSync&&ccSync.now()", null); if (!full) { ui.removeCallbacks(reload); ui.postDelayed(reload, 300) } }
     // Upload anything not yet sent before the app goes to the background.
     override fun onPause() { study.stopReading(); more.pause(); web.evaluateJavascript("window.ccSync&&ccSync.now()", null); web.onPause(); super.onPause() }
-    override fun onSaveInstanceState(out: Bundle) { super.onSaveInstanceState(out); web.saveState(out); out.putInt("page", page) }
-    override fun onDestroy() { ui.removeCallbacksAndMessages(null); study.destroy(); web.destroy(); super.onDestroy() }
+    override fun onSaveInstanceState(out: Bundle) { super.onSaveInstanceState(out); out.putInt("page", page) }
+    override fun onDestroy() { ui.removeCallbacksAndMessages(null); study.destroy(); CcEngine.remove(ccListener); CcEngine.release(this); super.onDestroy() }
 
     private fun show(f: Boolean) = showPage(if (f) 2 else 0)
 
