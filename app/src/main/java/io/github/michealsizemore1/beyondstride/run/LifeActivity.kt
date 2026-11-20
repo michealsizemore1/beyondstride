@@ -630,7 +630,10 @@ class LifeActivity : Activity() {
             }
             j.optString("digest").takeIf { it.isNotBlank() }?.let { body.addView(RunUi.text(this@LifeActivity, it, RunUi.MUTED, 12f).apply { setPadding(0, d(10), 0, 0) }) }
             val secs = j.optJSONArray("sections") ?: return
+            body.addView(RunUi.text(this@LifeActivity, "🏃 Miles by day / week / month are in Activities → Mileage · 🍎 food by day is in Nutrition → By day.", RunUi.DIM, 11f).apply { setPadding(0, d(10), 0, 0) })
             for (i in 0 until secs.length()) { val sec = secs.getJSONObject(i)
+                // Running numbers live in Activities and food in Nutrition now (each number in one place).
+                if (sec.optString("title").let { it.contains("Fitness") || it.contains("Nutrition") || it.contains("Micronutrients") }) continue
                 body.addView(RunUi.text(this@LifeActivity, sec.optString("title"), RunUi.ACCENT, 13f, true).apply { setPadding(0, d(12), 0, d(4)) })
                 body.addView(ccTable(sec.optJSONArray("head"), sec.optJSONArray("rows"), sec.optJSONArray("cells"), sec.optJSONArray("headColors")))
             }
@@ -675,7 +678,10 @@ class LifeActivity : Activity() {
             label.text = j.optString("label"); body.removeAllViews()
             // (The habit completion calendar was removed from BeyondStride's Monthly page at Micheal's request; still on the website.)
             val secs = j.optJSONArray("sections") ?: return
+            body.addView(RunUi.text(this@LifeActivity, "🏃 Miles by day / week / month are in Activities → Mileage · 🍎 food by day is in Nutrition → By day.", RunUi.DIM, 11f).apply { setPadding(0, d(10), 0, 0) })
             for (i in 0 until secs.length()) { val sec = secs.getJSONObject(i)
+                // Running numbers live in Activities and food in Nutrition now (each number in one place).
+                if (sec.optString("title").let { it.contains("Fitness") || it.contains("Nutrition") || it.contains("Micronutrients") }) continue
                 body.addView(RunUi.text(this@LifeActivity, sec.optString("title"), RunUi.ACCENT, 13f, true).apply { setPadding(0, d(12), 0, d(4)) })
                 body.addView(ccTable(sec.optJSONArray("head"), sec.optJSONArray("rows"), sec.optJSONArray("cells"), sec.optJSONArray("headColors")))
             }
