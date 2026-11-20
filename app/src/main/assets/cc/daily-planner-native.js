@@ -203,6 +203,43 @@
   function back(fn,arg){try{if(window.BSNative&&BSNative[fn])BSNative[fn].apply(BSNative,arg);}catch(e){}}
   var FILES={ou:['OtherUploadsDB','files'],ja:['JournalArchiveDB','journals']};
   // 🌱 The whole Habits page (any day: off = days from today), like the Command Center's Habits tab.
+  // 📖 Bible tab: Scripture Focus, Bible Audio, Worship, AI Prayer (the study hero comes from bibleStudy.info()).
+  function biblePage(){
+    goRealDay();
+    function st(k){var e=document.querySelector('.tri-check[data-key="'+k+'"]');return e?(e.dataset.state||''):'';}
+    function txt(id){var e=document.getElementById(id);if(!e||e.style.display==='none')return '';return String(e.innerText||e.textContent||'').trim();}
+    var key=false;try{key=!!journalAIKey();}catch(e){}
+    return {verse:txt('meditScriptureDisplay')||'“Be still, and know that I am God.” — Psalm 46:10',text:(document.getElementById('spDailyBreadText')||{}).value||'',
+      checks:{spDailyBread:st('spDailyBread'),spBibleAudio:st('spBibleAudio'),spWorship:st('spWorship'),spAIPrayer:st('spAIPrayer')},
+      explain:txt('meditVerseExplain'),worship:txt('bibleWorshipAIResult'),prayer:txt('meditAIResult'),hasKey:key};
+  }
+  // 📚 Library tab: today's listening, the finish-by-date plan with progress, this week's listening, and every book.
+  function libraryPage(sort){
+    var base=library(),books=[];try{books=getBooks().slice();}catch(e){}
+    var by={oldest:function(a,c){return String(a.dateCompleted||'').localeCompare(String(c.dateCompleted||''));},
+      title:function(a,c){return String(a.title||'').localeCompare(String(c.title||''));},
+      author:function(a,c){return String(a.author||'').localeCompare(String(c.author||''));},
+      rating:function(a,c){return (Number(c.rating)||0)-(Number(a.rating)||0);}}[sort]||function(a,c){return String(c.dateCompleted||'').localeCompare(String(a.dateCompleted||''));};
+    books.sort(by);
+    var week=null;try{var wd=getCurrentWeekChartData();week={labels:wd.labels,values:wd.metrics.map(function(m){return Number(m.audiobook)||0;})};}catch(e){}
+    var plan=null;try{var p=JSON.parse(localStorage.getItem('audiobook_finish_plan')||'null');
+      if(p&&p.startDate&&p.finishDate){
+        var start=new Date(p.startDate+'T00:00:00'),end=new Date(p.finishDate+'T00:00:00'),now=new Date();now.setHours(0,0,0,0);
+        var thru=now>end?new Date(end):new Date(now),act=0,el=0,tot=Number(p.totalSeconds)||0;
+        if(thru>=start){var d=new Date(start);while(d<=thru){var k=dk(d),pd={};try{pd=JSON.parse(localStorage.getItem('planner_'+k)||'{}');}catch(x){}act+=journalAudiobookMinutesForDate(k,pd)*60;d.setDate(d.getDate()+1);}el=Math.floor((thru-start)/86400000)+1;}
+        act=Math.min(tot,act);var planned=Math.min(tot,Math.round(tot*(el/Math.max(1,Number(p.days)||1)))),tol=Math.max(300,Math.round((Number(p.dailySeconds)||0)*0.1));
+        var label='On Track',color='#16a34a';if(act>=tot&&tot>0){label='Complete';}else if(act>planned+tol){label='Ahead';color='#2563eb';}else if(act+tol<planned){label='Behind';color='#dc2626';}
+        var ms=[],cur=new Date(start),w=1;while(cur<=end){var we=new Date(cur);we.setDate(we.getDate()+6);if(we>end)we=new Date(end);var th=Math.floor((we-start)/86400000)+1;
+          ms.push({l:'Week '+w+': '+cur.toLocaleDateString('en-US',{month:'short',day:'numeric'})+'–'+we.toLocaleDateString('en-US',{month:'short',day:'numeric'}),pct:Math.min(100,Math.round(th/p.days*100))});cur=new Date(we);cur.setDate(cur.getDate()+1);w++;}
+        plan={title:p.title||'',author:p.author||'',total:formatSecondsLong(tot),days:p.days,daily:formatSecondsLong(p.dailySeconds),label:label,color:color,
+          pct:tot?Math.min(100,Math.round(act/tot*100)):0,plannedPct:tot?Math.min(100,Math.round(planned/tot*100)):0,
+          listened:formatSecondsLong(act),planned:formatSecondsLong(planned),remaining:formatSecondsLong(Math.max(0,tot-act)),milestones:ms,source:p.source||'the audiobook length you entered'};
+      }}catch(e){}
+    return {state:base.state,text:base.text,time:base.time,count:books.length,year:base.year,week:week,plan:plan,
+      books:books.map(function(b){return {id:b.id,title:b.title||'',author:b.author||'',date:b.dateCompleted||'',rating:Number(b.rating)||0,notes:b.notes||'',readingNotes:Array.isArray(b.readingNotes)?b.readingNotes:[]};})};
+  }
+  function bookIdx(books,id){for(var i=0;i<books.length;i++)if(String(books[i].id)===String(id))return i;return -1;}
+  function libDone(){try{renderLibrary();}catch(e){}try{if(typeof journalCloudSchedule==='function')journalCloudSchedule();}catch(e){}return true;}
   function habitsPage(off){
     off=Number(off)||0;var view=new Date();view.setDate(view.getDate()+off);view.setHours(12,0,0,0);
     try{h2ViewDate=new Date(view);h2SyncFromJournal();}catch(e){}
@@ -231,7 +268,37 @@
       weekStart:h2Key(ws),habits:habits,heat:heat,heatStart:h2Key(hs)};
   }
   window.ccNative={
-    version:15,
+    version:16,
+    biblePage:function(){return JSON.stringify(biblePage());},
+    setVerse:function(v){goRealDay();var el=document.getElementById('spDailyBreadText');if(!el)return false;el.value=String(v||'');if(el.oninput)el.oninput.call(el);else{localStorage.setItem('medit_scripture',el.value);save();}return true;},
+    bibleAI:function(kind){goRealDay();try{if(!journalAIKey())return 'nokey';}catch(e){return 'nokey';}
+      try{if(kind==='suggest')aiDailyBread();else if(kind==='explain')meditVerseSummary();else if(kind==='worship')bibleWorshipAIPrompt();else if(kind==='prayer')meditAIPrompt('prayer');else return false;}catch(e){return false;}return true;},
+    bibleHero:function(a){goRealDay();try{var b=document.getElementById('hm-bible');if(b)b.click();if(window.bibleStudy&&typeof bibleStudy[a]==='function'){bibleStudy[a]();return true;}}catch(e){}return false;},
+    bookCovers:function(){window._bsCov=window._bsCov||{};var out={};try{getBooks().forEach(function(b){var k=String(b.id);
+      if(k in _bsCov){if(_bsCov[k])out[k]=_bsCov[k];}else{_bsCov[k]='';getBookCover(b.id).then(function(d){_bsCov[k]=d||'';}).catch(function(){});}});}catch(e){}return JSON.stringify(out);},
+    bookCoversReset:function(){window._bsCov={};return true;},
+    libraryPage:function(sort){return JSON.stringify(libraryPage(sort));},
+    bookSave:function(id,title,author,date,rating,notes){title=String(title||'').trim();if(!title)return false;var books=getBooks(),i=id?bookIdx(books,id):-1;
+      var f={title:title,author:String(author||'').trim(),dateCompleted:String(date||''),rating:Math.max(0,Math.min(5,Number(rating)||0)),notes:String(notes||'').trim()};
+      if(i>=0)books[i]=Object.assign({},books[i],f);else books.unshift(Object.assign({id:Date.now()},f));saveBooks(books);return libDone();},
+    bookDelete:function(id){var books=getBooks(),i=bookIdx(books,id);if(i<0)return false;books.splice(i,1);saveBooks(books);return libDone();},
+    bookNote:function(id,idx,json){var n;try{n=JSON.parse(json);}catch(e){return false;}var books=getBooks(),i=bookIdx(books,id);if(i<0)return false;
+      var iso=String(n.isoDate||dk(new Date()));var note={date:new Date(iso+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}),isoDate:iso};
+      ['chapter','quote','summary','insights','application','questions'].forEach(function(k){note[k]=String(n[k]||'').trim();});
+      if(!(note.chapter||note.quote||note.summary||note.insights||note.application||note.questions))return false;
+      if(!Array.isArray(books[i].readingNotes))books[i].readingNotes=[];idx=Number(idx);if(idx>=0&&idx<books[i].readingNotes.length)books[i].readingNotes[idx]=note;else books[i].readingNotes.unshift(note);
+      saveBooks(books);return libDone();},
+    bookNoteDelete:function(id,idx){var books=getBooks(),i=bookIdx(books,id);if(i<0||!Array.isArray(books[i].readingNotes))return false;books[i].readingNotes.splice(Number(idx),1);saveBooks(books);return libDone();},
+    bookOpen:function(id){try{var b=document.getElementById('hm-library');if(b)b.click();bookCollapsed.delete(Number(id));bookCollapsed.delete(id);renderLibrary();setTimeout(function(){var e=document.getElementById('bookBody_'+id);if(e)e.scrollIntoView({block:'center'});},120);}catch(e){return false;}return true;},
+    planCreate:function(title,author,h,m,start,finish){title=String(title||'').trim();author=String(author||'').trim();h=Math.max(0,parseInt(h,10)||0);m=Math.max(0,parseInt(m,10)||0);
+      if(!title)return 'Enter the audiobook name first.';if(!author)return 'Enter the audiobook author.';if(m>59)return 'Additional minutes must be between 0 and 59.';
+      var tot=(h*60+m)*60;if(tot<=0)return 'Enter the total audiobook length.';if(!start)return 'Choose a start date.';if(!finish)return 'Choose a finish date.';
+      var days=Math.floor((new Date(finish+'T00:00:00')-new Date(start+'T00:00:00'))/86400000)+1;if(days<1)return 'The finish date must be on or after the start date.';
+      localStorage.setItem('audiobook_finish_plan',JSON.stringify({query:title,queryAuthor:author,title:title,author:author,narrator:'',source:'the audiobook length you entered',startDate:start,finishDate:finish,totalSeconds:tot,dailySeconds:Math.ceil(tot/days),days:days,artwork:'',createdAt:new Date().toISOString()}));
+      try{renderAudiobookFinishPlan();}catch(e){}try{if(typeof journalCloudSchedule==='function')journalCloudSchedule();}catch(e){}return 'ok';},
+    planDelete:function(){localStorage.removeItem('audiobook_finish_plan');try{renderAudiobookFinishPlan();}catch(e){}return true;},
+    meditSound:function(type){try{meditToggleSound(type);if(window._meditAudioCtx&&_meditAudioCtx.resume)_meditAudioCtx.resume();}catch(e){return false;}return true;},
+    meditSounds:function(){var o={};try{['rain','ocean','forest'].forEach(function(t){o[t]=!!(_meditAudioNodes&&_meditAudioNodes[t]);});}catch(e){}return JSON.stringify(o);},
     habitsPage:function(off){return JSON.stringify(habitsPage(off));},
     /** On the Habits page's day: log / adjust / move / delete. */
     habitLogOn:function(off,id,status){try{var d=new Date();d.setDate(d.getDate()+(Number(off)||0));h2ViewDate=d;h2SetLog(id,status);}catch(e){return false;}return true;},

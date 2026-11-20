@@ -23,6 +23,7 @@ import android.view.inputmethod.EditorInfo
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.EditText
+import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.core.content.FileProvider
@@ -133,28 +134,81 @@ class LifeMore(private val act: Activity, private val web: WebView, private val 
         }
     }
 
-    // ── 🧘 Meditation timer ──
-    private val timerText = RunUi.text(act, "10:00", Color.WHITE, 44f, true).apply { gravity = Gravity.CENTER }
-    private val timerBtn = RunUi.button(act, "▶ Start", 0xFF7C3AED.toInt(), Color.WHITE) { toggleTimer() }
+    // ── 🧘 Meditation timer (looks like the Command Center's ⏱ Session Timer) ──
+    private val timerText = RunUi.text(act, "10:00", Color.WHITE, 40f, true).apply { gravity = Gravity.CENTER }
+    private val timerStatus = RunUi.text(act, "READY", 0xFFC4B5FD.toInt(), 11f, true).apply { gravity = Gravity.CENTER; letterSpacing = 0.1f }
+    private val ring = Ring(act)
+    private val timerBtn = RunUi.button(act, "▶ Start", 0xFF8B5CF6.toInt(), Color.WHITE) { toggleTimer() }
+    private val presets = LinearLayout(act).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER }
     private val medLog = LinearLayout(act).apply { orientation = LinearLayout.VERTICAL }
     private var total = 600; private var endAt = 0L; private var leftMs = 600_000L; private var running = false
     private val medNotes = input("Notes (optional)", 2)
-    private fun meditCard() = RunUi.card(act).apply {
-        title(this, "🧘 Meditation")
-        val choices = LinearLayout(act).apply { orientation = LinearLayout.HORIZONTAL; setPadding(0, d(8), 0, 0) }
-        listOf(5, 10, 15, 20, 30).forEach { m -> choices.addView(RunUi.text(act, "$m min", Color.WHITE, 12f, true).apply {
-            setPadding(d(10), d(5), d(10), d(5)); background = RunUi.rounded(0xFF2A3430.toInt(), d(14).toFloat())
-            setOnClickListener { if (!running) { total = m * 60; leftMs = total * 1000L; show() } } }, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { marginEnd = d(6) }) }
-        addView(choices); addView(timerText.apply { setPadding(0, d(10), 0, d(4)) })
-        addView(LinearLayout(act).apply { orientation = LinearLayout.HORIZONTAL
-            addView(timerBtn, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1.4f).apply { marginEnd = d(8) })
-            addView(RunUi.button(act, "Reset", 0xFF374151.toInt(), Color.WHITE) { stopTimer(); leftMs = total * 1000L; show() }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f)) })
-        addView(medNotes, lp())
-        addView(note("When the time is up you'll hear a bell; the session is logged and Meditation is checked off. Keeps the screen on while running."))
-        addView(RunUi.text(act, "Recent sessions", RunUi.ACCENT, 13f, true).apply { setPadding(0, d(12), 0, d(2)) })
-        addView(medLog)
+    private val customMin = input("min").apply { inputType = InputType.TYPE_CLASS_NUMBER; gravity = Gravity.CENTER }
+    /** The purple progress ring around the time. */
+    private class Ring(ctx: android.content.Context) : View(ctx) {
+        var frac = 1f
+        private val p = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { style = android.graphics.Paint.Style.STROKE; strokeCap = android.graphics.Paint.Cap.ROUND }
+        override fun onDraw(c: android.graphics.Canvas) {
+            val w = 10 * resources.displayMetrics.density; p.strokeWidth = w
+            val r = android.graphics.RectF(w, w, width - w, height - w)
+            p.color = 0xFF3B2A66.toInt(); c.drawArc(r, 0f, 360f, false, p)
+            p.color = 0xFF8B5CF6.toInt(); c.drawArc(r, -90f, 360f * frac, false, p)
+        }
     }
-    private fun show() { val s = ((leftMs + 999) / 1000).toInt(); timerText.text = String.format(Locale.US, "%d:%02d", s / 60, s % 60) }
+    private fun setDuration(m: Int) { if (running) return; total = m.coerceIn(1, 120) * 60; leftMs = total * 1000L; timerStatus.text = "READY"; show(); drawPresets() }
+    private fun drawPresets() {
+        presets.removeAllViews()
+        listOf(5, 10, 15, 20, 30).forEach { m -> val on = total == m * 60
+            presets.addView(RunUi.text(act, "${m}m", if (on) Color.WHITE else 0xFFD1D5DB.toInt(), 13f, true).apply { gravity = Gravity.CENTER
+                setPadding(d(10), d(6), d(10), d(6)); background = android.graphics.drawable.GradientDrawable().apply { cornerRadius = d(7).toFloat()
+                    setColor(if (on) 0xFF8B5CF6.toInt() else 0xFF26302C.toInt()); setStroke(d(1), if (on) 0xFF8B5CF6.toInt() else 0xFF3A4440.toInt()) }
+                setOnClickListener { setDuration(m) } }, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { marginStart = d(3); marginEnd = d(3) }) }
+    }
+    private fun meditCard() = LinearLayout(act).apply { orientation = LinearLayout.VERTICAL
+        addView(RunUi.card(act).apply { gravity = Gravity.CENTER_HORIZONTAL; layoutParams = lp(12)
+            addView(RunUi.text(act, "⏱ SESSION TIMER", 0xFFA78BFA.toInt(), 12f, true).apply { gravity = Gravity.CENTER; letterSpacing = 0.06f }, lp(0))
+            addView(FrameLayout(act).apply {
+                addView(ring, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
+                addView(LinearLayout(act).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER; addView(timerText); addView(timerStatus) }, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
+            }, LinearLayout.LayoutParams(d(170), d(170)).apply { topMargin = d(12); gravity = Gravity.CENTER_HORIZONTAL })
+            addView(presets, lp(14)); drawPresets()
+            addView(LinearLayout(act).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER
+                addView(customMin, LinearLayout.LayoutParams(d(80), WRAP_CONTENT))
+                addView(RunUi.text(act, "Set", 0xFFC4B5FD.toInt(), 13f, true).apply { setPadding(d(14), d(7), d(14), d(7)); background = RunUi.rounded(0xFF3B2A66.toInt(), d(7).toFloat())
+                    setOnClickListener { setDuration(customMin.text.toString().toIntOrNull() ?: 10) } }, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { marginStart = d(6) }) }, lp(10))
+            addView(LinearLayout(act).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER
+                addView(timerBtn, LinearLayout.LayoutParams(d(120), WRAP_CONTENT).apply { marginEnd = d(8) })
+                addView(RunUi.button(act, "↺ Reset", 0xFF374151.toInt(), Color.WHITE) { stopTimer(); leftMs = total * 1000L; timerStatus.text = "READY"; show() }, LinearLayout.LayoutParams(d(110), WRAP_CONTENT)) }, lp(12))
+        })
+        addView(soundsCard)
+        addView(RunUi.card(act).apply { layoutParams = lp(12)
+            addView(RunUi.text(act, "📝 Session notes", 0xFFA78BFA.toInt(), 13f, true))
+            addView(medNotes, lp())
+            addView(note("When the time is up you'll hear a bell; the session is logged and Meditation is checked off. Keeps the screen on while running."))
+            addView(RunUi.text(act, "Recent sessions", RunUi.ACCENT, 13f, true).apply { setPadding(0, d(12), 0, d(2)) })
+            addView(medLog)
+        })
+    }
+    // 🎵 Ambient Sounds — played by the Command Center page (same sounds as the website).
+    private val soundBtns = HashMap<String, TextView>()
+    private val soundsCard: LinearLayout by lazy { RunUi.card(act).apply { layoutParams = lp(12)
+        addView(RunUi.text(act, "🎵 AMBIENT SOUNDS", 0xFF34D399.toInt(), 12f, true).apply { letterSpacing = 0.06f })
+        addView(LinearLayout(act).apply { orientation = LinearLayout.HORIZONTAL; setPadding(0, d(10), 0, 0)
+            listOf(Triple("rain", "🌧️ Rain", 0xFF38BDF8.toInt()), Triple("ocean", "🌊 Ocean", 0xFF60A5FA.toInt()), Triple("forest", "🌳 Forest", 0xFF4ADE80.toInt())).forEach { (k, t, c) ->
+                val b = RunUi.text(act, t, c, 13f, true).apply { gravity = Gravity.CENTER; setPadding(d(12), d(8), d(12), d(8))
+                    setOnClickListener { web.evaluateJavascript("window.ccNative&&ccNative.meditSound&&ccNative.meditSound('$k')") { loadSounds() } } }
+                soundBtns[k] = b; paintSound(k, false)
+                addView(b, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { marginEnd = d(8) }) } })
+        addView(note("Tap to turn a sound on or off. They keep playing while you stay in the Life tab."))
+    } }
+    private fun paintSound(k: String, on: Boolean) {
+        val c = when (k) { "rain" -> 0xFF38BDF8; "ocean" -> 0xFF60A5FA; else -> 0xFF4ADE80 }.toInt()
+        soundBtns[k]?.background = android.graphics.drawable.GradientDrawable().apply { cornerRadius = d(10).toFloat(); setColor(if (on) c and 0x55FFFFFF else 0xFF1F2925.toInt()); setStroke(d(1), c) }
+        soundBtns[k]?.setTextColor(if (on) Color.WHITE else c)
+    }
+    fun loadSounds() { web.evaluateJavascript("window.ccNative&&ccNative.meditSounds?ccNative.meditSounds():'{}'") { r ->
+        val o = try { JSONObject(str(r)) } catch (e: Exception) { JSONObject() }; soundBtns.keys.forEach { paintSound(it, o.optBoolean(it)) } } }
+    private fun show() { val s = ((leftMs + 999) / 1000).toInt(); timerText.text = String.format(Locale.US, "%d:%02d", s / 60, s % 60); ring.frac = (leftMs.toFloat() / (total * 1000f)).coerceIn(0f, 1f); ring.invalidate() }
     private val tick: Runnable = object : Runnable { override fun run() {
         if (!running) return
         leftMs = endAt - SystemClock.elapsedRealtime()
@@ -162,8 +216,8 @@ class LifeMore(private val act: Activity, private val web: WebView, private val 
         show(); ui.postDelayed(this, 250)
     } }
     private fun toggleTimer() {
-        if (running) { stopTimer(); return }
-        running = true; endAt = SystemClock.elapsedRealtime() + leftMs; timerBtn.text = "⏸ Pause"
+        if (running) { stopTimer(); timerStatus.text = "PAUSED"; return }
+        running = true; endAt = SystemClock.elapsedRealtime() + leftMs; timerBtn.text = "⏸ Pause"; timerStatus.text = "BREATHE"
         act.window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON); ui.post(tick)
     }
     private fun stopTimer() { running = false; timerBtn.text = "▶ Start"; ui.removeCallbacks(tick); act.window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
@@ -171,7 +225,7 @@ class LifeMore(private val act: Activity, private val web: WebView, private val 
         stopTimer()
         try { val tg = ToneGenerator(AudioManager.STREAM_ALARM, 90); tg.startTone(ToneGenerator.TONE_PROP_BEEP2, 900); ui.postDelayed({ tg.startTone(ToneGenerator.TONE_PROP_BEEP2, 900) }, 1500); ui.postDelayed({ tg.release() }, 3500) } catch (e: Exception) { }
         js("ccNative.meditLog(${total / 60},${JSONObject.quote(medNotes.text.toString())})") { medNotes.setText(""); loadMeditation() }
-        timerText.text = "Done ✓"; leftMs = total * 1000L
+        timerText.text = "Done ✓"; timerStatus.text = "COMPLETE"; leftMs = total * 1000L
     }
     fun pause() { if (running) stopTimer() }
     private fun loadMeditation() {

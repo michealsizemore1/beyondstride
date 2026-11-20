@@ -62,6 +62,9 @@ class LifeActivity : Activity() {
     private var weekTab: WeekTabCard? = null
     private var libCard: LibraryCard? = null
     private var habitsCard: LifeHabits? = null
+    private var lifeBible: LifeBible? = null
+    private var lifeLibrary: LifeLibrary? = null
+    private var medHeader: LifeMeditate? = null
     private var bibleChecks: ChecksCard? = null
     private var meditCard: MeditCard? = null
     private lateinit var sectionCol: LinearLayout
@@ -226,9 +229,9 @@ class LifeActivity : Activity() {
     private fun openSection(name: String, title: String) {
         val views: List<View> = when (name) {
             "wellness" -> listOfNotNull(wellCard?.view)
-            "bible" -> listOfNotNull(bibleCard?.view, bibleChecks?.view)
-            "meditate" -> listOfNotNull(meditCard?.view, more.meditView)
-            "library" -> listOfNotNull(libCard?.view)
+            "bible" -> listOfNotNull(lifeBible?.view)
+            "meditate" -> listOfNotNull(medHeader?.view, more.meditView)
+            "library" -> listOfNotNull(lifeLibrary?.view)
             "habits2" -> listOfNotNull(habitsCard?.view)
             else -> emptyList()
         }
@@ -244,7 +247,9 @@ class LifeActivity : Activity() {
             setPadding(0, d(14), 0, 0); setOnClickListener { openCcPage(name) } })
         showPage(6); sectionScroll.scrollTo(0, 0)
         if (name == "habits2") habitsCard?.load()
-        if (name == "meditate") more.load()
+        if (name == "meditate") { more.load(); more.loadSounds() }
+        if (name == "bible") lifeBible?.load()
+        if (name == "library") lifeLibrary?.load(true)
     }
     private fun openCcPage(name: String) {
         showPage(2)
@@ -282,6 +287,9 @@ class LifeActivity : Activity() {
         meditCard = MeditCard()
         libCard = LibraryCard()
         habitsCard = LifeHabits(this, web, { showPage(2) }, { })
+        lifeBible = LifeBible(this, web, { showPage(2) }, { bibleCard?.go?.performClick() }, { needKey() })
+        lifeLibrary = LifeLibrary(this, web) { showPage(2) }
+        medHeader = LifeMeditate(this, web)
         reviewCard = ReviewCard().also { nativeCol.addView(it.view) }
         journalCard = JournalCard().also { nativeCol.addView(it.view) }
         reviewsCol.removeAllViews()
@@ -300,7 +308,7 @@ class LifeActivity : Activity() {
         web.evaluateJavascript("(window.ccNative&&typeof load==='function')?(ccNative.all?ccNative.all():ccNative.focus()):null") { r ->
             val json = try { (JSONTokener(r).nextValue() as? String)?.let { JSONObject(it) } } catch (e: Exception) { null }
             if (json == null) { focusCard?.loading(); if (tries++ < 60) ui.postDelayed(reload, 700) ; return@evaluateJavascript }
-            tries = 0; focusCard?.fill(json); if (page == 0) calendar?.load(); scheduleCard?.fill(json); checksCard?.fill(json); bibleChecks?.fill(json); meditCard?.fill(json); wellCard?.fill(json); bibleCard?.fill(json); libCard?.fill(json); if (page == 6 && section == "habits2") habitsCard?.load(); reviewCard?.fill(json); journalCard?.fill(json); weekCard?.fill(json)
+            tries = 0; focusCard?.fill(json); if (page == 0) calendar?.load(); scheduleCard?.fill(json); checksCard?.fill(json); bibleChecks?.fill(json); meditCard?.fill(json); wellCard?.fill(json); bibleCard?.fill(json); libCard?.fill(json); if (page == 6 && section == "habits2") habitsCard?.load(); if (page == 6 && section == "bible") lifeBible?.load(); if (page == 6 && section == "library") lifeLibrary?.load(); medHeader?.fill(json); reviewCard?.fill(json); journalCard?.fill(json); weekCard?.fill(json)
             // An older copy of the Command Center is still cached (the website updates before this screen can use the
             // new parts): fetch the newest once.
             if ((!json.has("checks") || !json.has("schedule") || !json.has("review") || !json.has("wellness") || !json.has("weekly") || !json.has("journal")) && !refreshed) { refreshed = true; web.clearCache(true); web.reload(); ui.postDelayed(reload, 2500) }
@@ -470,7 +478,7 @@ class LifeActivity : Activity() {
         private val status = RunUi.text(this@LifeActivity, "", RunUi.ACCENT, 13f, true)
         private val passages = RunUi.text(this@LifeActivity, "", Color.WHITE, 15f, true)
         private val memory = RunUi.text(this@LifeActivity, "", RunUi.MUTED, 12f)
-        private val go = RunUi.button(this@LifeActivity, "Start study ›", 0xFF7C3AED.toInt(), Color.WHITE) {
+        val go = RunUi.button(this@LifeActivity, "Start study ›", 0xFF7C3AED.toInt(), Color.WHITE) {
             study.open { r -> when (r) {
                 "ok" -> showPage(3)
                 "nokey" -> needKey()

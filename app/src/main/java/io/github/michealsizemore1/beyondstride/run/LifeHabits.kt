@@ -104,6 +104,7 @@ class LifeHabits(private val act: Activity, private val web: WebView, private va
         if (shown.isEmpty()) view.addView(RunUi.card(act).apply { addView(RunUi.text(act, if (all.isEmpty()) "Build your first habit — tap + Add Habit." else "No habits match this view.", RunUi.MUTED, 13f)) })
         shown.forEachIndexed { idx, h -> view.addView(habitCard(h, idx, shown.size)) }
         view.addView(progressCard(all, j.optString("heat")))
+        view.addView(notesCard())
     }
 
     private fun habitCard(h: JSONObject, idx: Int, n: Int): View {
@@ -169,6 +170,24 @@ class LifeHabits(private val act: Activity, private val web: WebView, private va
             setOnClickListener { if (isOpen) open.remove(key) else open.add(key); draw() } })
         c.addView(panel)
         return outer
+    }
+
+    private var notesOpen = true
+    private fun notesCard() = RunUi.card(act).apply {
+        (layoutParams as? LinearLayout.LayoutParams)?.topMargin = d(12)
+        addView(LinearLayout(act).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+            addView(RunUi.text(act, "Habit Design Notes", 0xFFFB923C.toInt(), 17f, true), LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
+            addView(RunUi.text(act, if (notesOpen) "⌄" else "›", VIOLET, 18f, true))
+            setOnClickListener { notesOpen = !notesOpen; draw() } })
+        if (notesOpen) listOf(
+            "Make it obvious" to "Use “After I…, I will…” to give every habit a reliable cue.",
+            "Start small" to "Define a minimum version easy enough to do on a difficult day.",
+            "Measure consistency" to "Use completion rate and momentum—not only an unbroken streak.",
+            "Recover quickly" to "A missed day is information. Aim to return on the next scheduled day."
+        ).forEach { (t, b) -> addView(LinearLayout(act).apply { orientation = LinearLayout.VERTICAL
+            background = RunUi.rounded(0xFF232B28.toInt(), d(12).toFloat()); setPadding(d(14), d(12), d(14), d(12))
+            addView(RunUi.text(act, t, 0xFFFB923C.toInt(), 15f, true)); addView(RunUi.text(act, b, RunUi.MUTED, 13f).apply { setPadding(0, d(4), 0, 0) }) },
+            LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = d(10) }) }
     }
 
     private fun progressCard(all: List<JSONObject>, heat: String) = RunUi.card(act).apply {

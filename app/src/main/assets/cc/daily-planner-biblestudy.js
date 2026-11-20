@@ -362,7 +362,9 @@
     var r=sv&&sv.segs?{label:sv.label,text:sv.segs.map(segLabel).join('; ')}:readingFor(todayKey(),dayPick);
     var steps=['Open','Read','Study','Worship','Close'],done=sv&&sv.done?Object.keys(sv.done).filter(function(k){return sv.done[k];}).length:0;
     return {status:sv&&sv.finished?'done':sv&&sv.study?'progress':'new',label:r.label||'',passages:parseSegs(r.text||'').map(segLabel).join('; ')||r.text||'',
-      memory:memoryLine(),step:sv&&typeof sv.step==='number'?steps[sv.step]||'':'',hasKey:!!journalAIKey()};
+      memory:memoryLine(),step:sv&&typeof sv.step==='number'?steps[sv.step]||'':'',hasKey:!!journalAIKey(),
+      planType:plan().type,day:new Date('2026-'+(dayPick||mmdd(todayKey()))+'T12:00').toLocaleDateString('en-US',{month:'short',day:'numeric'}),
+      planLabel:(function(p){return p.type==='oneyear'?'Plan':p.type==='book'?p.book+(p.done?' — finished':' · ch. '+p.chapter):'Daily Bread verse';})(plan())};
   }
   // ── For BeyondStride's native Bible Study screen: the same session, driven without this page's overlay. ──
   // Same prompts, same saved session (bstudy_<date>), same checks ticked; the phone draws the screens.
