@@ -122,8 +122,9 @@ class LifeActivity : Activity() {
         setContentView(RunUi.tabbed(this, box, RunUi.TAB_LIFE))
     }
 
-    override fun onResume() { super.onResume(); web.onResume(); if (!full) { ui.removeCallbacks(reload); ui.postDelayed(reload, 300) } }
-    override fun onPause() { web.onPause(); super.onPause() }
+    override fun onResume() { super.onResume(); web.onResume(); web.evaluateJavascript("window.ccSync&&ccSync.now()", null); if (!full) { ui.removeCallbacks(reload); ui.postDelayed(reload, 300) } }
+    // Upload anything not yet sent before the app goes to the background.
+    override fun onPause() { web.evaluateJavascript("window.ccSync&&ccSync.now()", null); web.onPause(); super.onPause() }
     override fun onSaveInstanceState(out: Bundle) { super.onSaveInstanceState(out); web.saveState(out); out.putBoolean("full", full) }
     override fun onDestroy() { ui.removeCallbacksAndMessages(null); web.destroy(); super.onDestroy() }
 
@@ -138,7 +139,7 @@ class LifeActivity : Activity() {
     // ── Native sections ──
     private fun buildNative() {
         nativeCol.removeAllViews()
-        nativeCol.addView(RunUi.text(this, "Your Command Center, as BeyondStride screens. Changes save to the Command Center right away and sync like always.", RunUi.MUTED, 12f).apply { setPadding(0, RunUi.dp(this@LifeActivity, 6), 0, 0) })
+        nativeCol.addView(RunUi.text(this, "Your Command Center, as BeyondStride screens. Changes save to the Command Center right away and sync with Chrome and your computer.", RunUi.MUTED, 12f).apply { setPadding(0, RunUi.dp(this@LifeActivity, 6), 0, 0) })
         focusCard = FocusCard().also { nativeCol.addView(it.view) }
         nativeCol.addView(RunUi.text(this, "Everything else is in 📓 Full Command Center (tap above). More sections will move here one at a time.", RunUi.DIM, 11f).apply { setPadding(0, RunUi.dp(this@LifeActivity, 12), 0, 0) })
     }
