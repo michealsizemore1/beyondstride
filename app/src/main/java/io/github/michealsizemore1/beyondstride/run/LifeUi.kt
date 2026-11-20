@@ -8,6 +8,7 @@ import android.os.Looper
 import android.text.Editable
 import android.text.TextWatcher
 import android.view.Gravity
+import android.view.View
 import android.view.inputmethod.EditorInfo
 import android.widget.EditText
 import android.widget.LinearLayout
@@ -108,5 +109,48 @@ object LifeUi {
         private fun show() { arrow.text = if (open) "▼" else "▶"; body.visibility = if (open) android.view.View.VISIBLE else android.view.View.GONE; if (open) refresh() }
         /** Redraw the body (only while open). */
         fun refresh() { if (open) onOpen(body) }
+    }
+
+    /** One row of a [FoldGroup]: "📅 Weekly — by day" style title, remembered open/closed, body drawn when it opens. */
+    class Fold(val key: String, val label: String, val defaultOpen: Boolean, val onOpen: (LinearLayout) -> Unit)
+
+    /**
+     * Rows that open in place, joined like the Activities tab's list (icon, white title, › that turns down when open).
+     * The open row's content sits right under it in the same rounded block.
+     */
+    class FoldGroup(private val act: Activity, private val folds: List<Fold>) {
+        private val pr = act.getSharedPreferences("collapse", 0)
+        val view = LinearLayout(act).apply { orientation = LinearLayout.VERTICAL }
+        private val rows = ArrayList<RunUi.GroupRow>(); private val bodies = ArrayList<LinearLayout>()
+        init {
+            folds.forEachIndexed { i, f ->
+                val l = f.label.trim(); val sp = l.indexOf(' ')
+                val icon = if (sp > 0 && l.substring(0, sp).none { it.isLetterOrDigit() }) l.substring(0, sp) else ""
+                val title = if (icon.isNotEmpty()) l.substring(sp + 1).trim() else l
+                val body = LinearLayout(act).apply { orientation = LinearLayout.VERTICAL; setPadding(RunUi.dp(act, 14), RunUi.dp(act, 2), RunUi.dp(act, 14), RunUi.dp(act, 12)) }
+                lateinit var row: RunUi.GroupRow
+                row = RunUi.groupRow(act, icon, title, null, pr.getBoolean(f.key, f.defaultOpen)) {
+                    val o = !row.open; row.setOpen(o); pr.edit().putBoolean(f.key, o).apply(); body.visibility = if (o) View.VISIBLE else View.GONE
+                    if (o) f.onOpen(body); style() }
+                rows += row; bodies += body
+                view.addView(row); view.addView(body)
+                body.visibility = if (row.open) View.VISIBLE else View.GONE
+                if (row.open) f.onOpen(body)
+            }
+            style()
+        }
+        /** Redraw the open rows' content. */
+        fun refresh() { folds.forEachIndexed { i, f -> if (rows[i].open) f.onOpen(bodies[i]) } }
+        private fun style() {
+            val r = RunUi.dp(act, 14).toFloat()
+            rows.forEachIndexed { i, row ->
+                val first = i == 0; val last = i == rows.size - 1; val bodyOpen = bodies[i].visibility == View.VISIBLE
+                val t = if (first) r else 0f; val b = if (last && !bodyOpen) r else 0f
+                row.background = GradientDrawable().apply { setColor(row.bg); cornerRadii = floatArrayOf(t, t, t, t, b, b, b, b) }
+                (row.layoutParams as? android.view.ViewGroup.MarginLayoutParams)?.let { it.topMargin = if (first) RunUi.dp(act, 12) else RunUi.dp(act, 1); row.layoutParams = it }
+                val bb = if (last) r else 0f
+                bodies[i].background = GradientDrawable().apply { setColor(row.bg); cornerRadii = floatArrayOf(0f, 0f, 0f, 0f, bb, bb, bb, bb) }
+            }
+        }
     }
 }

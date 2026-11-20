@@ -180,20 +180,25 @@ object WeekTables {
     }
 
     /** 📅 Weekly · 📆 Monthly · 🗓️ Yearly, each a card you open or close. */
-    fun mileageSections(act: Activity, all: List<JSONObject>, ex: Map<String, Double>): List<View> = listOf(
-        "week" to "📅 Weekly — by day", "month" to "📆 Monthly — by week", "year" to "🗓️ Yearly — by month").map { (k, t) ->
-        val dr = MileageBreakdown(act, all, ex, k)
-        LifeUi.Collapsible(act, "act_$k", t, 0xFFE67E22.toInt(), k == "week") { b -> if (dr.view.parent == null) b.addView(dr.view) }.view }
+    fun mileageSections(act: Activity, all: List<JSONObject>, ex: Map<String, Double>): List<View> {
+        val dr = listOf("week", "month", "year").associateWith { MileageBreakdown(act, all, ex, it) }
+        fun add(k: String) = { b: LinearLayout -> val v = dr.getValue(k).view; if (v.parent == null) b.addView(v) }
+        return listOf(LifeUi.FoldGroup(act, listOf(
+            LifeUi.Fold("act_week", "📅 Weekly — by day", true, add("week")),
+            LifeUi.Fold("act_month", "📆 Monthly — by week", false, add("month")),
+            LifeUi.Fold("act_year", "🗓️ Yearly — by month", false, add("year")))).view)
+    }
 
     fun nutritionSections(act: Activity, onHistory: () -> Unit = {}): List<View> {
         val wk = NutritionWeek(act)
         val month = NutritionPeriod(act, "month"); val year = NutritionPeriod(act, "year")
         // Older days come from the cloud copy of the day summaries; refresh now and then.
         Thread { if (NutritionHistory.refresh(act.applicationContext)) act.runOnUiThread { month.draw(); year.draw(); onHistory() } }.start()
-        return listOf(
-            LifeUi.Collapsible(act, "nu_week", "📅 Weekly — by day", RunUi.ACCENT, true) { b -> if (wk.view.parent == null) b.addView(wk.view) }.view,
-            LifeUi.Collapsible(act, "nu_month", "📆 Monthly — by week", RunUi.ACCENT, false) { b -> if (month.view.parent == null) b.addView(month.view) }.view,
-            LifeUi.Collapsible(act, "nu_year", "🗓️ Yearly — by month", RunUi.ACCENT, false) { b -> if (year.view.parent == null) b.addView(year.view) }.view)
+        fun add(v: View) = { b: LinearLayout -> if (v.parent == null) b.addView(v) }
+        return listOf(LifeUi.FoldGroup(act, listOf(
+            LifeUi.Fold("nu_week", "📅 Weekly — by day", true, add(wk.view)),
+            LifeUi.Fold("nu_month", "📆 Monthly — by week", false, add(month.view)),
+            LifeUi.Fold("nu_year", "🗓️ Yearly — by month", false, add(year.view)))).view)
     }
 
     /** 🍎 Nutrition and 🧪 Micronutrients averaged per week (Monthly) or per month (Yearly), from the saved day summaries. */

@@ -605,10 +605,10 @@ class LifeActivity : Activity() {
         val view = LinearLayout(this@LifeActivity).apply { orientation = LinearLayout.VERTICAL }
         private val offs = intArrayOf(0, 0, 0)
         private fun d(v: Int) = RunUi.dp(this@LifeActivity, v)
-        private val parts = listOf(Triple("week", "📅 Weekly — by day", 0), Triple("monthly", "📆 Monthly — by week", 1), Triple("yearly", "🗓️ Yearly — by month", 2)).map { (k, t, i) ->
-            LifeUi.Collapsible(this@LifeActivity, "life_${tag}_$k", t, RunUi.ACCENT, k == "week") { b -> draw(k, i, b) } }
-        init { parts.forEach { view.addView(it.view) } }
-        fun load() { parts.forEach { it.refresh() } }
+        private val group = LifeUi.FoldGroup(this@LifeActivity, listOf(Triple("week", "📅 Weekly — by day", 0), Triple("monthly", "📆 Monthly — by week", 1), Triple("yearly", "🗓️ Yearly — by month", 2)).map { (k, t, i) ->
+            LifeUi.Fold("life_${tag}_$k", t, k == "week") { b -> draw(k, i, b) } })
+        init { view.addView(group.view) }
+        fun load() { group.refresh() }
         private fun draw(kind: String, i: Int, b: LinearLayout) {
             val call = if (kind == "week") "ccNative.weekTab(${offs[i]})" else "ccNative.period('$kind',${offs[i]})"
             web.evaluateJavascript("window.ccNative&&ccNative.period?$call:null") { r ->
