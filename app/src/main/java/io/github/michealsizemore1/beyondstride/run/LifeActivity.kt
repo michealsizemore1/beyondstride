@@ -55,6 +55,8 @@ class LifeActivity : Activity() {
     private var scheduleCard: ScheduleCard? = null
     private var reviewCard: ReviewCard? = null
     private var wellCard: WellnessCard? = null
+    private var bibleCard: BibleCard? = null
+    private var weekCard: WeeklyCard? = null
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -148,7 +150,9 @@ class LifeActivity : Activity() {
         scheduleCard = ScheduleCard().also { nativeCol.addView(it.view) }
         checksCard = ChecksCard().also { nativeCol.addView(it.view) }
         wellCard = WellnessCard().also { nativeCol.addView(it.view) }
+        bibleCard = BibleCard().also { nativeCol.addView(it.view) }
         reviewCard = ReviewCard().also { nativeCol.addView(it.view) }
+        weekCard = WeeklyCard().also { nativeCol.addView(it.view) }
         nativeCol.addView(RunUi.text(this, "Everything else is in 📓 Full Command Center (tap above). More sections will move here one at a time.", RunUi.DIM, 11f).apply { setPadding(0, RunUi.dp(this@LifeActivity, 12), 0, 0) })
     }
 
@@ -158,10 +162,10 @@ class LifeActivity : Activity() {
         web.evaluateJavascript("(window.ccNative&&typeof load==='function')?(ccNative.all?ccNative.all():ccNative.focus()):null") { r ->
             val json = try { (JSONTokener(r).nextValue() as? String)?.let { JSONObject(it) } } catch (e: Exception) { null }
             if (json == null) { focusCard?.loading(); if (tries++ < 60) ui.postDelayed(reload, 700) ; return@evaluateJavascript }
-            tries = 0; focusCard?.fill(json); scheduleCard?.fill(json); checksCard?.fill(json); wellCard?.fill(json); reviewCard?.fill(json)
+            tries = 0; focusCard?.fill(json); scheduleCard?.fill(json); checksCard?.fill(json); wellCard?.fill(json); bibleCard?.fill(json); reviewCard?.fill(json); weekCard?.fill(json)
             // An older copy of the Command Center is still cached (the website updates before this screen can use the
             // new parts): fetch the newest once.
-            if ((!json.has("checks") || !json.has("schedule") || !json.has("review") || !json.has("wellness")) && !refreshed) { refreshed = true; web.clearCache(true); web.reload(); ui.postDelayed(reload, 2500) }
+            if ((!json.has("checks") || !json.has("schedule") || !json.has("review") || !json.has("wellness") || !json.has("weekly")) && !refreshed) { refreshed = true; web.clearCache(true); web.reload(); ui.postDelayed(reload, 2500) }
         }
     }
     private fun js(call: String) = web.evaluateJavascript("window.ccNative&&$call", null)
@@ -300,6 +304,111 @@ class LifeActivity : Activity() {
         }
     }
 
+    private fun needKey() {
+        android.app.AlertDialog.Builder(this).setTitle("AI key needed in the Command Center")
+            .setMessage("This uses the Command Center's own AI key, which stays in each browser and isn't synced. Add it once: 📓 Full Command Center → Settings → Anthropic API key.\n\n(BeyondStride's own key stays in the app and is never given to the Command Center.)")
+            .setPositiveButton("Open Full Command Center") { _, _ -> show(true) }.setNegativeButton("Not now", null).show()
+    }
+
+    /** 📖 Bible Study + 🧘 Meditation — today's reading, progress, memory verse; the guided session / timer open full screen. */
+    private inner class BibleCard {
+        val view = RunUi.card(this@LifeActivity)
+        private val status = RunUi.text(this@LifeActivity, "", RunUi.ACCENT, 13f, true)
+        private val passages = RunUi.text(this@LifeActivity, "", Color.WHITE, 15f, true)
+        private val memory = RunUi.text(this@LifeActivity, "", RunUi.MUTED, 12f)
+        private val go = RunUi.button(this@LifeActivity, "Start study ›", 0xFF7C3AED.toInt(), Color.WHITE) {
+            web.evaluateJavascript("window.ccNative&&ccNative.bibleOpen?ccNative.bibleOpen():false") { r -> if (r.contains("nokey")) needKey() else if (r == "true") show(true) } }
+        private val medLine = RunUi.text(this@LifeActivity, "", Color.WHITE, 14f)
+        private val medWeek = RunUi.text(this@LifeActivity, "", RunUi.MUTED, 12f)
+        private val medBox = TextView(this@LifeActivity)
+        private fun d(v: Int) = RunUi.dp(this@LifeActivity, v)
+        init {
+            view.addView(RunUi.text(this@LifeActivity, "📖 Daily Bible Study", Color.WHITE, 16f, true))
+            view.addView(status.apply { setPadding(0, d(4), 0, 0) }); view.addView(passages.apply { setPadding(0, d(2), 0, 0) }); view.addView(memory.apply { setPadding(0, d(4), 0, 0) })
+            view.addView(go, LinearLayout.LayoutParams(MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = d(8) })
+            view.addView(RunUi.text(this@LifeActivity, "Prayer → Read & listen → Study → Worship → Prayer. Opens full screen; ticks your Bible checks as you go. Tap 🎯 Today to come back.", RunUi.DIM, 10f).apply { setPadding(0, d(6), 0, 0) })
+            view.addView(View(this@LifeActivity).apply { setBackgroundColor(0xFF2A3430.toInt()) }, LinearLayout.LayoutParams(MATCH_PARENT, d(1)).apply { topMargin = d(12); bottomMargin = d(10) })
+            view.addView(LinearLayout(this@LifeActivity).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL
+                medBox.gravity = android.view.Gravity.CENTER; medBox.textSize = 14f
+                addView(medBox, LinearLayout.LayoutParams(d(28), d(28)))
+                addView(LinearLayout(this@LifeActivity).apply { orientation = LinearLayout.VERTICAL; setPadding(d(10), 0, 0, 0)
+                    addView(RunUi.text(this@LifeActivity, "🧘 Meditation", Color.WHITE, 15f, true)); addView(medLine); addView(medWeek) }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)) })
+            view.addView(RunUi.button(this@LifeActivity, "Start meditation ›", 0xFF374151.toInt(), Color.WHITE) {
+                web.evaluateJavascript("window.ccNative&&ccNative.meditOpen?ccNative.meditOpen():false") { r -> if (r == "true") show(true) } }, LinearLayout.LayoutParams(MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = d(8) })
+        }
+        fun fill(j: JSONObject) {
+            j.optJSONObject("bible")?.let { b ->
+                val st = b.optString("status")
+                status.text = (when (st) { "done" -> "✓ Done today"; "progress" -> "In progress" + (b.optString("step").takeIf { it.isNotEmpty() }?.let { " · $it" } ?: ""); else -> "Today" }) + " · " + b.optString("label")
+                passages.text = b.optString("passages")
+                memory.text = b.optString("memory").takeIf { it.isNotBlank() }?.let { "🧠 Memory verse this week: $it" } ?: ""
+                memory.visibility = if (memory.text.isEmpty()) View.GONE else View.VISIBLE
+                go.text = when (st) { "done" -> "Review study"; "progress" -> "Continue ›"; else -> "Start study ›" }
+            }
+            j.optJSONObject("meditation")?.let { m ->
+                paintBox(medBox, m.optString("state"))
+                medLine.text = m.optString("line")
+                medWeek.text = "This week: ${m.optInt("weekSessions")} session${if (m.optInt("weekSessions") == 1) "" else "s"} · ${m.optInt("weekMins")} min"
+            }
+        }
+    }
+
+    /** 📅 Weekly Review — this week's numbers, Wins / Improve / Focus / Lessons, AI Fill; ‹ › for other weeks. */
+    private inner class WeeklyCard {
+        val view = RunUi.card(this@LifeActivity)
+        private val label = RunUi.text(this@LifeActivity, "", Color.WHITE, 14f, true).apply { gravity = android.view.Gravity.CENTER }
+        private val stats = RunUi.text(this@LifeActivity, "", RunUi.MUTED, 12f)
+        private val note = RunUi.text(this@LifeActivity, "", RunUi.MUTED, 12f)
+        private val fillBtn = RunUi.button(this@LifeActivity, "✨ AI Fill Review", 0xFF7C3AED.toInt(), Color.WHITE) { aiFill() }
+        private val edits = LinkedHashMap<String, EditText>()
+        private var busy = false
+        private fun d(v: Int) = RunUi.dp(this@LifeActivity, v)
+        private fun arrow(t: String, n: Int) = RunUi.text(this@LifeActivity, t, RunUi.ACCENT, 22f, true).apply { setPadding(d(14), 0, d(14), 0)
+            setOnClickListener { web.evaluateJavascript("window.ccNative&&ccNative.weeklyShift($n)") { reload.run() } } }
+        init {
+            view.addView(RunUi.text(this@LifeActivity, "📅 Weekly Review", Color.WHITE, 16f, true))
+            view.addView(LinearLayout(this@LifeActivity).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL; setPadding(0, d(4), 0, 0)
+                addView(arrow("‹", -1)); addView(label, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)); addView(arrow("›", 1)) })
+            view.addView(stats); view.addView(note)
+            view.addView(fillBtn, LinearLayout.LayoutParams(MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = d(8) })
+            listOf("revWins" to "Wins This Week", "revImprove" to "What to Improve", "revFocus" to "Focus for Next Week", "revLessons" to "Lessons Learned").forEach { (id, lab) ->
+                view.addView(RunUi.text(this@LifeActivity, lab, RunUi.ACCENT, 13f, true).apply { setPadding(0, d(12), 0, d(2)) })
+                val et = EditText(this@LifeActivity).apply {
+                    setTextColor(Color.WHITE); setHintTextColor(RunUi.DIM); textSize = 14f; minLines = 2; gravity = android.view.Gravity.TOP; hint = "…"
+                    background = RunUi.rounded(0xFF26302C.toInt(), d(10).toFloat()); setPadding(d(10), d(8), d(10), d(8))
+                    val commit = Runnable { js("ccNative.setWeekly(${JSONObject.quote(id)},${JSONObject.quote(text.toString())})") }
+                    addTextChangedListener(object : TextWatcher {
+                        override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+                        override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+                        override fun afterTextChanged(s: Editable?) { if (hasFocus()) { ui.removeCallbacks(commit); ui.postDelayed(commit, 1000) } }
+                    })
+                    setOnFocusChangeListener { _, has -> if (!has) { ui.removeCallbacks(commit); commit.run() } }
+                }
+                edits[id] = et; view.addView(et)
+            }
+            view.addView(RunUi.button(this@LifeActivity, "Save Review", RunUi.ACCENT) { js("ccNative.saveWeekly()"); ui.postDelayed(reload, 400) },
+                LinearLayout.LayoutParams(MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = d(10) })
+            view.addView(RunUi.text(this@LifeActivity, "Typing here saves the week's review. After ✨ AI Fill, read it over and tap Save Review. Charts and the injury roll-up are in 📓 Full Command Center → Review.", RunUi.DIM, 10f).apply { setPadding(0, d(8), 0, 0) })
+        }
+        private fun aiFill() {
+            web.evaluateJavascript("window.ccNative&&ccNative.weeklyFill?ccNative.weeklyFill():false") { r ->
+                if (r.contains("nokey")) needKey() else if (r == "true") { busy = true; note.text = "✨ Writing the week's review…"; fillBtn.isEnabled = false; ui.postDelayed(poll, 2500) } }
+        }
+        private val poll: Runnable = object : Runnable { override fun run() { reload.run(); if (busy) ui.postDelayed(this, 2500) } }
+        fun fill(j: JSONObject) {
+            val w = j.optJSONObject("weekly") ?: run { view.visibility = View.GONE; return }
+            view.visibility = View.VISIBLE
+            label.text = w.optString("label"); stats.text = w.optString("stats")
+            busy = w.optBoolean("busy"); fillBtn.isEnabled = !busy; fillBtn.alpha = if (busy) 0.5f else 1f
+            val arr = w.optJSONArray("fields") ?: return; var unsaved = false
+            for (i in 0 until arr.length()) { val o = arr.getJSONObject(i); val et = edits[o.optString("id")] ?: continue
+                if (o.optBoolean("unsaved")) unsaved = true
+                if (!et.hasFocus() && et.text.toString() != o.optString("value")) et.setText(o.optString("value")) }
+            note.text = when { busy -> "✨ Writing the week's review…"; unsaved -> "Not saved yet — tap Save Review when it looks right."; else -> "" }
+            note.visibility = if (note.text.isEmpty()) View.GONE else View.VISIBLE
+        }
+    }
+
     /** 💚 Wellness — BP, meds, weight, sleep, dog walk, steps, bike: the check and its numbers, like the Wellness tab. */
     private inner class WellnessCard {
         val view = RunUi.card(this@LifeActivity)
@@ -318,7 +427,7 @@ class LifeActivity : Activity() {
         fun fill(j: JSONObject) {
             val arr = j.optJSONArray("wellness") ?: run { view.visibility = View.GONE; return }
             view.visibility = View.VISIBLE
-            val rows = (0 until arr.length()).map { arr.getJSONObject(it) }
+            val rows = (0 until arr.length()).map { arr.getJSONObject(it) }.filter { it.optString("key") != "exBike" }   // Bike left off (Micheal, Nov 2026)
             val shape = rows.joinToString("|") { r -> r.optString("key") + ":" + (0 until r.getJSONArray("fields").length()).joinToString(",") { r.getJSONArray("fields").getJSONObject(it).optString("id") } }
             if (shape != built) { built = shape; build(rows) }
             rows.forEach { r ->
