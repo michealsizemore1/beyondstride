@@ -62,6 +62,11 @@ class LifeActivity : Activity() {
     private var weekTab: WeekTabCard? = null
     private var libCard: LibraryCard? = null
     private var habitsCard: HabitsCard? = null
+    private var bibleChecks: ChecksCard? = null
+    private var meditCard: MeditCard? = null
+    private lateinit var sectionCol: LinearLayout
+    private lateinit var sectionScroll: ScrollView
+    private var section = ""
     private var dashCard: LifeDashboard? = null
     private lateinit var more: LifeMore
     private lateinit var moreScroll: ScrollView
@@ -144,6 +149,9 @@ class LifeActivity : Activity() {
             addView(moreScroll, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
             tabsScroll = ScrollView(this@LifeActivity).apply { setBackgroundColor(RunUi.BG); isFillViewport = true; addView(tabsPage()) }
             addView(tabsScroll, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
+            sectionCol = LinearLayout(this@LifeActivity).apply { orientation = LinearLayout.VERTICAL; setPadding(RunUi.dp(this@LifeActivity, 14), 0, RunUi.dp(this@LifeActivity, 14), RunUi.dp(this@LifeActivity, 24)) }
+            sectionScroll = ScrollView(this@LifeActivity).apply { setBackgroundColor(RunUi.BG); isFillViewport = true; addView(sectionCol) }
+            addView(sectionScroll, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
             study = BibleStudyPage(this@LifeActivity, web) { showPage(0) }
             addView(study.view, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
         }
@@ -207,13 +215,37 @@ class LifeActivity : Activity() {
                         addView(RunUi.text(this@LifeActivity, t.first, Color.WHITE, 30f))
                         addView(RunUi.text(this@LifeActivity, t.second, Color.WHITE, 16f, true).apply { setPadding(0, d(6), 0, d(2)) })
                         addView(RunUi.text(this@LifeActivity, desc, RunUi.MUTED, 11f))
-                        setOnClickListener { openCcPage(t.third) }
+                        setOnClickListener { openSection(t.third, t.first + " " + t.second) }
                     }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { if (i == 0) marginEnd = d(8) })
                 }
                 if (row.size == 1) addView(View(this@LifeActivity), LinearLayout.LayoutParams(0, 1, 1f))
             })
         }
         return col
+    }
+    /** A ☰ Tabs section as BeyondStride screens (Uploads still opens the Command Center's own page). */
+    private fun openSection(name: String, title: String) {
+        val views: List<View> = when (name) {
+            "wellness" -> listOfNotNull(wellCard?.view)
+            "bible" -> listOfNotNull(bibleCard?.view, bibleChecks?.view)
+            "meditate" -> listOfNotNull(meditCard?.view, more.meditView)
+            "library" -> listOfNotNull(libCard?.view)
+            "habits2" -> listOfNotNull(habitsCard?.view)
+            else -> emptyList()
+        }
+        if (views.isEmpty()) { openCcPage(name); return }
+        val d = { v: Int -> RunUi.dp(this, v) }
+        section = name
+        sectionCol.removeAllViews()
+        sectionCol.addView(LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL; setPadding(0, d(6), 0, 0)
+            addView(RunUi.text(this@LifeActivity, "‹", RunUi.ACCENT, 26f, true).apply { setPadding(d(2), 0, d(12), 0); setOnClickListener { showPage(5) } })
+            addView(RunUi.text(this@LifeActivity, title, Color.WHITE, 20f, true)) })
+        views.forEach { v -> (v.parent as? ViewGroup)?.removeView(v); sectionCol.addView(v) }
+        sectionCol.addView(RunUi.text(this, "Open the full ${title.substringAfter(' ')} page ›", 0xFFA78BFA.toInt(), 13f, true).apply {
+            setPadding(0, d(14), 0, 0); setOnClickListener { openCcPage(name) } })
+        showPage(6); sectionScroll.scrollTo(0, 0)
+        if (name == "habits2") habitsCard?.load()
+        if (name == "meditate") more.load()
     }
     private fun openCcPage(name: String) {
         showPage(2)
@@ -228,10 +260,11 @@ class LifeActivity : Activity() {
         reviewsScroll.visibility = if (p == 1) View.VISIBLE else View.GONE
         moreScroll.visibility = if (p == 4) View.VISIBLE else View.GONE
         tabsScroll.visibility = if (p == 5) View.VISIBLE else View.GONE
+        sectionScroll.visibility = if (p == 6) View.VISIBLE else View.GONE
         if (p == 4) more.load()
         fun style(t: TextView, on: Boolean) { t.background = RunUi.rounded(if (on) RunUi.ACCENT else RunUi.CARD, RunUi.dp(this, 20).toFloat()); t.setTextColor(if (on) Color.BLACK else Color.WHITE) }
-        style(tabToday, p == 0); style(tabReviews, p == 1); style(tabFull, p == 2); style(tabMore, p == 4); style(tabTabs, p == 5)
-        if (p == 0 || p == 1) reload.run()
+        style(tabToday, p == 0); style(tabReviews, p == 1); style(tabFull, p == 2); style(tabMore, p == 4); style(tabTabs, p == 5 || p == 6)
+        if (p == 0 || p == 1 || p == 6) reload.run()
         if (p == 1) { weekTab?.load(); monthCard?.load(); yearCard?.load(); dashCard?.load() }
     }
 
@@ -242,11 +275,14 @@ class LifeActivity : Activity() {
         calendar = LifeCalendar(this, web).also { nativeCol.addView(it.view) }
         focusCard = FocusCard().also { nativeCol.addView(it.view) }
         scheduleCard = ScheduleCard().also { nativeCol.addView(it.view) }
-        checksCard = ChecksCard().also { nativeCol.addView(it.view) }
-        wellCard = WellnessCard().also { nativeCol.addView(it.view) }
-        bibleCard = BibleCard().also { nativeCol.addView(it.view) }
-        libCard = LibraryCard().also { nativeCol.addView(it.view) }
-        habitsCard = HabitsCard().also { nativeCol.addView(it.view) }
+        checksCard = ChecksCard("✅ Daily Checks") { g -> !g.contains("Bible") && !g.contains("Meditation") && !g.contains("Listening") && !g.contains("Wellness") }.also { nativeCol.addView(it.view) }
+        // These live in their own sections (☰ Tabs), like the Command Center's ☰ menu pages.
+        wellCard = WellnessCard()
+        bibleCard = BibleCard()
+        bibleChecks = ChecksCard("✅ Bible checks") { g -> g.contains("Bible") }
+        meditCard = MeditCard()
+        libCard = LibraryCard()
+        habitsCard = HabitsCard()
         reviewCard = ReviewCard().also { nativeCol.addView(it.view) }
         journalCard = JournalCard().also { nativeCol.addView(it.view) }
         reviewsCol.removeAllViews()
@@ -256,7 +292,7 @@ class LifeActivity : Activity() {
         yearCard = PeriodCard("yearly").also { reviewsCol.addView(it.view) }
         dashCard = LifeDashboard(this, web).also { reviewsCol.addView(it.view) }
         reviewsCol.addView(RunUi.text(this, "The BP report, habit streak chart and the injury roll-up are in 📓 Full.", RunUi.DIM, 11f).apply { setPadding(0, RunUi.dp(this@LifeActivity, 12), 0, 0) })
-        nativeCol.addView(RunUi.text(this, "Weekly, monthly and yearly reviews are in 📊 Reviews. Search, Ask AI, meditation timer, BP report, files and settings are in 🗂️ More.", RunUi.DIM, 11f).apply { setPadding(0, RunUi.dp(this@LifeActivity, 12), 0, 0) })
+        nativeCol.addView(RunUi.text(this, "Bible Study, Wellness, Meditation, Listening and Habits are in ☰ Tabs. Reviews are in 📊 Reviews. Search, Ask AI, BP report, files and settings are in 🗂️ More.", RunUi.DIM, 11f).apply { setPadding(0, RunUi.dp(this@LifeActivity, 12), 0, 0) })
     }
 
     private var tries = 0
@@ -265,7 +301,7 @@ class LifeActivity : Activity() {
         web.evaluateJavascript("(window.ccNative&&typeof load==='function')?(ccNative.all?ccNative.all():ccNative.focus()):null") { r ->
             val json = try { (JSONTokener(r).nextValue() as? String)?.let { JSONObject(it) } } catch (e: Exception) { null }
             if (json == null) { focusCard?.loading(); if (tries++ < 60) ui.postDelayed(reload, 700) ; return@evaluateJavascript }
-            tries = 0; focusCard?.fill(json); if (page == 0) calendar?.load(); scheduleCard?.fill(json); checksCard?.fill(json); wellCard?.fill(json); bibleCard?.fill(json); libCard?.fill(json); if (page == 0) habitsCard?.load(); reviewCard?.fill(json); journalCard?.fill(json); weekCard?.fill(json)
+            tries = 0; focusCard?.fill(json); if (page == 0) calendar?.load(); scheduleCard?.fill(json); checksCard?.fill(json); bibleChecks?.fill(json); meditCard?.fill(json); wellCard?.fill(json); bibleCard?.fill(json); libCard?.fill(json); if (page == 6 && section == "habits2") habitsCard?.load(); reviewCard?.fill(json); journalCard?.fill(json); weekCard?.fill(json)
             // An older copy of the Command Center is still cached (the website updates before this screen can use the
             // new parts): fetch the newest once.
             if ((!json.has("checks") || !json.has("schedule") || !json.has("review") || !json.has("wellness") || !json.has("weekly") || !json.has("journal")) && !refreshed) { refreshed = true; web.clearCache(true); web.reload(); ui.postDelayed(reload, 2500) }
@@ -442,23 +478,12 @@ class LifeActivity : Activity() {
                 // An older Command Center (or a reading it can't find): use its own screen.
                 else -> web.evaluateJavascript("window.ccNative&&ccNative.bibleOpen?ccNative.bibleOpen():false") { x -> if (x.contains("nokey")) needKey() else if (x == "true") show(true) }
             } } }
-        private val medLine = RunUi.text(this@LifeActivity, "", Color.WHITE, 14f)
-        private val medWeek = RunUi.text(this@LifeActivity, "", RunUi.MUTED, 12f)
-        private val medBox = TextView(this@LifeActivity)
         private fun d(v: Int) = RunUi.dp(this@LifeActivity, v)
         init {
             view.addView(RunUi.text(this@LifeActivity, "📖 Daily Bible Study", Color.WHITE, 16f, true))
             view.addView(status.apply { setPadding(0, d(4), 0, 0) }); view.addView(passages.apply { setPadding(0, d(2), 0, 0) }); view.addView(memory.apply { setPadding(0, d(4), 0, 0) })
             view.addView(go, LinearLayout.LayoutParams(MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = d(8) })
             view.addView(RunUi.text(this@LifeActivity, "Prayer → Read & listen → Study → Worship → Prayer, right here in the app. Ticks your Bible checks as you go.", RunUi.DIM, 10f).apply { setPadding(0, d(6), 0, 0) })
-            view.addView(View(this@LifeActivity).apply { setBackgroundColor(0xFF2A3430.toInt()) }, LinearLayout.LayoutParams(MATCH_PARENT, d(1)).apply { topMargin = d(12); bottomMargin = d(10) })
-            view.addView(LinearLayout(this@LifeActivity).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL
-                medBox.gravity = android.view.Gravity.CENTER; medBox.textSize = 14f
-                addView(medBox, LinearLayout.LayoutParams(d(28), d(28)))
-                addView(LinearLayout(this@LifeActivity).apply { orientation = LinearLayout.VERTICAL; setPadding(d(10), 0, 0, 0)
-                    addView(RunUi.text(this@LifeActivity, "🧘 Meditation", Color.WHITE, 15f, true)); addView(medLine); addView(medWeek) }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)) })
-            view.addView(RunUi.button(this@LifeActivity, "Start meditation ›", 0xFF374151.toInt(), Color.WHITE) {
-                web.evaluateJavascript("window.ccNative&&ccNative.meditOpen?ccNative.meditOpen():false") { r -> if (r == "true") show(true) } }, LinearLayout.LayoutParams(MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = d(8) })
         }
         fun fill(j: JSONObject) {
             j.optJSONObject("bible")?.let { b ->
@@ -469,8 +494,28 @@ class LifeActivity : Activity() {
                 memory.visibility = if (memory.text.isEmpty()) View.GONE else View.VISIBLE
                 go.text = when (st) { "done" -> "Review study"; "progress" -> "Continue ›"; else -> "Start study ›" }
             }
+        }
+    }
+
+    /** 🧘 Meditation — today's check, today's session and this week's total (the timer is right below it). */
+    private inner class MeditCard {
+        val view = RunUi.card(this@LifeActivity)
+        private val medLine = RunUi.text(this@LifeActivity, "", Color.WHITE, 14f)
+        private val medWeek = RunUi.text(this@LifeActivity, "", RunUi.MUTED, 12f)
+        private val medBox = TextView(this@LifeActivity)
+        private var st = ""
+        private fun d(v: Int) = RunUi.dp(this@LifeActivity, v)
+        init {
+            view.addView(LinearLayout(this@LifeActivity).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL
+                medBox.gravity = android.view.Gravity.CENTER; medBox.textSize = 14f
+                medBox.setOnClickListener { st = CYCLE[(CYCLE.indexOf(st) + 1) % CYCLE.size]; paintBox(medBox, st); js("ccNative.setCheck('spMeditation',${JSONObject.quote(st)})") }
+                addView(medBox, LinearLayout.LayoutParams(d(28), d(28)))
+                addView(LinearLayout(this@LifeActivity).apply { orientation = LinearLayout.VERTICAL; setPadding(d(10), 0, 0, 0)
+                    addView(RunUi.text(this@LifeActivity, "🧘 Meditation today", Color.WHITE, 16f, true)); addView(medLine); addView(medWeek) }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)) })
+        }
+        fun fill(j: JSONObject) {
             j.optJSONObject("meditation")?.let { m ->
-                paintBox(medBox, m.optString("state"))
+                st = m.optString("state"); paintBox(medBox, st)
                 medLine.text = m.optString("line")
                 medWeek.text = "This week: ${m.optInt("weekSessions")} session${if (m.optInt("weekSessions") == 1) "" else "s"} · ${m.optInt("weekMins")} min"
             }
@@ -879,14 +924,14 @@ class LifeActivity : Activity() {
     }
 
     /** ✅ Daily Checks — Bible, Meditation, Listening, Wellness, Planning & Review: the Command Center's checkmarks. */
-    private inner class ChecksCard {
+    private inner class ChecksCard(private val title: String, private val include: (String) -> Boolean) {
         val view = RunUi.card(this@LifeActivity)
         private val summary = RunUi.text(this@LifeActivity, "", RunUi.MUTED, 12f)
         private val body = LinearLayout(this@LifeActivity).apply { orientation = LinearLayout.VERTICAL }
         private var sig = ""
         private fun d(v: Int) = RunUi.dp(this@LifeActivity, v)
         init {
-            view.addView(RunUi.text(this@LifeActivity, "✅ Daily Checks", Color.WHITE, 16f, true))
+            view.addView(RunUi.text(this@LifeActivity, title, Color.WHITE, 16f, true))
             view.addView(summary); view.addView(body)
             view.addView(RunUi.text(this@LifeActivity, "Automatic checks (audiobook, Bible Study…) still fill in on their own.", RunUi.DIM, 10f).apply { setPadding(0, d(8), 0, 0) })
         }
@@ -894,8 +939,7 @@ class LifeActivity : Activity() {
         private fun nice(l: String) = l.replaceFirstChar { it.uppercase() }.replace(Regex("^Goal\\s+"), "")
         fun fill(j: JSONObject) {
             val arr = j.optJSONArray("checks") ?: run { summary.text = "Getting the newest Command Center…"; return }
-            val hasWell = j.has("wellness")   // Wellness has its own card (with the numbers) below
-            val items = (0 until arr.length()).map { arr.getJSONObject(it) }.filter { !(hasWell && it.optString("group").contains("Wellness")) && !(j.has("library") && it.optString("group").contains("Listening")) }
+            val items = (0 until arr.length()).map { arr.getJSONObject(it) }.filter { include(it.optString("group")) }
             val n = { st: String -> items.count { it.optString("state") == st } }
             summary.text = "${n("green")} done · ${n("purple")} partly · ${n("red")} not done · ${n("black")} N/A · ${n("")} not marked"
             val newSig = items.joinToString("|") { it.optString("key") + it.optString("id") + ":" + it.optString("state") + ":" + it.optString("label") }
@@ -995,6 +1039,7 @@ class LifeActivity : Activity() {
     @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
         if (full && web.canGoBack()) web.goBack()
+        else if (page == 6) showPage(5)
         else if (full || page in listOf(1, 3, 4, 5)) show(false)
         else @Suppress("DEPRECATION") super.onBackPressed()
     }

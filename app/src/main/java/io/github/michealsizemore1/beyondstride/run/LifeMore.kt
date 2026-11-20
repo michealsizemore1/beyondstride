@@ -34,12 +34,13 @@ import java.util.Locale
 
 /**
  * 🗂️ The Life tab's "More" page — the rest of the Command Center as BeyondStride screens:
- * 🔍 journal search · 💬 Ask AI + saved answers · 🧘 meditation timer · 🩺 BP report · 📁 files · ⚙️ settings.
+ * 🔍 journal search · 💬 Ask AI + saved answers · 🩺 BP report · 📁 files · ⚙️ settings (the 🧘 meditation timer is built here but shown in ☰ Tabs → Meditate).
  * Everything reads and changes the Command Center's own data through window.ccNative.
  */
 class LifeMore(private val act: Activity, private val web: WebView, private val needKey: () -> Unit) {
     val col = LinearLayout(act).apply { orientation = LinearLayout.VERTICAL; setPadding(d(14), 0, d(14), d(24)) }
     private val ui = Handler(Looper.getMainLooper())
+    lateinit var meditView: LinearLayout
     private fun d(v: Int) = RunUi.dp(act, v)
     private fun str(r: String?) = try { JSONTokener(r ?: "").nextValue() as? String ?: "" } catch (e: Exception) { "" }
     private fun js(call: String, cb: (String) -> Unit = {}) = web.evaluateJavascript("window.ccNative&&ccNative.search?$call:null") { cb(it ?: "") }
@@ -56,7 +57,8 @@ class LifeMore(private val act: Activity, private val web: WebView, private val 
 
     private fun build() {
         col.removeAllViews()
-        col.addView(searchCard()); col.addView(askCard()); col.addView(meditCard()); col.addView(bpCard()); col.addView(filesCard()); col.addView(settingsCard())
+        meditView = meditCard()   // shown in ☰ Tabs → Meditate
+        col.addView(searchCard()); col.addView(askCard()); col.addView(bpCard()); col.addView(filesCard()); col.addView(settingsCard())
     }
 
     // ── 🔍 Search ──
