@@ -202,8 +202,46 @@
   function all(name,store){return idb(name,store).then(function(db){return new Promise(function(res){var q=db.transaction(store,'readonly').objectStore(store).getAll();q.onsuccess=function(){res(q.result||[]);};q.onerror=function(){res([]);};});}).catch(function(){return [];});}
   function back(fn,arg){try{if(window.BSNative&&BSNative[fn])BSNative[fn].apply(BSNative,arg);}catch(e){}}
   var FILES={ou:['OtherUploadsDB','files'],ja:['JournalArchiveDB','journals']};
+  // 🌱 The whole Habits page (any day: off = days from today), like the Command Center's Habits tab.
+  function habitsPage(off){
+    off=Number(off)||0;var view=new Date();view.setDate(view.getDate()+off);view.setHours(12,0,0,0);
+    try{h2ViewDate=new Date(view);h2SyncFromJournal();}catch(e){}
+    var state;try{state=h2State();}catch(e){return null;}
+    var key=h2Key(view),now=new Date();
+    function st(h,d){var log=h2Log(state,h.id,h2Key(d)),due=h2IsDue(h,d,state),c=h2IsComplete(h,log);return !due?'n':c?'d':log.status==='partial'?'p':log.status==='skip'?'s':'o';}
+    var due=state.habits.filter(function(h){return h2IsDue(h,view,state);}),comp=due.filter(function(h){return h2IsComplete(h,h2Log(state,h.id,key));});
+    var stats=state.habits.map(function(h){return h2HabitStats(state,h);});
+    var best=stats.reduce(function(m,x){return Math.max(m,x.streak);},0),mom=stats.length?Math.round(stats.reduce(function(a,x){return a+x.rate;},0)/stats.length):0;
+    var perfect=0;for(var p=0;p<30;p++){var pd=new Date();pd.setDate(pd.getDate()-p);var pdue=state.habits.filter(function(h){return h2IsDue(h,pd,state);});if(pdue.length&&pdue.every(function(h){return h2IsComplete(h,h2Log(state,h.id,h2Key(pd)));}))perfect++;}
+    var ws=h2StartWeek(view);
+    var habits=state.habits.map(function(h,i){
+      var log=h2Log(state,h.id,key),done=h2IsComplete(h,log),isDue=h2IsDue(h,view,state),s2=stats[i];
+      var week='';for(var w=0;w<7;w++){var d=new Date(ws);d.setDate(d.getDate()+w);week+=st(h,d);}
+      var month='',md=0,mdone=0,mp=0,msk=0;for(var m=29;m>=0;m--){var d2=new Date(view);d2.setDate(d2.getDate()-m);var c=st(h,d2);month+=c;if(c!=='n'){md++;if(c==='d')mdone++;else if(c==='p')mp++;else if(c==='s')msk++;}}
+      var kind=h.autoSource==='steps'||h.autoSource==='hydration'||h.autoSource==='sleep-routine'||h.autoSource==='udemy'?'auto':h.type==='check'?'check':'count';
+      var val=h.autoSource==='sleep-routine'?Number(log.value||0)+' / 6 routine steps':h.autoSource==='udemy'?Number(log.value||0)+' / 20 min from My Schedule':h.autoSource==='steps'?Number(log.value||0).toLocaleString()+' / '+Number(h.target||10000).toLocaleString()+' steps':
+        h.autoSource==='hydration'?Number(log.value||0)+' / '+Number(h.target||75)+' oz water':kind==='count'?Number(log.value||0)+' / '+Number(h.target||1)+(h.type==='duration'?' min':''):'';
+      return {id:h.id,name:h.name||'',category:h.category||'Other',meta:(h.category||'Other')+' • '+h2ScheduleLabel(h)+' • '+h2TypeLabel(h)+(h.autoSource?' • Journal-linked':'')+(isDue?'':' • Not scheduled'),
+        why:h.why||'',status:done?'d':log.status==='partial'?'p':log.status==='skip'?'s':'o',kind:kind,value:val,due:isDue,streak:s2.streak,rate:s2.rate,best:s2.best,week:week,month:month,
+        monthText:mdone+' of '+md+' scheduled days complete • '+(md?Math.round(mdone/md*100):0)+'%'+(mp?' • '+mp+' in progress':'')+(msk?' • '+msk+' skipped':'')};
+    });
+    var heat='',hs=new Date();hs.setDate(hs.getDate()-83);
+    for(var q=0;q<84;q++){var hd=new Date(hs);hd.setDate(hd.getDate()+q);var hdue=state.habits.filter(function(h){return h2IsDue(h,hd,state);}),hdone=hdue.filter(function(h){return h2IsComplete(h,h2Log(state,h.id,h2Key(hd)));}).length,r=hdue.length?hdone/hdue.length:0;heat+=r===0?'0':r<.5?'1':r<1?'2':'3';}
+    return {off:off,label:off===0?'Today':view.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}),due:due.length,done:comp.length,momentum:mom,best:best,perfect:perfect,
+      weekStart:h2Key(ws),habits:habits,heat:heat,heatStart:h2Key(hs)};
+  }
   window.ccNative={
-    version:14,
+    version:15,
+    habitsPage:function(off){return JSON.stringify(habitsPage(off));},
+    /** On the Habits page's day: log / adjust / move / delete. */
+    habitLogOn:function(off,id,status){try{var d=new Date();d.setDate(d.getDate()+(Number(off)||0));h2ViewDate=d;h2SetLog(id,status);}catch(e){return false;}return true;},
+    habitAdjustOn:function(off,id,delta){try{var d=new Date();d.setDate(d.getDate()+(Number(off)||0));h2ViewDate=d;h2Adjust(id,Number(delta)||0);}catch(e){return false;}return true;},
+    habitMove:function(id,dir){try{var s=h2State(),i=s.habits.findIndex(function(h){return h.id===id;}),j=i+Number(dir);if(i<0||j<0||j>=s.habits.length)return false;
+      var t=s.habits[i];s.habits[i]=s.habits[j];s.habits[j]=t;h2SaveState(s);try{h2Render();}catch(e){}}catch(e){return false;}return true;},
+    habitDelete:function(id){try{var s=h2State(),rm=s.habits.find(function(h){return h.id===id;});if(rm&&rm.autoSource&&s.dismissedAuto.indexOf(rm.autoSource)===-1)s.dismissedAuto.push(rm.autoSource);s.habits=s.habits.filter(function(h){return h.id!==id;});Object.keys(s.logs).forEach(function(k){if(s.logs[k])delete s.logs[k][id];});
+      h2SaveState(s);try{h2Render();}catch(e){}}catch(e){return false;}return true;},
+    /** Open the Command Center's own add / edit form for a habit (id empty = new). */
+    habitForm:function(id){try{var b=document.getElementById('hm-habits2');if(b)b.click();if(id)h2Edit(id);else h2ToggleForm(true);window.scrollTo(0,0);var fc=document.getElementById('h2FormCard');if(fc)fc.scrollIntoView();}catch(e){return false;}return true;},
     search:function(q){return JSON.stringify(search(q));},
     /** ✨ Saved AI answers. */
     archive:function(){try{return JSON.stringify(JSON.parse(localStorage.getItem('ai_archive')||'[]'));}catch(e){return '[]';}},

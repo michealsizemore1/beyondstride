@@ -61,7 +61,7 @@ class LifeActivity : Activity() {
     private var yearCard: PeriodCard? = null
     private var weekTab: WeekTabCard? = null
     private var libCard: LibraryCard? = null
-    private var habitsCard: HabitsCard? = null
+    private var habitsCard: LifeHabits? = null
     private var bibleChecks: ChecksCard? = null
     private var meditCard: MeditCard? = null
     private lateinit var sectionCol: LinearLayout
@@ -281,7 +281,7 @@ class LifeActivity : Activity() {
         bibleChecks = ChecksCard("✅ Bible checks") { g -> g.contains("Bible") }
         meditCard = MeditCard()
         libCard = LibraryCard()
-        habitsCard = HabitsCard()
+        habitsCard = LifeHabits(this, web, { showPage(2) }, { })
         reviewCard = ReviewCard().also { nativeCol.addView(it.view) }
         journalCard = JournalCard().also { nativeCol.addView(it.view) }
         reviewsCol.removeAllViews()
