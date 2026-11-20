@@ -584,14 +584,48 @@ class LifeActivity : Activity() {
     }
 
     /** A Command Center summary table (first column and TOTAL row highlighted), scrolling sideways when wide. */
-    private fun ccTable(head: org.json.JSONArray?, rows: org.json.JSONArray?): View {
+    /** A Command Center summary table, with its colors (status lines in green / amber / red, red "High" pills, colored header dots). */
+    private fun ccTable(head: org.json.JSONArray?, rows: org.json.JSONArray?, cells: org.json.JSONArray? = null, headColors: org.json.JSONArray? = null): View {
         val d = { v: Int -> RunUi.dp(this, v) }
         val t = android.widget.TableLayout(this)
-        fun row(cells: org.json.JSONArray, header: Boolean, total: Boolean) = android.widget.TableRow(this).apply {
-            for (k in 0 until cells.length()) addView(RunUi.text(this@LifeActivity, cells.optString(k), if (header) RunUi.MUTED else if (k == 0 || total) RunUi.ACCENT else Color.WHITE, 12f, header || total || k == 0).apply { setPadding(d(6), d(4), d(10), d(4)) })
+        fun css(c: String): Int? {
+            if (c.isBlank()) return null
+            val m = Regex("rgba?\\((\\d+),\\s*(\\d+),\\s*(\\d+)").find(c)
+            val v = if (m != null) Color.rgb(m.groupValues[1].toInt(), m.groupValues[2].toInt(), m.groupValues[3].toInt()) else try { Color.parseColor(c) } catch (e: Exception) { return null }
+            return v
         }
-        head?.let { t.addView(row(it, true, false)) }
-        if (rows != null) for (i in 0 until rows.length()) { val r = rows.getJSONArray(i); t.addView(row(r, false, r.optString(0).startsWith("TOTAL"))) }
+        // The Command Center's colors are made for a white page; lift dark ones a little so they read on dark cards.
+        fun lift(c: Int): Int { val r = Color.red(c); val g = Color.green(c); val b = Color.blue(c); if (maxOf(r, g, b) > 200) return c
+            return Color.rgb(r + (255 - r) * 30 / 100, g + (255 - g) * 30 / 100, b + (255 - b) * 30 / 100) }
+        head?.let { h -> t.addView(android.widget.TableRow(this).apply {
+            for (k in 0 until h.length()) addView(LinearLayout(this@LifeActivity).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL; setPadding(d(6), d(4), d(10), d(4))
+                css(headColors?.optString(k) ?: "")?.let { c -> addView(View(this@LifeActivity).apply { background = RunUi.rounded(c, d(4).toFloat()) }, LinearLayout.LayoutParams(d(8), d(8)).apply { marginEnd = d(5) }) }
+                addView(RunUi.text(this@LifeActivity, h.optString(k), RunUi.MUTED, 12f, true)) }) }) }
+        if (rows != null) for (i in 0 until rows.length()) {
+            val r = rows.getJSONArray(i); val total = r.optString(0).let { it.startsWith("TOTAL") || it.startsWith("DAILY AVG") || it.startsWith("AVG") }
+            val rc = cells?.optJSONArray(i)
+            t.addView(android.widget.TableRow(this).apply {
+                for (k in 0 until r.length()) {
+                    val base = if (k == 0 || total && rc == null) RunUi.ACCENT else Color.WHITE
+                    val lines = rc?.optJSONArray(k)
+                    if (lines == null || lines.length() == 0) { addView(RunUi.text(this@LifeActivity, r.optString(k), base, 12f, total || k == 0).apply { setPadding(d(6), d(4), d(10), d(4)) }); continue }
+                    addView(LinearLayout(this@LifeActivity).apply { orientation = LinearLayout.VERTICAL; setPadding(d(6), d(4), d(10), d(4))
+                        for (li in 0 until lines.length()) { val segs = lines.getJSONArray(li)
+                            val pill = (0 until segs.length()).map { segs.getJSONObject(it) }.firstOrNull { it.optString("bg").isNotBlank() }
+                            val sb = android.text.SpannableStringBuilder()
+                            for (si in 0 until segs.length()) { val o = segs.getJSONObject(si); val st = sb.length; sb.append(o.optString("t"))
+                                val col = if (pill != null) Color.WHITE else css(o.optString("c"))?.let { lift(it) } ?: base
+                                sb.setSpan(android.text.style.ForegroundColorSpan(col), st, sb.length, 0)
+                                if (o.optBoolean("b") || k == 0 || total) sb.setSpan(android.text.style.StyleSpan(android.graphics.Typeface.BOLD), st, sb.length, 0)
+                                if (o.optBoolean("s")) sb.setSpan(android.text.style.RelativeSizeSpan(0.82f), st, sb.length, 0) }
+                            val tv = RunUi.text(this@LifeActivity, "", base, 12f).apply { text = sb; isSingleLine = true }
+                            if (pill != null) { tv.background = RunUi.rounded(css(pill.optString("bg")) ?: 0xFFEF4444.toInt(), d(10).toFloat()); tv.setPadding(d(8), d(1), d(8), d(1))
+                                addView(tv, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = d(2) }) }
+                            else addView(tv)
+                        } })
+                }
+            })
+        }
         return android.widget.HorizontalScrollView(this).apply { addView(t) }
     }
 
@@ -636,7 +670,7 @@ class LifeActivity : Activity() {
             val secs = j.optJSONArray("sections") ?: return
             for (i in 0 until secs.length()) { val sec = secs.getJSONObject(i)
                 body.addView(RunUi.text(this@LifeActivity, sec.optString("title"), RunUi.ACCENT, 13f, true).apply { setPadding(0, d(12), 0, d(4)) })
-                body.addView(ccTable(sec.optJSONArray("head"), sec.optJSONArray("rows")))
+                body.addView(ccTable(sec.optJSONArray("head"), sec.optJSONArray("rows"), sec.optJSONArray("cells"), sec.optJSONArray("headColors")))
             }
         }
         private fun goals() {
@@ -681,7 +715,7 @@ class LifeActivity : Activity() {
             val secs = j.optJSONArray("sections") ?: return
             for (i in 0 until secs.length()) { val sec = secs.getJSONObject(i)
                 body.addView(RunUi.text(this@LifeActivity, sec.optString("title"), RunUi.ACCENT, 13f, true).apply { setPadding(0, d(12), 0, d(4)) })
-                body.addView(table(sec.optJSONArray("head"), sec.optJSONArray("rows")))
+                body.addView(ccTable(sec.optJSONArray("head"), sec.optJSONArray("rows"), sec.optJSONArray("cells"), sec.optJSONArray("headColors")))
             }
         }
         private fun heat(h: String) {

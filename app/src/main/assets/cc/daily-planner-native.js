@@ -90,8 +90,26 @@
   function tableData(id){
     var el=document.getElementById(id),t=el&&el.querySelector('table');if(!t)return null;
     var head=[].map.call(t.querySelectorAll('thead th'),function(th){return th.textContent.trim();});
-    var rows=[].map.call(t.querySelectorAll('tbody tr, tfoot tr'),function(tr){return [].map.call(tr.children,function(td){return td.textContent.trim();});});
-    return {head:head,rows:rows};
+    var trs=t.querySelectorAll('tbody tr, tfoot tr');
+    var rows=[].map.call(trs,function(tr){return [].map.call(tr.children,function(td){return td.textContent.trim();});});
+    // The same cells with their colors: each cell is lines of {t, c (text color), bg (pill), b (bold), s (small)}.
+    function rich(td){
+      var lines=[[]];
+      function walk(n,st){
+        if(n.nodeType===3){var x=n.textContent.replace(/\s+/g,' ');var L=lines[lines.length-1];if(x.trim())L.push({t:x,c:st.c||'',bg:st.bg||'',b:!!st.b,s:!!st.s});else if(L.length&&!/ $/.test(L[L.length-1].t))L[L.length-1].t+=' ';return;}
+        if(n.nodeType!==1)return;var cs=n.style||{},fw=cs.fontWeight,fs=cs.fontSize;
+        var ns={c:cs.color||st.c,bg:(n!==td&&cs.backgroundColor)||st.bg,b:st.b||fw==='bold'||Number(fw)>=600,s:st.s||(fs&&/em$/.test(fs)&&parseFloat(fs)<1)};
+        var block=n!==td&&/^(DIV|P|BR)$/.test(n.tagName);
+        if(block&&lines[lines.length-1].length)lines.push([]);
+        [].forEach.call(n.childNodes,function(ch){walk(ch,ns);});
+        if(block&&lines[lines.length-1].length)lines.push([]);
+      }
+      walk(td,{});
+      return lines.filter(function(l){return l.length;}).map(function(l){if(l.length){l[0].t=l[0].t.replace(/^\s+/,'');l[l.length-1].t=l[l.length-1].t.replace(/\s+$/,'');}return l;});
+    }
+    var cells=[].map.call(trs,function(tr){return [].map.call(tr.children,rich);});
+    var headColors=[].map.call(t.querySelectorAll('thead th'),function(th){var dot=th.querySelector('span');return dot&&dot.style.backgroundColor||'';});
+    return {head:head,rows:rows,cells:cells,headColors:headColors};
   }
   function period(kind,off){
     off=Number(off)||0;var out={kind:kind,off:off,sections:[]};
@@ -99,14 +117,14 @@
       var keep=monthOff2;monthOff2=off;
       try{renderMonthly();}catch(e){}
       out.label=(document.getElementById('monthLabel')||{}).textContent||'';
-      [['mFitness','🏃 Fitness'],['mWellness','💚 Wellness'],['mSpirituality','📖 Spirituality & Reading']].forEach(function(x){var d=tableData(x[0]);if(d)out.sections.push({title:x[1],head:d.head,rows:d.rows});});
+      [['mFitness','🏃 Fitness'],['mWellness','💚 Wellness'],['mSpirituality','📖 Spirituality & Reading']].forEach(function(x){var d=tableData(x[0]);if(d)out.sections.push({title:x[1],head:d.head,rows:d.rows,cells:d.cells,headColors:d.headColors});});
       out.heat=[].map.call(document.querySelectorAll('#hmGrid > .heatmap-cell'),function(c){var cn=c.className||'',m=cn.match(/\bhm(\d)\b/);return /hm-empty/.test(cn)?'e':/hm-future/.test(cn)?'f':(m?m[1]:'0');}).join('');
       monthOff2=keep;try{if(activeTabName()==='monthly')renderMonthly();}catch(e){}
     }else{
       var keepY=yearOff2;yearOff2=off;
       try{renderYearly();}catch(e){}
       out.label=(document.getElementById('yearLabel')||{}).textContent||'';
-      [['yFitness','🏃 Fitness'],['yWellness','💚 Wellness'],['ySpirituality','📖 Spirituality & Reading']].forEach(function(x){var d=tableData(x[0]);if(d)out.sections.push({title:x[1],head:d.head,rows:d.rows});});
+      [['yFitness','🏃 Fitness'],['yWellness','💚 Wellness'],['ySpirituality','📖 Spirituality & Reading']].forEach(function(x){var d=tableData(x[0]);if(d)out.sections.push({title:x[1],head:d.head,rows:d.rows,cells:d.cells,headColors:d.headColors});});
       yearOff2=keepY;try{if(activeTabName()==='yearly')renderYearly();}catch(e){}
     }
     return out;
@@ -136,7 +154,7 @@
       out.goals.push({label:sp[0]?sp[0].textContent.trim():'',value:sp[1]?sp[1].textContent.trim().replace(/\s*\d+%$/,''):'',pct:fill?parseInt(fill.style.width,10)||0:0,reached:r.classList.contains('goal-reached')});
     });
     var dg=document.getElementById('wDigest');out.digest=dg?String(dg.innerText||'').replace(/\n{2,}/g,'\n').trim().slice(0,1200):'';
-    [['wFitness','🏃 Fitness'],['wWellness','💚 Wellness'],['wSpirituality','📖 Spirituality & Reading'],['wNutrition','🍎 Nutrition'],['wNutritionMicro','🧪 Micronutrients']].forEach(function(x){var d=tableData(x[0]);if(d&&d.rows.length)out.sections.push({title:x[1],head:d.head,rows:d.rows});});
+    [['wFitness','🏃 Fitness'],['wWellness','💚 Wellness'],['wSpirituality','📖 Spirituality & Reading'],['wNutrition','🍎 Nutrition'],['wNutritionMicro','🧪 Micronutrients']].forEach(function(x){var d=tableData(x[0]);if(d&&d.rows.length)out.sections.push({title:x[1],head:d.head,rows:d.rows,cells:d.cells,headColors:d.headColors});});
     try{out.targets=JSON.parse(localStorage.getItem('weekly_goals')||'{}');}catch(e){out.targets={};}
     weekOff2=keep;try{if(activeTabName()==='weekly'){renderWeekly();renderGoals();}}catch(e){}
     return out;
