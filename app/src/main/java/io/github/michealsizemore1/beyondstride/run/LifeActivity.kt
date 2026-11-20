@@ -58,6 +58,7 @@ class LifeActivity : Activity() {
     private var calendar: LifeCalendar? = null
     private lateinit var bar: LinearLayout
     private var yearCard: PeriodCard? = null
+    private var weekTab: WeekTabCard? = null
     private var full = false
     private var focusCard: FocusCard? = null
     private var checksCard: ChecksCard? = null
@@ -161,7 +162,7 @@ class LifeActivity : Activity() {
         fun style(t: TextView, on: Boolean) { t.background = RunUi.rounded(if (on) RunUi.ACCENT else RunUi.CARD, RunUi.dp(this, 20).toFloat()); t.setTextColor(if (on) Color.BLACK else Color.WHITE) }
         style(tabToday, p == 0); style(tabReviews, p == 1); style(tabFull, p == 2)
         if (p == 0 || p == 1) reload.run()
-        if (p == 1) { monthCard?.load(); yearCard?.load() }
+        if (p == 1) { weekTab?.load(); monthCard?.load(); yearCard?.load() }
     }
 
     // ── Native sections ──
@@ -177,6 +178,7 @@ class LifeActivity : Activity() {
         reviewCard = ReviewCard().also { nativeCol.addView(it.view) }
         journalCard = JournalCard().also { nativeCol.addView(it.view) }
         reviewsCol.removeAllViews()
+        weekTab = WeekTabCard().also { reviewsCol.addView(it.view) }
         weekCard = WeeklyCard().also { reviewsCol.addView(it.view) }
         monthCard = PeriodCard("monthly").also { reviewsCol.addView(it.view) }
         yearCard = PeriodCard("yearly").also { reviewsCol.addView(it.view) }
@@ -428,6 +430,78 @@ class LifeActivity : Activity() {
             if (!j.has("journal")) { view.visibility = View.GONE; return }
             view.visibility = View.VISIBLE
             val t = j.optString("journal"); if (!et.hasFocus() && et.text.toString() != t) et.setText(t)
+        }
+    }
+
+    /** A Command Center summary table (first column and TOTAL row highlighted), scrolling sideways when wide. */
+    private fun ccTable(head: org.json.JSONArray?, rows: org.json.JSONArray?): View {
+        val d = { v: Int -> RunUi.dp(this, v) }
+        val t = android.widget.TableLayout(this)
+        fun row(cells: org.json.JSONArray, header: Boolean, total: Boolean) = android.widget.TableRow(this).apply {
+            for (k in 0 until cells.length()) addView(RunUi.text(this@LifeActivity, cells.optString(k), if (header) RunUi.MUTED else if (k == 0 || total) RunUi.ACCENT else Color.WHITE, 12f, header || total || k == 0).apply { setPadding(d(6), d(4), d(10), d(4)) })
+        }
+        head?.let { t.addView(row(it, true, false)) }
+        if (rows != null) for (i in 0 until rows.length()) { val r = rows.getJSONArray(i); t.addView(row(r, false, r.optString(0).startsWith("TOTAL"))) }
+        return android.widget.HorizontalScrollView(this).apply { addView(t) }
+    }
+
+    /** 📊 Weekly — goal progress bars (set your targets here), the week's numbers and its Fitness / Wellness / Spirituality / Nutrition tables. */
+    private inner class WeekTabCard {
+        val view = RunUi.card(this@LifeActivity)
+        private var off = 0
+        private var targets = JSONObject()
+        private val label = RunUi.text(this@LifeActivity, "", Color.WHITE, 14f, true).apply { gravity = android.view.Gravity.CENTER }
+        private val body = LinearLayout(this@LifeActivity).apply { orientation = LinearLayout.VERTICAL }
+        private fun d(v: Int) = RunUi.dp(this@LifeActivity, v)
+        private fun arrow(t: String, n: Int) = RunUi.text(this@LifeActivity, t, RunUi.ACCENT, 22f, true).apply { setPadding(d(14), 0, d(14), 0); setOnClickListener { off += n; load() } }
+        init {
+            view.addView(LinearLayout(this@LifeActivity).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL
+                addView(RunUi.text(this@LifeActivity, "📊 This Week", Color.WHITE, 16f, true), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+                addView(RunUi.text(this@LifeActivity, "⚙️ Goals", 0xFFA78BFA.toInt(), 13f, true).apply { setPadding(d(8), d(4), 0, d(4)); setOnClickListener { goals() } }) })
+            view.addView(LinearLayout(this@LifeActivity).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL; setPadding(0, d(4), 0, 0)
+                addView(arrow("‹", -1)); addView(label, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)); addView(arrow("›", 1)) })
+            view.addView(body)
+        }
+        fun load() {
+            web.evaluateJavascript("window.ccNative&&ccNative.weekTab?ccNative.weekTab($off):null") { r ->
+                val j = try { (JSONTokener(r).nextValue() as? String)?.let { JSONObject(it) } } catch (e: Exception) { null } ?: run { view.visibility = View.GONE; return@evaluateJavascript }
+                view.visibility = View.VISIBLE; fill(j)
+            }
+        }
+        private fun fill(j: JSONObject) {
+            label.text = j.optString("label"); targets = j.optJSONObject("targets") ?: JSONObject(); body.removeAllViews()
+            val g = j.optJSONArray("goals")
+            if (g == null || g.length() == 0) body.addView(RunUi.text(this@LifeActivity, "Tap ⚙️ Goals to set weekly targets (miles, Bible days, prayer days, run days, audiobook minutes).", RunUi.MUTED, 12f).apply { setPadding(0, d(6), 0, 0) })
+            else for (i in 0 until g.length()) { val o = g.getJSONObject(i); val pct = o.optInt("pct")
+                body.addView(LinearLayout(this@LifeActivity).apply { orientation = LinearLayout.HORIZONTAL; setPadding(0, d(8), 0, d(3))
+                    addView(RunUi.text(this@LifeActivity, o.optString("label"), Color.WHITE, 13f, true), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+                    addView(RunUi.text(this@LifeActivity, o.optString("value") + (if (o.optBoolean("reached")) "  ✓" else ""), if (o.optBoolean("reached")) 0xFF22C55E.toInt() else RunUi.MUTED, 12f, true)) })
+                val bar = FrameLayout(this@LifeActivity).apply { background = RunUi.rounded(0xFF2A3430.toInt(), d(4).toFloat()) }
+                val fillV = View(this@LifeActivity).apply { background = RunUi.rounded(if (o.optBoolean("reached")) 0xFF22C55E.toInt() else 0xFF818CF8.toInt(), d(4).toFloat()) }
+                bar.addView(fillV, FrameLayout.LayoutParams(0, d(8)))
+                body.addView(bar, LinearLayout.LayoutParams(MATCH_PARENT, d(8)))
+                bar.post { fillV.layoutParams = FrameLayout.LayoutParams(bar.width * pct / 100, d(8)); fillV.requestLayout() }
+            }
+            j.optString("digest").takeIf { it.isNotBlank() }?.let { body.addView(RunUi.text(this@LifeActivity, it, RunUi.MUTED, 12f).apply { setPadding(0, d(10), 0, 0) }) }
+            val secs = j.optJSONArray("sections") ?: return
+            for (i in 0 until secs.length()) { val sec = secs.getJSONObject(i)
+                body.addView(RunUi.text(this@LifeActivity, sec.optString("title"), RunUi.ACCENT, 13f, true).apply { setPadding(0, d(12), 0, d(4)) })
+                body.addView(ccTable(sec.optJSONArray("head"), sec.optJSONArray("rows")))
+            }
+        }
+        private fun goals() {
+            val box = LinearLayout(this@LifeActivity).apply { orientation = LinearLayout.VERTICAL; setPadding(d(20), d(8), d(20), 0) }
+            val fields = listOf("Miles" to "Miles / week", "Bible" to "Bible days (of 7)", "Prayer" to "Prayer days (of 7)", "Exercise" to "Run days (your plan's count is used when there is one)", "Audible" to "Audiobook minutes / week")
+            val edits = fields.map { (k, l) ->
+                box.addView(RunUi.text(this@LifeActivity, l, Color.GRAY, 12f).apply { setPadding(0, d(8), 0, 0) })
+                EditText(this@LifeActivity).apply { inputType = android.text.InputType.TYPE_CLASS_NUMBER or android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL
+                    targets.optDouble(k).takeIf { !it.isNaN() && it > 0 }?.let { setText(if (it % 1.0 == 0.0) it.toInt().toString() else it.toString()) }; hint = "none" }.also { box.addView(it) } to k
+            }
+            android.app.AlertDialog.Builder(this@LifeActivity).setTitle("Weekly goals").setView(android.widget.ScrollView(this@LifeActivity).apply { addView(box) })
+                .setPositiveButton("Save") { _, _ ->
+                    val o = JSONObject(); edits.forEach { (et, k) -> o.put(k, et.text.toString().toDoubleOrNull() ?: 0.0) }
+                    web.evaluateJavascript("window.ccNative&&ccNative.setGoals(${JSONObject.quote(o.toString())})") { load() }
+                }.setNegativeButton("Cancel", null).show()
         }
     }
 
