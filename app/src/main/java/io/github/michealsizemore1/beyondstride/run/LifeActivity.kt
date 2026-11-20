@@ -51,6 +51,7 @@ class LifeActivity : Activity() {
     private lateinit var tabFull: TextView
     private var full = false
     private var focusCard: FocusCard? = null
+    private var checksCard: ChecksCard? = null
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -141,18 +142,74 @@ class LifeActivity : Activity() {
         nativeCol.removeAllViews()
         nativeCol.addView(RunUi.text(this, "Your Command Center, as BeyondStride screens. Changes save to the Command Center right away and sync with Chrome and your computer.", RunUi.MUTED, 12f).apply { setPadding(0, RunUi.dp(this@LifeActivity, 6), 0, 0) })
         focusCard = FocusCard().also { nativeCol.addView(it.view) }
+        checksCard = ChecksCard().also { nativeCol.addView(it.view) }
         nativeCol.addView(RunUi.text(this, "Everything else is in 📓 Full Command Center (tap above). More sections will move here one at a time.", RunUi.DIM, 11f).apply { setPadding(0, RunUi.dp(this@LifeActivity, 12), 0, 0) })
     }
 
     private var tries = 0
     private val reload: Runnable = Runnable {
-        web.evaluateJavascript("(window.ccNative&&typeof load==='function')?ccNative.focus():null") { r ->
+        web.evaluateJavascript("(window.ccNative&&typeof load==='function')?(ccNative.all?ccNative.all():ccNative.focus()):null") { r ->
             val json = try { (JSONTokener(r).nextValue() as? String)?.let { JSONObject(it) } } catch (e: Exception) { null }
             if (json == null) { focusCard?.loading(); if (tries++ < 60) ui.postDelayed(reload, 700) ; return@evaluateJavascript }
-            tries = 0; focusCard?.fill(json)
+            tries = 0; focusCard?.fill(json); checksCard?.fill(json)
         }
     }
     private fun js(call: String) = web.evaluateJavascript("window.ccNative&&$call", null)
+
+    /** A Command Center check box: empty, green ✓, black N/A, purple partly, red not done. */
+    private fun paintBox(b: TextView, st: String) {
+        val d = RunUi.dp(this, 1)
+        val c = when (st) { "green" -> 0xFF22C55E; "purple" -> 0xFFA855F7; "red" -> 0xFFEF4444; "black" -> 0xFF0B0F0D; else -> 0 }.toInt()
+        b.background = android.graphics.drawable.GradientDrawable().apply { cornerRadius = 8f * d; setColor(c); setStroke(2 * d, if (st.isEmpty()) RunUi.MUTED else if (st == "black") 0xFF6B7280.toInt() else c) }
+        b.text = if (st.isEmpty()) "" else "✓"; b.setTextColor(Color.WHITE)
+    }
+    private val CYCLE = listOf("", "green", "black", "purple", "red")
+
+    /** ✅ Daily Checks — Bible, Meditation, Listening, Wellness, Planning & Review: the Command Center's checkmarks. */
+    private inner class ChecksCard {
+        val view = RunUi.card(this@LifeActivity)
+        private val summary = RunUi.text(this@LifeActivity, "", RunUi.MUTED, 12f)
+        private val body = LinearLayout(this@LifeActivity).apply { orientation = LinearLayout.VERTICAL }
+        private var sig = ""
+        private fun d(v: Int) = RunUi.dp(this@LifeActivity, v)
+        init {
+            view.addView(RunUi.text(this@LifeActivity, "✅ Daily Checks", Color.WHITE, 16f, true))
+            view.addView(summary); view.addView(body)
+            view.addView(RunUi.text(this@LifeActivity, "Automatic checks (BP, weight, sleep, steps, dog walk, audiobook…) still fill in on their own. Meds stays manual.", RunUi.DIM, 10f).apply { setPadding(0, d(8), 0, 0) })
+        }
+        private fun icon(g: String) = when { g.contains("Bible") -> "📖"; g.contains("Meditation") -> "🧘"; g.contains("Listening") -> ""; g.contains("Wellness") -> "💚"; g.contains("Planning") -> "📝"; else -> "•" }
+        private fun nice(l: String) = l.replaceFirstChar { it.uppercase() }.replace(Regex("^Goal\\s+"), "")
+        fun fill(j: JSONObject) {
+            val arr = j.optJSONArray("checks") ?: return
+            val items = (0 until arr.length()).map { arr.getJSONObject(it) }
+            val n = { st: String -> items.count { it.optString("state") == st } }
+            summary.text = "${n("green")} done · ${n("purple")} partly · ${n("red")} not done · ${n("black")} N/A · ${n("")} not marked"
+            val newSig = items.joinToString("|") { it.optString("key") + it.optString("id") + ":" + it.optString("state") + ":" + it.optString("label") }
+            if (newSig == sig) return; sig = newSig
+            body.removeAllViews()
+            items.groupBy { it.optString("group") }.forEach { (g, list) ->
+                val done = list.count { it.optString("state") == "green" }
+                body.addView(LinearLayout(this@LifeActivity).apply { orientation = LinearLayout.HORIZONTAL; setPadding(0, d(10), 0, d(2))
+                    addView(RunUi.text(this@LifeActivity, (icon(g) + " " + g).trim(), RunUi.ACCENT, 13f, true), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+                    addView(RunUi.text(this@LifeActivity, "$done/${list.size}", RunUi.MUTED, 12f, true)) })
+                list.forEach { o ->
+                    val key = o.optString("key"); val id = o.optString("id"); var st = o.optString("state")
+                    val box = TextView(this@LifeActivity).apply { gravity = android.view.Gravity.CENTER; textSize = 14f; setTypeface(typeface, android.graphics.Typeface.BOLD) }
+                    paintBox(box, st)
+                    val row = LinearLayout(this@LifeActivity).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL; setPadding(0, d(4), 0, d(4))
+                        addView(box, LinearLayout.LayoutParams(d(28), d(28)))
+                        addView(RunUi.text(this@LifeActivity, nice(o.optString("label")), Color.WHITE, 14f).apply { setPadding(d(10), 0, 0, 0) }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)) }
+                    row.setOnClickListener {
+                        st = if (id.isNotEmpty()) (if (st == "green") "" else "green") else CYCLE[(CYCLE.indexOf(st) + 1) % CYCLE.size]
+                        paintBox(box, st)
+                        if (id.isNotEmpty()) js("ccNative.setBox(${JSONObject.quote(id)},${st == "green"})")
+                        else js("ccNative.setCheck(${JSONObject.quote(key)},${JSONObject.quote(st)})")
+                    }
+                    body.addView(row)
+                }
+            }
+        }
+    }
 
     /** 🎯 Today's Focus — Priority Tasks + Goals, the same six lines and checks as the Command Center. */
     private inner class FocusCard {
