@@ -61,6 +61,7 @@ class LifeActivity : Activity() {
     private var weekTab: WeekTabCard? = null
     private var libCard: LibraryCard? = null
     private var habitsCard: HabitsCard? = null
+    private var dashCard: LifeDashboard? = null
     private var full = false
     private var focusCard: FocusCard? = null
     private var checksCard: ChecksCard? = null
@@ -164,7 +165,7 @@ class LifeActivity : Activity() {
         fun style(t: TextView, on: Boolean) { t.background = RunUi.rounded(if (on) RunUi.ACCENT else RunUi.CARD, RunUi.dp(this, 20).toFloat()); t.setTextColor(if (on) Color.BLACK else Color.WHITE) }
         style(tabToday, p == 0); style(tabReviews, p == 1); style(tabFull, p == 2)
         if (p == 0 || p == 1) reload.run()
-        if (p == 1) { weekTab?.load(); monthCard?.load(); yearCard?.load() }
+        if (p == 1) { weekTab?.load(); monthCard?.load(); yearCard?.load(); dashCard?.load() }
     }
 
     // ── Native sections ──
@@ -186,7 +187,8 @@ class LifeActivity : Activity() {
         weekCard = WeeklyCard().also { reviewsCol.addView(it.view) }
         monthCard = PeriodCard("monthly").also { reviewsCol.addView(it.view) }
         yearCard = PeriodCard("yearly").also { reviewsCol.addView(it.view) }
-        reviewsCol.addView(RunUi.text(this, "Charts, the dashboard and the injury roll-up are in 📓 Full.", RunUi.DIM, 11f).apply { setPadding(0, RunUi.dp(this@LifeActivity, 12), 0, 0) })
+        dashCard = LifeDashboard(this, web).also { reviewsCol.addView(it.view) }
+        reviewsCol.addView(RunUi.text(this, "The BP report, habit streak chart and the injury roll-up are in 📓 Full.", RunUi.DIM, 11f).apply { setPadding(0, RunUi.dp(this@LifeActivity, 12), 0, 0) })
         nativeCol.addView(RunUi.text(this, "Weekly, monthly and yearly reviews are in 📊 Reviews. Everything else is in 📓 Full. More sections will move here one at a time.", RunUi.DIM, 11f).apply { setPadding(0, RunUi.dp(this@LifeActivity, 12), 0, 0) })
     }
 
