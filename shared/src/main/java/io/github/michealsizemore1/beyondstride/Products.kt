@@ -147,8 +147,9 @@ object Products {
 
     val SUPPLEMENTS = listOf(
         Product("Nature Made", "Supplement", "Multi For Him 50+ (USP Verified)", "1 tablet", 0.0, 0.0, 0.0, 0.0, mapOf("vitC" to 180.0, "vitD" to 25.0, "calcium" to 160.0, "magnesium" to 100.0, "vitB12" to 25.0, "zinc" to 15.0)),
-        Product("Nature Made", "Supplement", "Magnesium Oxide 250mg", "1 tablet", 0.0, 0.0, 0.0, 0.0, mapOf("magnesium" to 250.0)),
+        Product("Nature Made", "Supplement", "Advanced Multi 50+ Gummies", "3 gummies", 40.0, 0.0, 0.0, 9.0, mapOf("vitC" to 90.0, "vitD" to 25.0, "calcium" to 130.0, "magnesium" to 84.0, "vitB12" to 25.0, "zinc" to 5.5)),Product("Nature Made", "Supplement", "Magnesium Oxide 250mg", "1 tablet", 0.0, 0.0, 0.0, 0.0, mapOf("magnesium" to 250.0)),
         Product("Nature Made", "Supplement", "Iron 65mg (Ferrous Sulfate)", "1 tablet", 0.0, 0.0, 0.0, 0.0, mapOf("iron" to 65.0)),
+                Product("Nature Made", "Supplement", "Advanced Multi 50+ Gummies", "3 gummies", 40.0, 0.0, 0.0, 9.0, mapOf("vitC" to 90.0, "vitD" to 25.0, "calcium" to 130.0, "magnesium" to 84.0, "vitB12" to 25.0, "zinc" to 5.5)),
         Product("Pure Encapsulations", "Supplement", "Potassium Magnesium (citrate)", "1 capsule", 0.0, 0.0, 0.0, 0.0, mapOf("potassium" to 140.0, "magnesium" to 70.0))
     )
 
