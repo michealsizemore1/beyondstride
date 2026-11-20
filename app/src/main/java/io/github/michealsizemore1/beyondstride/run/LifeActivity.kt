@@ -62,6 +62,9 @@ class LifeActivity : Activity() {
     private var libCard: LibraryCard? = null
     private var habitsCard: HabitsCard? = null
     private var dashCard: LifeDashboard? = null
+    private lateinit var more: LifeMore
+    private lateinit var moreScroll: ScrollView
+    private lateinit var tabMore: TextView
     private var full = false
     private var focusCard: FocusCard? = null
     private var checksCard: ChecksCard? = null
@@ -100,6 +103,8 @@ class LifeActivity : Activity() {
         // The Command Center tells us when it saves (auto-checks, edits in the full view) so the native screens update.
         web.addJavascriptInterface(object {
             @JavascriptInterface fun changed() { ui.removeCallbacks(reload); ui.postDelayed(reload, 400) }
+            @JavascriptInterface fun files(json: String) { if (::more.isInitialized) more.onFiles(json) }
+            @JavascriptInterface fun file(name: String, type: String, b64: String) { if (::more.isInitialized) more.onFile(name, type, b64) }
         }, "BSNative")
         if (savedInstanceState != null) web.restoreState(savedInstanceState)
         else {
@@ -117,20 +122,24 @@ class LifeActivity : Activity() {
             addView(web, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
             addView(nativeScroll, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
             addView(reviewsScroll, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
+            more = LifeMore(this@LifeActivity, web) { needKey() }
+            moreScroll = ScrollView(this@LifeActivity).apply { setBackgroundColor(RunUi.BG); isFillViewport = true; addView(more.col) }
+            addView(moreScroll, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
             study = BibleStudyPage(this@LifeActivity, web) { showPage(0) }
             addView(study.view, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
         }
-        fun pill(label: String, onClick: () -> Unit) = RunUi.text(this, label, Color.WHITE, 13f, true).apply {
+        fun pill(label: String, onClick: () -> Unit) = RunUi.text(this, label, Color.WHITE, 12f, true).apply {
             gravity = android.view.Gravity.CENTER; setPadding(0, RunUi.dp(this@LifeActivity, 8), 0, RunUi.dp(this@LifeActivity, 8))
             setOnClickListener { onClick() }
         }
-        tabToday = pill("🎯 Today") { showPage(0) }; tabReviews = pill("📊 Reviews") { showPage(1) }; tabFull = pill("📓 Full") { showPage(2) }
+        tabToday = pill("🎯 Today") { showPage(0) }; tabReviews = pill("📊 Reviews") { showPage(1) }; tabFull = pill("📓 Full") { showPage(2) }; tabMore = pill("🗂️ More") { showPage(4) }
         bar = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL; setBackgroundColor(RunUi.BG)
             setPadding(RunUi.dp(this@LifeActivity, 14), RunUi.dp(this@LifeActivity, 6), RunUi.dp(this@LifeActivity, 14), RunUi.dp(this@LifeActivity, 6))
             addView(tabToday, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginEnd = RunUi.dp(this@LifeActivity, 6) })
             addView(tabReviews, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1.1f).apply { marginEnd = RunUi.dp(this@LifeActivity, 6) })
-            addView(tabFull, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 0.9f))
+            addView(tabMore, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginEnd = RunUi.dp(this@LifeActivity, 6) })
+            addView(tabFull, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 0.85f))
         }
         val box = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -150,7 +159,7 @@ class LifeActivity : Activity() {
 
     override fun onResume() { super.onResume(); web.onResume(); Thread { try { CalendarReminders.refresh(applicationContext) } catch (e: Exception) { } }.start(); web.evaluateJavascript("window.ccSync&&ccSync.now()", null); if (!full) { ui.removeCallbacks(reload); ui.postDelayed(reload, 300) } }
     // Upload anything not yet sent before the app goes to the background.
-    override fun onPause() { study.stopReading(); web.evaluateJavascript("window.ccSync&&ccSync.now()", null); web.onPause(); super.onPause() }
+    override fun onPause() { study.stopReading(); more.pause(); web.evaluateJavascript("window.ccSync&&ccSync.now()", null); web.onPause(); super.onPause() }
     override fun onSaveInstanceState(out: Bundle) { super.onSaveInstanceState(out); web.saveState(out); out.putInt("page", page) }
     override fun onDestroy() { ui.removeCallbacksAndMessages(null); study.destroy(); web.destroy(); super.onDestroy() }
 
@@ -162,8 +171,10 @@ class LifeActivity : Activity() {
         study.view.visibility = if (p == 3) View.VISIBLE else View.GONE
         bar.visibility = if (p == 3) View.GONE else View.VISIBLE
         reviewsScroll.visibility = if (p == 1) View.VISIBLE else View.GONE
+        moreScroll.visibility = if (p == 4) View.VISIBLE else View.GONE
+        if (p == 4) more.load()
         fun style(t: TextView, on: Boolean) { t.background = RunUi.rounded(if (on) RunUi.ACCENT else RunUi.CARD, RunUi.dp(this, 20).toFloat()); t.setTextColor(if (on) Color.BLACK else Color.WHITE) }
-        style(tabToday, p == 0); style(tabReviews, p == 1); style(tabFull, p == 2)
+        style(tabToday, p == 0); style(tabReviews, p == 1); style(tabFull, p == 2); style(tabMore, p == 4)
         if (p == 0 || p == 1) reload.run()
         if (p == 1) { weekTab?.load(); monthCard?.load(); yearCard?.load(); dashCard?.load() }
     }
@@ -189,7 +200,7 @@ class LifeActivity : Activity() {
         yearCard = PeriodCard("yearly").also { reviewsCol.addView(it.view) }
         dashCard = LifeDashboard(this, web).also { reviewsCol.addView(it.view) }
         reviewsCol.addView(RunUi.text(this, "The BP report, habit streak chart and the injury roll-up are in 📓 Full.", RunUi.DIM, 11f).apply { setPadding(0, RunUi.dp(this@LifeActivity, 12), 0, 0) })
-        nativeCol.addView(RunUi.text(this, "Weekly, monthly and yearly reviews are in 📊 Reviews. Everything else is in 📓 Full. More sections will move here one at a time.", RunUi.DIM, 11f).apply { setPadding(0, RunUi.dp(this@LifeActivity, 12), 0, 0) })
+        nativeCol.addView(RunUi.text(this, "Weekly, monthly and yearly reviews are in 📊 Reviews. Search, Ask AI, meditation timer, BP report, files and settings are in 🗂️ More.", RunUi.DIM, 11f).apply { setPadding(0, RunUi.dp(this@LifeActivity, 12), 0, 0) })
     }
 
     private var tries = 0
@@ -919,6 +930,7 @@ class LifeActivity : Activity() {
 
     @Deprecated("Deprecated in Java")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        if (requestCode == LifeMore.PICK) { if (resultCode == RESULT_OK) data?.data?.let { more.onPicked(it) }; return }
         if (requestCode == 41) { fileCb?.onReceiveValue(WebChromeClient.FileChooserParams.parseResult(resultCode, data)); fileCb = null; return }
         @Suppress("DEPRECATION") super.onActivityResult(requestCode, resultCode, data)
     }
@@ -927,7 +939,7 @@ class LifeActivity : Activity() {
     @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
         if (full && web.canGoBack()) web.goBack()
-        else if (full || page == 1 || page == 3) show(false)
+        else if (full || page == 1 || page == 3 || page == 4) show(false)
         else @Suppress("DEPRECATION") super.onBackPressed()
     }
 }
