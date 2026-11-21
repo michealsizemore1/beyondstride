@@ -121,7 +121,6 @@ object RunUi {
         }
 
     const val TAB_TODAY = 0; const val TAB_FITNESS = 1; const val TAB_NUTRITION = 2; const val TAB_PLAN = 3; const val TAB_RUNS = 3   // the Plan screen opens from Activities (⌚ Watch workouts)
-    const val TAB_LIFE = 4   // 📓 the Command Center (Settings → Life tab turns it off)
 
 
     /** Page content with the bottom tab bar (Today · Fitness · Plan · Runs). */
@@ -138,12 +137,10 @@ object RunUi {
     }
     fun tabbed(act: android.app.Activity, content: View, selected: Int): View {
         keepScroll(act, content)
-        // Bar order: Today · Life · Fitness · Nutrition · Activities (each keeps its own TAB_ number for "selected").
-        val showLife = LifeTab.on(act) || selected == TAB_LIFE
-        val ids = listOfNotNull(TAB_TODAY, if (showLife) TAB_LIFE else null, TAB_FITNESS, TAB_NUTRITION, TAB_RUNS)
+        // Bar order: Today · Fitness · Nutrition · Activities (each keeps its own TAB_ number for "selected").
+        val ids = listOf(TAB_TODAY, TAB_FITNESS, TAB_NUTRITION, TAB_RUNS)
         val tabs = listOfNotNull<Triple<String, String, Class<*>?>>(
             Triple("Today", "☀", RunsActivity::class.java),
-            if (showLife) Triple("Life", "clock", LifeActivity::class.java) else null,
             Triple("Fitness", "♥", FitnessActivity::class.java),
             Triple("Nutrition", "🍎", NutritionActivity::class.java),
             Triple("Activities", "≡", ActivitiesActivity::class.java),
@@ -156,12 +153,7 @@ object RunUi {
                 val on = ids[i] == selected
                 addView(LinearLayout(act).apply {
                     orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER
-                    if (glyph == "clock") addView(android.widget.ImageView(act).apply {
-                        setImageDrawable(LifeClockIcon()); scaleType = android.widget.ImageView.ScaleType.FIT_CENTER
-                        if (on) background = rounded(ACCENT, dp(act, 16).toFloat())
-                        setPadding(0, dp(act, 3), 0, dp(act, 3))
-                    }, LinearLayout.LayoutParams(dp(act, 54), dp(act, 33)))
-                    else addView(text(act, glyph, if (on) Color.BLACK else MUTED, 20f, true).apply {
+                    addView(text(act, glyph, if (on) Color.BLACK else MUTED, 20f, true).apply {
                         gravity = Gravity.CENTER
                         if (on) background = rounded(ACCENT, dp(act, 16).toFloat())
                         setPadding(0, dp(act, 3), 0, dp(act, 3))

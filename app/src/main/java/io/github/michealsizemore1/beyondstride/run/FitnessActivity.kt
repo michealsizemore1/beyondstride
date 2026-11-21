@@ -74,8 +74,7 @@ class FitnessActivity : Activity() {
             ))
         }
         // Resting heart rate: sleeping HR each night (Samsung Health), last 30 nights.
-        // With the Life tab on, it lives in Life → Wellness with the other body numbers (one place for each number).
-        if (!LifeTab.on(this)) run {
+        run {
             val R = io.github.michealsizemore1.beyondstride.Readiness
             val nights = io.github.michealsizemore1.beyondstride.ReadinessSync.nights(this)
                 .filter { it.sleepHr > 0 && R.daysBetween(it.day, R.today()) in 0..29 }.sortedBy { it.day }

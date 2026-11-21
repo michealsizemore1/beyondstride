@@ -17,7 +17,6 @@
     <uses-permission android:name="android.permission.health.READ_HEALTH_DATA_IN_BACKGROUND" />
     <uses-permission android:name="android.permission.health.READ_EXERCISE" />
     <uses-permission android:name="android.permission.health.READ_WEIGHT" />
-    <uses-permission android:name="android.permission.health.READ_BLOOD_PRESSURE" />
     <uses-permission android:name="android.permission.health.READ_DISTANCE" />
     <uses-permission android:name="android.permission.health.READ_TOTAL_CALORIES_BURNED" />
     <uses-permission android:name="android.permission.health.READ_POWER" />
@@ -44,13 +43,6 @@
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-            <!-- The Command Center's "Send plan to BeyondStride" link opens here. -->
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="beyondstride" android:host="localhost" />
             </intent-filter>
         </activity>
         <activity
@@ -92,12 +84,6 @@
             android:name=".run.NutritionActivity"
             android:exported="false"
             android:label="Nutrition"
-            android:taskAffinity="io.github.michealsizemore1.beyondstride.running" />
-        <activity
-            android:name=".run.LifeActivity"
-            android:exported="false"
-            android:label="Life"
-            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|uiMode"
             android:taskAffinity="io.github.michealsizemore1.beyondstride.running" />
         <activity
             android:name=".run.FitnessActivity"
