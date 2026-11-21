@@ -7,8 +7,12 @@
  * never overwrite your real data: a new device always takes the cloud's version first.
  * Book covers and book documents sync too (Nov 20 2026), one item each (__cover_<book>, __doc_<id>); a document over 3 MB stays on its device.
  * Not synced: other Master App tools' data, AI keys, sign-ins.
+ * Nov 21 2026: off inside BeyondStride (the Life tab is disconnected from the website). Chrome <-> computer still syncs.
  * Nothing is removed. */
 (function(){
+  // Nov 21 2026: BeyondStride's Life tab is disconnected from this website. Inside the app, sync stays off:
+  // the Life tab is its own copy, and the website keeps what it had. Chrome and the computer still sync with each other.
+  if(window.BSNative){window.ccSync={now:function(){},pending:function(){return 0;},linked:function(){return false;},off:true};return;}
   var META='ccsync_meta', DEV='ccsync_dev', IDB=['activities_data','bible_reading_archive'], SEED_DAYS=20;
   var joinMode='', dirty={}, applying=false, busy=false, timer=null, lastPull=0, started=false;
   var setItem=Storage.prototype.setItem, removeItem=Storage.prototype.removeItem;

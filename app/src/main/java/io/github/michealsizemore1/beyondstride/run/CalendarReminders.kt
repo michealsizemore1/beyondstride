@@ -13,8 +13,6 @@ import androidx.work.Worker
 import androidx.work.WorkerParameters
 import io.github.michealsizemore1.beyondstride.R
 import org.json.JSONArray
-import java.net.HttpURLConnection
-import java.net.URL
 import java.time.Duration
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -25,13 +23,18 @@ import java.util.concurrent.TimeUnit
 
 /**
  * 🔔 Command Center calendar reminders as phone notifications — even with the app closed.
- * Your events come from the Command Center's synced copy (the same private Firebase spot: nutrition/<key>/ccsync),
- * so an event added in Chrome or on the computer gets its reminder too. Checked hourly (with the other reminders) and
- * whenever the Life tab opens; each reminder is scheduled once for its exact time.
+ * Your events come from the Life tab itself: it hands the phone a copy whenever the calendar changes
+ * (since Nov 21 2026 the Life tab no longer syncs with the Command Center website). Checked hourly (with the
+ * other reminders) and whenever the Life tab opens; each reminder is scheduled once for its exact time.
  */
 object CalendarReminders {
     private fun p(ctx: Context) = ctx.getSharedPreferences("ccreminders", 0)
     fun on(ctx: Context) = p(ctx).getBoolean("on", true)
+    /** Save the Life tab's calendar events. Returns true if they changed. */
+    fun saveEvents(ctx: Context, json: String): Boolean {
+        if (p(ctx).getString("events", null) == json) return false
+        p(ctx).edit().putString("events", json).apply(); return true
+    }
     fun setOn(ctx: Context, v: Boolean) { p(ctx).edit().putBoolean("on", v).apply(); Thread { refresh(ctx) }.start() }
 
     /** Fetch the events and (re)schedule the next 14 days' reminders. Call off the main thread. */
@@ -39,13 +42,8 @@ object CalendarReminders {
         val wm = try { WorkManager.getInstance(ctx) } catch (e: Exception) { return }
         val old = p(ctx).getStringSet("names", emptySet()) ?: emptySet()
         val keep = HashSet<String>()
-        if (on(ctx) && NutritionSync.ready(ctx)) {
-            val raw = try {
-                val c = URL(Live.db(ctx) + "/nutrition/" + NutritionSync.key(ctx) + "/ccsync/v/journal_calendar_events.json").openConnection() as HttpURLConnection
-                c.connectTimeout = 15000; c.readTimeout = 20000
-                if (c.responseCode == 200) c.inputStream.bufferedReader().readText() else null
-            } catch (e: Exception) { null } ?: return          // offline: leave what's scheduled alone
-            val str = try { org.json.JSONTokener(raw).nextValue() as? String } catch (e: Exception) { null } ?: "[]"
+        if (on(ctx)) {
+            val str = p(ctx).getString("events", null) ?: return     // not handed over yet: leave what's scheduled alone
             val list = try { JSONArray(str) } catch (e: Exception) { JSONArray() }
             val now = LocalDateTime.now(); val until = now.plusDays(14)
             for (i in 0 until list.length()) {

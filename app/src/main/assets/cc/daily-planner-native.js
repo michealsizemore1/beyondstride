@@ -570,6 +570,10 @@
       return writeStored(function(d){d[id+'c']=state;});
     }
   };
+  // 🔔 Calendar events go to the phone (for reminders), since the Life tab no longer syncs through the cloud.
+  function sendCal(v){try{if(window.BSNative&&BSNative.calendar)BSNative.calendar(v==null?(localStorage.getItem('journal_calendar_events')||'[]'):String(v));}catch(e){}}
+  (function(){var si=Storage.prototype.setItem;Storage.prototype.setItem=function(k,v){var r=si.apply(this,arguments);if(k==='journal_calendar_events'&&this===window.localStorage)sendCal(v);return r;};})();
+  setTimeout(function(){sendCal();},2000);
   // Tell BeyondStride when the Command Center saves, so its screens update (auto-checks, carry-over, edits here).
   function hook(){
     if(typeof window.save!=='function'||window.save.__native)return;

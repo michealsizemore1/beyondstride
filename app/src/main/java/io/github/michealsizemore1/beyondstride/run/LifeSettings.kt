@@ -11,7 +11,7 @@ import org.json.JSONObject
 
 /**
  * 🌱 Life tab settings, in BeyondStride's Settings (moved from Life → Tools): the Command Center's own AI key (kept
- * separate from BeyondStride's — two keys, by choice), whether the AI may read the journal, and sync status.
+ * separate from BeyondStride's — two keys, by choice), whether the AI may read the journal, and that the Life tab is its own copy (not synced with the website).
  * Talks to the same shared Command Center page as the Life tab (CcEngine).
  */
 object LifeSettings {
@@ -32,9 +32,8 @@ object LifeSettings {
                 keyState.text = if (j.optBoolean("hasKey")) "🔑 Life tab AI key: saved ✓" else "🔑 Life tab AI key: not set (needed for AI Fill, Ask AI and Bible Study)"
                 aiContext = j.optBoolean("aiContext", true)
                 ctxToggle.text = (if (aiContext) "☑" else "☐") + "  Let the AI read your journal for answers and reviews"
-                val sync = j.optJSONObject("sync")
                 status.text = listOfNotNull(
-                    sync?.let { if (it.optBoolean("linked")) "🔄 Sync with Chrome: on" + (if (it.optInt("pending") > 0) " · ${it.optInt("pending")} waiting to upload" else " · up to date") else "🔄 Sync: not linked yet" },
+                    "🔌 Not synced with the Command Center website: the Life tab is its own copy. It's kept safe by BeyondStride's Backup.",
                     j.optString("status").takeIf { it.isNotBlank() }).joinToString("\n")
                 // 💾 Storage, laid out line by line, colored by how full it is.
                 storage.removeAllViews()
@@ -66,8 +65,6 @@ object LifeSettings {
             addView(ctxToggle.apply { setPadding(0, d(12), 0, d(4)); setOnClickListener { js("ccNative.setAIContext(${!aiContext})") { load() } } })
             addView(status.apply { setPadding(0, d(8), 0, 0) })
             addView(storage.apply { setPadding(0, d(8), 0, 0) })
-            addView(RunUi.button(act, "🔄 Sync now", 0xFF374151.toInt(), Color.WHITE) { js("ccNative.syncNow()") { web.postDelayed({ load() }, 4000) } },
-                LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = d(8) })
             load()
         }
     }

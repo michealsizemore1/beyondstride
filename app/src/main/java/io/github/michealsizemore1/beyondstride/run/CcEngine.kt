@@ -79,6 +79,9 @@ object CcEngine {
                     // 💾 Life data for BeyondStride's Backup, sent in parts.
                     @JavascriptInterface fun lifePart(part: String) { synchronized(lifeBuf) { lifeBuf.append(part) } }
                     @JavascriptInterface fun lifeDone(msg: String) { post { lifeFinished(context.applicationContext, msg) } }
+                    // 🔔 Calendar events, kept on the phone for reminders (the Life tab no longer syncs through the cloud).
+                    @JavascriptInterface fun calendar(json: String) { val app = context.applicationContext
+                        if (CalendarReminders.saveEvents(app, json)) Thread { try { CalendarReminders.refresh(app) } catch (e: Exception) { } }.start() }
                 }, "BSNative")
             }.also { web = it }
         }

@@ -8,8 +8,11 @@
 // ══════════════════════════════════════════════════════
 (function(){
   var CFG_KEY='beyondstride_sync';
-  function cfg(){try{return JSON.parse(localStorage.getItem(CFG_KEY)||'null');}catch(e){return null;}}
-  (function readLink(){
+  // Nov 21 2026: BeyondStride is disconnected from this website. Its data (wellness, runs, plan, nutrition) only
+  // feeds the copy inside the app; the website no longer reads it.
+  var IN_APP=!!window.BSNative;
+  function cfg(){if(!IN_APP)return null;try{return JSON.parse(localStorage.getItem(CFG_KEY)||'null');}catch(e){return null;}}
+  (function readLink(){if(!IN_APP)return;
     var m=(location.hash||'').match(/[#&]bsr?=([A-Za-z0-9_-]+)/);if(!m)return;
     try{var b64=m[1].replace(/-/g,'+').replace(/_/g,'/');while(b64.length%4)b64+='=';
       var parts=atob(b64).split('|');

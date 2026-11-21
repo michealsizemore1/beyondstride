@@ -2470,20 +2470,31 @@ html[data-theme="halloween"] .header{
 
 
 <script src="daily-planner-idb.js?v=2026-11-20-1"></script>
-<script src="daily-planner-sync.js?v=2026-11-20-2"></script>
+<script src="daily-planner-sync.js?v=2026-11-21-1"></script>
 <script src="daily-planner-core.js?v=2026-11-20-2"></script>
 <script src="daily-planner-bible.js?v=2026-11-20-1"></script>
 <script src="daily-planner-meditation.js?v=2026-11-17-1"></script>
 <script src="daily-planner-journal-archive.js?v=2026-11-20-1"></script>
 <script src="daily-planner-file-uploads.js?v=2026-11-20-1"></script><script src="daily-planner-misc.js?v=2026-11-10-1"></script><script src="daily-planner-journal-experience.js?v=2026-11-20-1"></script>
 <script src="master-backup-shared.js?v=2026-10-15-7"></script>
-<script src="daily-planner-beyondstride-review.js?v=2026-11-20-1"></script>
+<script src="daily-planner-beyondstride-review.js?v=2026-11-21-1"></script>
 <script src="daily-planner-storage-qol.js?v=2026-11-08-2-removeactivities"></script>
 <script src="daily-planner-rows.js?v=2026-11-14-1"></script>
 <script src="daily-planner-autocheck.js?v=2026-11-20-2"></script>
-<script src="daily-planner-native.js?v=2026-11-20-28"></script>
+<script src="daily-planner-native.js?v=2026-11-21-1"></script>
 <script src="daily-planner-biblestudy.js?v=2026-11-20-5"></script>
 <button class="journal-float-top" id="journalFloatTop" onclick="window.scrollTo({top:0,behavior:'smooth'})" aria-label="Back to top">&#x2191; Top</button>
 <div id="v26Toast" class="v26-toast" role="status" aria-live="polite"></div>
+<script>
+/* Nov 21 2026: website-only notice. BeyondStride's Life tab is now its own copy. */
+(function(){if(window.BSNative)return;try{if(localStorage.getItem('bs_disconnect_note_hidden')==='1')return;}catch(e){}
+function show(){var d=document.createElement('div');d.id='bsDisconnectNote';
+d.style.cssText='position:sticky;top:0;z-index:9999;background:#fef3c7;color:#78350f;border-bottom:1px solid #f59e0b;padding:8px 12px;font:14px/1.4 system-ui,sans-serif;display:flex;gap:10px;align-items:center;justify-content:center;flex-wrap:wrap';
+d.innerHTML='<span>&#x1F4F1; No longer synced with BeyondStride. Your up-to-date planner is the <b>Life</b> tab in the app. Changes made here won\u2019t reach the app.</span>';
+var b=document.createElement('button');b.textContent='Hide';b.style.cssText='border:1px solid #b45309;background:#fff;color:#78350f;border-radius:6px;padding:2px 10px;cursor:pointer';
+b.onclick=function(){try{localStorage.setItem('bs_disconnect_note_hidden','1');}catch(e){}d.remove();};d.appendChild(b);
+document.body.insertBefore(d,document.body.firstChild);}
+if(document.body)show();else document.addEventListener('DOMContentLoaded',show);})();
+</script>
 </body>
 </html>
