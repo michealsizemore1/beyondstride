@@ -26,8 +26,13 @@ object DaySteps {
         } catch (e: Exception) { }
     }
 
-    fun save(ctx: Context, steps: Long) {
+    /**
+     * [day] is the day the count belongs to (from the reading's own end time). Just after midnight the watch can still
+     * deliver yesterday's final total; that goes to the phone as yesterday's, and today's count isn't touched.
+     */
+    fun save(ctx: Context, steps: Long, day: LocalDate = LocalDate.now()) {
         val today = LocalDate.now().toString(); val pr = p(ctx)
+        if (day.toString() != today) { sendToPhone(ctx, day.toString(), steps, force = true); return }
         if (pr.getString("date", "") == today && pr.getLong("steps", -1) == steps) return
         pr.edit().putString("date", today).putLong("steps", steps).apply()
         sendToPhone(ctx, today, steps)
@@ -39,11 +44,11 @@ object DaySteps {
      * Tells the phone too (its count from Samsung Health via Health Connect can lag hours behind): every 250 steps or
      * 15 minutes, whichever comes first. The phone uses whichever count is higher.
      */
-    private fun sendToPhone(ctx: Context, date: String, steps: Long) {
+    private fun sendToPhone(ctx: Context, date: String, steps: Long, force: Boolean = false) {
         val pr = p(ctx); val now = System.currentTimeMillis()
         val sameDay = pr.getString("sentDate", "") == date
-        if (sameDay && steps - pr.getLong("sentSteps", 0) < 250 && now - pr.getLong("sentAt", 0) < 15 * 60_000L) return
-        pr.edit().putString("sentDate", date).putLong("sentSteps", steps).putLong("sentAt", now).apply()
+        if (!force && sameDay && steps - pr.getLong("sentSteps", 0) < 250 && now - pr.getLong("sentAt", 0) < 15 * 60_000L) return
+        if (!force) pr.edit().putString("sentDate", date).putLong("sentSteps", steps).putLong("sentAt", now).apply()
         val app = ctx.applicationContext
         Thread { try {
             val req = com.google.android.gms.wearable.PutDataMapRequest.create("/steps").apply {
@@ -58,7 +63,12 @@ object DaySteps {
 
 class StepsPassiveService : PassiveListenerService() {
     override fun onNewDataPointsReceived(dataPoints: DataPointContainer) {
-        dataPoints.getData(DataType.STEPS_DAILY).lastOrNull()?.let { DaySteps.save(applicationContext, it.value) }
+        val boot = java.time.Instant.ofEpochMilli(System.currentTimeMillis() - android.os.SystemClock.elapsedRealtime())
+        dataPoints.getData(DataType.STEPS_DAILY).forEach { dp ->
+            // The day this count belongs to: from the reading's end time (a moment before it, so a count ending at midnight is yesterday's).
+            val day = try { dp.getEndInstant(boot).minusMillis(1).atZone(java.time.ZoneId.systemDefault()).toLocalDate() } catch (e: Exception) { LocalDate.now() }
+            DaySteps.save(applicationContext, dp.value, day)
+        }
     }
 }
 

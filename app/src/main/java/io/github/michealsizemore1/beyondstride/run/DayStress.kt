@@ -104,16 +104,25 @@ object DayStress {
         val w = try { JSONObject(p(ctx).getString("watchSteps", "{}") ?: "{}").optLong(date, -1L) } catch (e: Exception) { -1L }
         return maxOf(hc, w).takeIf { it >= 0 }
     }
-    /** The watch's count for [date]. True when it raised the day's steps (so the Command Center gets it now). */
-    fun watchSteps(ctx: Context, date: String, steps: Long): Boolean {
+    /**
+     * The watch's count for [date]. The newest reading wins (by [at], when the watch sent it), not the highest: just after
+     * midnight the watch could hand over yesterday's final total labelled as today, and keeping the highest froze that
+     * wrong number for the whole day (Nov 21 2026: 7,583 shown vs 1,982 real). True when the day's steps changed.
+     */
+    fun watchSteps(ctx: Context, date: String, steps: Long, at: Long = 0L): Boolean {
         if (date.length != 10 || steps < 0) return false
         val before = steps(ctx, date) ?: -1L
-        val pr = p(ctx); val m = try { JSONObject(pr.getString("watchSteps", "{}") ?: "{}") } catch (e: Exception) { JSONObject() }
-        if (steps <= m.optLong(date, -1L)) return false
-        m.put(date, steps)
-        val cut = LocalDate.parse(date).minusDays(60).toString(); m.keys().asSequence().toList().filter { it < cut }.forEach { m.remove(it) }
-        pr.edit().putString("watchSteps", m.toString()).apply()
-        return steps > before
+        val pr = p(ctx)
+        val m = try { JSONObject(pr.getString("watchSteps", "{}") ?: "{}") } catch (e: Exception) { JSONObject() }
+        val ats = try { JSONObject(pr.getString("watchStepsAt", "{}") ?: "{}") } catch (e: Exception) { JSONObject() }
+        val prevAt = ats.optLong(date, 0L)
+        if (at > 0L) { if (at <= prevAt) return false }
+        else if (steps <= m.optLong(date, -1L)) return false          // an older watch build without a time: highest wins
+        m.put(date, steps); if (at > 0L) ats.put(date, at)
+        val cut = LocalDate.parse(date).minusDays(60).toString()
+        listOf(m, ats).forEach { o -> o.keys().asSequence().toList().filter { it < cut }.forEach { o.remove(it) } }
+        pr.edit().putString("watchSteps", m.toString()).putString("watchStepsAt", ats.toString()).apply()
+        return (steps(ctx, date) ?: -1L) != before
     }
 
     /** Today's hours, or null when nothing has been read today. */
