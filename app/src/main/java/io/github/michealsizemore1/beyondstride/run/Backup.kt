@@ -67,13 +67,15 @@ object Backup {
                 }
             }
             FILES.forEach { n -> File(ctx.filesDir, n).takeIf { it.exists() }?.let { put(n, it.readBytes()) } }
+            // 🌱 Life tab (the Command Center inside the app): its saved data and pictures/files — never the AI key. File backups only.
+            if (dirs) CcEngine.lifeFile(ctx).takeIf { it.exists() }?.let { put("life_backup.json", it.readBytes()) }
             put("prefs.json", prefsJson(ctx).toString().toByteArray())
             put("backup.json", JSONObject().put("app", "BeyondStride").put("version", VERSION)
                 .put("created", System.currentTimeMillis()).put("runs", runs).put("courses", courses).toString(2).toByteArray())
         }
         return runs to courses
     }
-    fun info(ctx: Context, runs: Int, courses: Int) = "$runs runs · $courses courses · ${ReadinessSync.checks(ctx).size} morning checks · ${NutriDay.historyCount(ctx) + io.github.michealsizemore1.beyondstride.NutritionStore.days(ctx).size} nutrition days · ${ActivityStore.list(ctx).size} activities"
+    fun info(ctx: Context, runs: Int, courses: Int) = "$runs runs · $courses courses · ${ReadinessSync.checks(ctx).size} morning checks · ${NutriDay.historyCount(ctx) + io.github.michealsizemore1.beyondstride.NutritionStore.days(ctx).size} nutrition days · ${ActivityStore.list(ctx).size} activities" + (CcEngine.lifeInfo(ctx).takeIf { it.isNotBlank() && CcEngine.lifeFile(ctx).exists() }?.let { " · Life: $it" } ?: "")
 
     /** Writes the backup to [uri]. Returns a short summary ("42 runs · 3 courses"). */
     fun write(ctx: Context, uri: Uri): String {
@@ -191,7 +193,7 @@ object Backup {
                 when {
                     name == "prefs.json" -> prefs = JSONObject(bytes.toString(Charsets.UTF_8))
                     name == "backup.json" -> { }
-                    name == "life_backup.json" -> { }   // older backups: the Life tab (Command Center) was removed
+                    name == "life_backup.json" -> { CcEngine.lifeFile(ctx).writeBytes(bytes); CcEngine.markLifeRestorePending(ctx) }
                     (DIRS.any { name.startsWith("$it/") } || name in FILES) && !name.contains("..") -> {
                         val f = File(ctx.filesDir, name)
                         if (f.canonicalPath.startsWith(base)) {

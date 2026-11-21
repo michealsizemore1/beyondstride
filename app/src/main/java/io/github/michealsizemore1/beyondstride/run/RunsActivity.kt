@@ -23,6 +23,8 @@ open class RunsActivity : Activity() {
     private var wrongDevice = false
 
     private val ui get() = RunUi
+    /** 🌱 The Command Center's day (schedule, focus, checks) — phone only, same page as the Life tab. */
+    private var todayLife: TodayLife? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -34,9 +36,18 @@ open class RunsActivity : Activity() {
                 PhoneRuns.list(this).forEach { wm.cancelUniqueWork("stryd-" + it.nameWithoutExtension) } } catch (e: Exception) { }
             f.edit().putBoolean("strydJobsCleared", true).apply()
         } }
+        handleLink(intent)
         Reminders.schedule(this)
         // Clear the sign-in left from the removed Strava connection.
         try { deleteSharedPreferences("strava") } catch (e: Exception) { }
+    }
+
+    override fun onPause() { todayLife?.stop(); super.onPause() }
+    override fun onDestroy() { todayLife?.stop(); CcEngine.release(this); super.onDestroy() }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        handleLink(intent)
     }
 
     override fun onResume() {
@@ -52,6 +63,7 @@ open class RunsActivity : Activity() {
         }
         WorkoutStore.pushToWatch(this)   // keeps the watch's "today" plan current
         render()
+        todayLife?.start()
         // New BeyondStride build out? (asks GitHub at most every 3 hours)
         Thread {
             val had = io.github.michealsizemore1.beyondstride.Updater.available(this)?.build
@@ -68,6 +80,34 @@ open class RunsActivity : Activity() {
                 try { DailySummary.publish(applicationContext, force = true) } catch (e: Exception) { }
             }
         }.start()
+    }
+
+    /** The Command Center's "Send plan to Running app" opens beyondstride://localhost/plan#<days>. */
+    private fun handlePlanImport(data: android.net.Uri): Boolean {
+        if (data.path?.startsWith("/plan") != true) return false
+        val b64 = data.encodedFragment ?: return true
+        Thread {
+            val msg = try {
+                val days = org.json.JSONObject(String(android.util.Base64.decode(b64, android.util.Base64.URL_SAFE or android.util.Base64.NO_PADDING or android.util.Base64.NO_WRAP)))
+                val n = WorkoutStore.importPlan(this, days)
+                "Received ${days.length()} days: $n workouts imported" +
+                    (if (WorkoutStore.restDays > 0) ", ${WorkoutStore.restDays} rest days" else "") +
+                    (if (WorkoutStore.keptEdited > 0) ", ${WorkoutStore.keptEdited} kept as you edited them" else "") +
+                    ". Sent to your watch."
+            } catch (e: Exception) { "Couldn't read the plan: ${e.message}" }
+            runOnUiThread {
+                Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
+                startActivity(Intent(this, WorkoutsActivity::class.java).putExtra("tab", "plan"))
+            }
+        }.start()
+        return true
+    }
+
+    /** Links into the app (the Command Center's "Send plan to Running app"). */
+    private fun handleLink(i: Intent?) {
+        val data = i?.data ?: return
+        if (data.scheme != "beyondstride" && data.scheme != "scoresrun") return
+        handlePlanImport(data)
     }
 
     /** 📝 Notes card: shows what's written; tap to edit. */
@@ -372,6 +412,14 @@ open class RunsActivity : Activity() {
         })
 
         CcStatus.line(this).let { (t, c) -> col.addView(RunUi.text(this, t, c, 12f, true).apply { setPadding(dp(2), dp(6), 0, 0) }) }
+
+        // 🌱 Life: My Schedule (next items), Today's Focus and today's checks — the morning screen's Command Center part.
+        if (this !is AllRunsActivity && LifeTab.on(this)) {
+            val tl = todayLife ?: TodayLife(this).also { todayLife = it }
+            (tl.view.parent as? android.view.ViewGroup)?.removeView(tl.view)
+            col.addView(RunUi.section(this, "LIFE"))
+            col.addView(tl.view)
+        }
 
         // 3. THIS WEEK: miles, runs, training load.
         val cal = java.util.Calendar.getInstance()

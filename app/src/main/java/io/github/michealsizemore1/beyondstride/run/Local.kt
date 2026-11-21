@@ -123,6 +123,7 @@ object Local {
         try { if (ActivityImport.enabled(ctx)) ActivityImport.fromHealthConnect(ctx) } catch (e: Exception) { }
         try { commit(ctx) } catch (e: Exception) { }
         try { if (WeightImport.enabled(ctx)) { val n = WeightImport.sync(ctx); out += "⚖️ " + (if (n > 0) "weight updated · " else "") + WeightImport.lastInfo(ctx).substringAfter(" · ") } } catch (e: Exception) { }
+        try { if (BpImport.enabled(ctx) && BpImport.sync(ctx)) out += "🩺 blood pressure updated" } catch (e: Exception) { }
         try { if (SleepData.granted(ctx)) SleepData.refresh(ctx, 7) } catch (e: Exception) { }
         try { DayStress.sync(ctx, force = true) } catch (e: Exception) { }
         try { DayStress.steps(ctx, Readiness.today())?.let { out += String.format(java.util.Locale.US, "👣 %,d steps", it) } } catch (e: Exception) { }
@@ -149,6 +150,7 @@ object Local {
         try { PlanStore.syncWatchIfNeeded(ctx) } catch (e: Exception) { }
         Reminders.morning(ctx)
         if (WeightImport.enabled(ctx) && (hourly || now - p.getLong("wtAt", 0L) > 15 * 60_000L)) { p.edit().putLong("wtAt", now).apply(); try { if (WeightImport.sync(ctx) > 0) DailySummary.publish(ctx, force = true) } catch (e: Exception) { } }
+        if (BpImport.enabled(ctx) && (hourly || now - p.getLong("bpAt", 0L) > 15 * 60_000L)) { p.edit().putLong("bpAt", now).apply(); try { if (BpImport.sync(ctx)) DailySummary.publish(ctx, force = true) } catch (e: Exception) { } }
         var sleepNew = false
         // Last night's sleep from Samsung Health (it can reach Health Connect hours after you wake), every 30 minutes in the background too.
         try { if (now - io.github.michealsizemore1.beyondstride.ReadinessSync.nightsAt(ctx) > 30 * 60_000L && SleepData.granted(ctx)) { SleepData.refresh(ctx, 7); sleepNew = true } } catch (e: Exception) { }

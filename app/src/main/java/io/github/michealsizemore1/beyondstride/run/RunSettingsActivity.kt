@@ -14,7 +14,7 @@ import android.widget.Switch
 import android.widget.Toast
 import io.github.michealsizemore1.beyondstride.RunMath
 
-/** Zones (sent to the watch), backup, cloud copy, and Stryd connection. */
+/** Zones (sent to the watch), Command Center link, and Stryd connection. */
 class RunSettingsActivity : Activity() {
     /** null = the list of setting groups; otherwise the open group. */
     private var page: String? = null
@@ -41,7 +41,7 @@ class RunSettingsActivity : Activity() {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(16), dp(40), dp(16), dp(40))
         }
-        val titles = mapOf("run" to "Run options", "audio" to "Audio prompts", "zones" to "Zones & power", "standalone" to "Stand-alone & cloud copy", "ai" to "AI food search", "backup" to "Backup", "about" to "About")
+        val titles = mapOf("run" to "Run options", "audio" to "Audio prompts", "zones" to "Zones & power", "cc" to "Command Center", "standalone" to "Stand-alone & cloud copy", "ai" to "AI food search", "backup" to "Backup", "life" to "🌱 Life tab", "about" to "About")
         col.addView(RunUi.text(this, page?.let { titles[it] } ?: "Settings", Color.WHITE, 26f, true))
         val classic = getSharedPreferences("runsettings", 0).getString("menuStyle", "cards") == "classic"
         if (page == null && !classic) { renderList(col); return }
@@ -56,6 +56,8 @@ class RunSettingsActivity : Activity() {
             col.addView(RunUi.button(this, "Menu style: Classic  (tap for cards)", RunUi.CARD, Color.WHITE) { setMenuStyle("cards") }
                 .apply { layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(12) } })
             col.addView(RunUi.button(this, "Background: " + (if (io.github.michealsizemore1.beyondstride.Theme.light) "Lighter" else "Dark") + "  (tap to switch)", RunUi.CARD, Color.WHITE) { toggleBg() }
+                .apply { layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(10) } })
+            col.addView(RunUi.button(this, "📓 Life tab settings ›", RunUi.CARD, Color.WHITE) { page = "life"; render() }
                 .apply { layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(10) } })
             col.addView(RunUi.button(this, "Watch data screens ›", RunUi.ACCENT) { startActivity(Intent(ctx, ScreensActivity::class.java)) }
                 .apply { layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(10) } })
@@ -230,18 +232,20 @@ class RunSettingsActivity : Activity() {
             addView(RunUi.text(ctx, if (at == 0L) "No backup yet" else "Last backup: " +
                 java.text.SimpleDateFormat("EEE, MMM d · h:mm a", java.util.Locale.getDefault()).format(java.util.Date(at)), Color.WHITE, 15f, true))
             Backup.lastInfo(ctx).takeIf { it.isNotBlank() }?.let { addView(RunUi.text(ctx, it, RunUi.MUTED, 12f)) }
-            addView(RunUi.text(ctx, "Runs, workouts & plan, courses, settings, zones, LiveTrack, morning checks, sleep, personal bests, your nutrition history (with food photos, favorites and notes), Activities and training plans — in one file. Your AI keys are never included. " +
+            if (LifeTab.on(ctx)) addView(RunUi.text(ctx, CcEngine.lifeAt(ctx).let { at -> if (at == 0L || !CcEngine.lifeFile(ctx).exists()) "🌱 Life data: not saved yet" + (CcEngine.lifeLastTry(ctx).takeIf { it.isNotBlank() }?.let { " · last try $it" } ?: " — tap Back up now")
+                else "🌱 Life data saved " + java.text.SimpleDateFormat("EEE, MMM d · h:mm a", java.util.Locale.getDefault()).format(java.util.Date(at)) + " · " + CcEngine.lifeInfo(ctx) }, 0xFF4ADE80.toInt(), 12f).apply { setPadding(0, dp(2), 0, 0) })
+            addView(RunUi.text(ctx, "Runs, workouts & plan, courses, settings, zones, LiveTrack, morning checks, sleep, personal bests, your nutrition history (with food photos, favorites and notes), Activities and training plans, and the 🌱 Life tab (habits, journal, reviews, schedule, calendar, books with covers and documents, Bible studies, files) — in one file. Your AI keys are never included. " +
                 "Save it to Google Drive so it's safe if the phone is lost.", RunUi.DIM, 12f).apply { setPadding(0, dp(6), 0, 0) })
-            addView(RunUi.button(ctx, if (Backup.uri(ctx) == null) "Back up now…" else "Back up now", RunUi.ACCENT) {
+            addView(RunUi.button(ctx, if (Backup.uri(ctx) == null) "Back up now…" else "Back up now", RunUi.ACCENT) { withLife {
                 val u = Backup.uri(ctx)
                 if (u == null) newBackup() else Thread {
                     val r = try { "Backed up: " + Backup.write(ctx, u) } catch (e: Exception) { null }
                     runOnUiThread { if (r == null) newBackup() else { Toast.makeText(ctx, r, Toast.LENGTH_LONG).show(); render() } }
                 }.start()
-            }.apply { layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(10) } })
+            } }.apply { layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(10) } })
             if (Backup.uri(ctx) != null) addView(RunUi.button(ctx, "Back up to a new file…", RunUi.CARD, Color.WHITE) { newBackup() }
                 .apply { layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(8) } })
-            addView(RunUi.button(ctx, "☁️ Share backup to OneDrive / Drive…", RunUi.CARD, Color.WHITE) {
+            addView(RunUi.button(ctx, "☁️ Share backup to OneDrive / Drive…", RunUi.CARD, Color.WHITE) { withLife {
                 Toast.makeText(ctx, "Making the backup…", Toast.LENGTH_SHORT).show()
                 Thread {
                     val f = try { java.io.File(cacheDir, "backup").apply { mkdirs(); listFiles()?.forEach { it.delete() } }.let { d ->
@@ -253,7 +257,7 @@ class RunSettingsActivity : Activity() {
                             .putExtra(Intent.EXTRA_SUBJECT, f.name).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION), "Save the backup to…"))
                     }
                 }.start()
-            }.apply { layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(8) } })
+            } }.apply { layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(8) } })
             addView(RunUi.button(ctx, "Restore from a backup…", RunUi.CARD, Color.WHITE) {
                 @Suppress("DEPRECATION") startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE)
                     .setType("*/*").putExtra(Intent.EXTRA_MIME_TYPES, arrayOf("application/zip", "application/octet-stream", "application/x-zip-compressed")), 82)
@@ -294,6 +298,21 @@ class RunSettingsActivity : Activity() {
         }.apply { layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(10) } })
         }
 
+        if (on("life")) {
+            if (LifeTab.on(ctx)) col.addView(LifeSettings.card(this))
+            else col.addView(RunUi.button(this, "Show the Life tab", RunUi.ACCENT) { LifeTab.setOn(ctx, true); render()
+                android.widget.Toast.makeText(ctx, "Life tab is back", android.widget.Toast.LENGTH_SHORT).show() }
+                .apply { layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(12) } })
+            col.addView(RunUi.text(this, "The Life tab is the Command Center inside the app (phone only — never on the watch). Its data is in your Backup.", RunUi.DIM, 12f).apply { setPadding(dp(4), dp(10), 0, 0) })
+            // Escape hatch, tucked at the bottom: hides the tab (nothing is deleted). Asks first, since a lot depends on it now.
+            if (LifeTab.on(ctx)) col.addView(RunUi.text(this, "Hide the Life tab…", 0xFFF87171.toInt(), 13f, true).apply { setPadding(dp(4), dp(28), 0, dp(8))
+                setOnClickListener {
+                    android.app.AlertDialog.Builder(ctx).setTitle("Hide the Life tab?")
+                        .setMessage("Nothing is deleted, and you can show it again here any time. While it's hidden:\n\n• the Life tab and the Today tab's Life section are gone\n• Wellness and its charts are hidden (resting HR goes back to Fitness)\n• the app stops syncing the Command Center with Chrome\n• your backup keeps the last Life copy but stops updating it\n\nCalendar reminders still come.")
+                        .setPositiveButton("Hide it") { _, _ -> LifeTab.setOn(ctx, false); render(); android.widget.Toast.makeText(ctx, "Life tab hidden", android.widget.Toast.LENGTH_SHORT).show() }
+                        .setNegativeButton("Keep it", null).show()
+                } })
+        }
         if (on("about")) {
         col.addView(RunUi.text(this, "Phone app " + packageManager.getPackageInfo(packageName, 0).versionName, RunUi.MUTED, 13f)
             .apply { setPadding(dp(4), dp(6), 0, 0) })
@@ -384,6 +403,7 @@ class RunSettingsActivity : Activity() {
         row("✨", "AI food search", if (AiFood.hasKey(ctx)) "Key saved · AI search and label photos on" else "Add your Anthropic key") { page = "ai"; render() }
         row("⇪", "Backup", Backup.lastAt(ctx).takeIf { it > 0 }?.let { "Last: " + java.text.SimpleDateFormat("MMM d, h:mm a", java.util.Locale.getDefault()).format(java.util.Date(it)) +
             (if (Backup.auto(ctx) && Backup.uri(ctx) != null) " · auto" else "") } ?: "Not set up") { page = "backup"; render() }
+        row("📓", "Life tab", if (LifeTab.on(ctx)) "Command Center settings, AI key, sync, storage" else "Hidden · tap to show it again") { page = "life"; render() }
         row("ⓘ", "About", "Phone app " + packageManager.getPackageInfo(packageName, 0).versionName) { page = "about"; render() }
         row("☰", "Menu style", "Cards · tap to switch back to classic (phone and watch)") { setMenuStyle("classic") }
         row("◐", "Background", if (io.github.michealsizemore1.beyondstride.Theme.light) "Lighter · tap for dark" else "Dark · tap for lighter") { toggleBg() }
@@ -443,6 +463,18 @@ class RunSettingsActivity : Activity() {
                 }.setNegativeButton("Cancel", null).show()
             }.apply { layoutParams = lp() })
         })
+        // Command Center Daily / Weekly Review (read-only summary).
+        col.addView(RunUi.text(this, "📝 Command Center Daily & Weekly Review", Color.WHITE, 15f, true).apply { setPadding(0, dp(14), 0, 0) })
+        col.addView(RunUi.card(this).apply {
+            addView(RunUi.text(ctx, "Each day's runs, training plan, sleep / HRV / readiness and nutrition are posted as a short summary that the Command Center's " +
+                "AI Fill Day Review and AI Fill Review read. One way only — nothing comes back into BeyondStride.", RunUi.MUTED, 12f))
+            if (CloudCopy.ready(ctx)) addView(RunUi.button(ctx, "Link the Command Center review", RunUi.CARD, Color.WHITE) {
+                Thread { try { DailySummary.publish(applicationContext, force = true) } catch (e: Exception) { } }.start()
+                val url = android.net.Uri.parse(RunSettings.ccUrl(ctx).substringBefore("#") + "#app=bs" + NutritionSync.linkPart(ctx))
+                try { startActivity(Intent(Intent.ACTION_VIEW, url)) } catch (e: Exception) { Toast.makeText(ctx, "Couldn't open the Command Center", Toast.LENGTH_LONG).show() }
+            }.apply { layoutParams = lp(10) })
+            addView(RunUi.text(ctx, "Tap once: the Command Center opens in your browser and remembers the link (if it was linked before, it already works).", RunUi.DIM, 11f).apply { setPadding(0, dp(6), 0, 0) })
+        })
         // Smart scale (Health Connect).
         col.addView(RunUi.text(this, "⚖ Weight from your scale (Health Connect)", Color.WHITE, 15f, true).apply { setPadding(0, dp(14), 0, 0) })
         col.addView(RunUi.card(this).apply {
@@ -457,6 +489,23 @@ class RunSettingsActivity : Activity() {
             WeightImport.lastInfo(ctx).takeIf { it.isNotBlank() }?.let { addView(RunUi.text(ctx, it, RunUi.DIM, 12f).apply { setPadding(0, dp(4), 0, 0) }) }
             addView(RunUi.button(ctx, "Check the scale now", RunUi.CARD, Color.WHITE) {
                 Thread { val g = WeightImport.granted(applicationContext); runOnUiThread { if (!g) askHealth(WeightImport.PERMS) else syncWeights() } }.start()
+            }.apply { layoutParams = lp(10) })
+        })
+        // Blood pressure cuff (Health Connect).
+        col.addView(RunUi.text(this, "🩺 Blood pressure (Health Connect)", Color.WHITE, 15f, true).apply { setPadding(0, dp(14), 0, 0) })
+        col.addView(RunUi.card(this).apply {
+            addView(Switch(ctx).apply {
+                text = "Send blood pressure to the Command Center"; setTextColor(Color.WHITE); textSize = 15f
+                isChecked = BpImport.enabled(ctx)
+                setOnCheckedChangeListener { _, v -> BpImport.setEnabled(ctx, v)
+                    if (v) Thread { val g = BpImport.granted(applicationContext); runOnUiThread { if (!g) askHealth(BpImport.PERMS) else syncBp() } }.start() }
+            })
+            addView(RunUi.text(ctx, "Your cuff's app (Withings, Omron Connect, Samsung Health…) must share Blood pressure with Health Connect. " +
+                "All of the day's readings (up to 3 in a row) are averaged. It fills BP and Pulse in the Command Center's Wellness section (a value you typed there is never replaced). " +
+                "Checks when you open the app and about every 15 minutes.", RunUi.MUTED, 12f))
+            BpImport.lastInfo(ctx).takeIf { it.isNotBlank() }?.let { addView(RunUi.text(ctx, it, RunUi.DIM, 12f).apply { setPadding(0, dp(4), 0, 0) }) }
+            if (BpImport.enabled(ctx)) addView(RunUi.button(ctx, "Check blood pressure now", RunUi.CARD, Color.WHITE) {
+                Thread { val g = BpImport.granted(applicationContext); runOnUiThread { if (!g) askHealth(BpImport.PERMS) else syncBp() } }.start()
             }.apply { layoutParams = lp(10) })
         })
         // Health Connect import.
@@ -481,6 +530,23 @@ class RunSettingsActivity : Activity() {
         })
     }
 
+    private fun syncBp() {
+        val app = applicationContext
+        Toast.makeText(this, "Checking Health Connect…", Toast.LENGTH_SHORT).show()
+        Thread { try { BpImport.sync(app, 14); DailySummary.publish(app, force = true) } catch (e: Exception) { }
+            runOnUiThread { if (!isFinishing) { Toast.makeText(this, BpImport.lastInfo(app).substringAfter(" · ").ifBlank { "Done" }, Toast.LENGTH_LONG).show(); render() } } }.start()
+    }
+    /** A fresh copy of the 🌱 Life data first (so the backup has today's), then [go]. Waits at most a minute. */
+    private fun withLife(go: () -> Unit) {
+        if (!LifeTab.on(this)) { go(); return }
+        var done = false
+        val fin = { if (!done) { done = true; go() } }
+        Toast.makeText(this, "Saving your Life data…", Toast.LENGTH_SHORT).show()
+        CcEngine.exportLife(this, force = true) { msg -> runOnUiThread {
+            if (msg.startsWith("error")) Toast.makeText(this, "Couldn't save the Life data ($msg) — backing up the rest", Toast.LENGTH_LONG).show()
+            fin() } }
+        android.os.Handler(mainLooper).postDelayed({ fin() }, 100_000L)
+    }
     private fun syncWeights() {
         val app = applicationContext
         Thread { val n = try { WeightImport.sync(app, 7) } catch (e: Exception) { 0 }
@@ -488,7 +554,7 @@ class RunSettingsActivity : Activity() {
             runOnUiThread { Toast.makeText(this, if (n > 0) "Filled $n weight${if (n == 1) "" else "s"} from the scale" else WeightImport.lastInfo(app).ifEmpty { "Nothing new from the scale" }, Toast.LENGTH_LONG).show(); render() } }.start()
     }
     private fun askHealth(p: Set<String>) {
-        val code = 84
+        val code = if (p == BpImport.PERMS) 85 else 84
         if (android.os.Build.VERSION.SDK_INT >= 34) { requestPermissions(p.toTypedArray(), code); return }
         try { @Suppress("DEPRECATION") startActivityForResult(androidx.health.connect.client.PermissionController.createRequestPermissionResultContract().createIntent(this, p), code) }
         catch (e: Exception) { Toast.makeText(this, "Install or update Health Connect from the Play Store, then try again", Toast.LENGTH_LONG).show() }
@@ -503,6 +569,7 @@ class RunSettingsActivity : Activity() {
     }
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == 85) { Thread { val g = BpImport.granted(applicationContext); runOnUiThread { if (g) syncBp() else Toast.makeText(this, "Blood pressure access wasn't allowed — turn it on in Settings → Apps → BeyondStride → Permissions → Health Connect", Toast.LENGTH_LONG).show() } }.start(); return }
         if (requestCode == 84) { if (WeightImport.granted(applicationContext)) syncWeights() else Toast.makeText(this, "Weight access wasn't allowed — turn it on in Settings → Apps → BeyondStride → Permissions → Health Connect", Toast.LENGTH_LONG).show(); return }
         if (requestCode != 83) return
         val app = applicationContext

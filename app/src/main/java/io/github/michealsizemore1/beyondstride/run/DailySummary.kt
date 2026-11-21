@@ -10,9 +10,8 @@ import java.net.URL
 import java.time.LocalDate
 
 /**
- * A short summary of each day (training, sleep / recovery, nutrition), kept in BeyondStride's own cloud spot:
- * <db>/nutrition/<key>/beyondstride/daily/<date>. The Nutrition tab's Monthly / Yearly tables read it back
- * ([NutritionHistory]). (The Command Center used to read it too; that link was removed in Nov 2026.)
+ * A short, read-only summary of each day for the Command Center's Daily / Weekly Review (AI Fill Review reads it).
+ * Written to <db>/nutrition/<key>/beyondstride/daily/<date> — one way only: BeyondStride never reads anything back.
  */
 object DailySummary {
     private val S = ActivityStore
@@ -73,6 +72,8 @@ object DailySummary {
         // 😴 Sleep stages and BeyondStride's Sleep Score.
         SleepStages.get(ctx, date)?.let { d -> w.put("sleepScore", d.score); if (d.stages) w.put("deep", d.deep).put("rem", d.rem).put("light", d.light); w.put("awake", d.awake)
             if (d.bed > 0) w.put("bed", d.bedText()).put("wake", d.wakeText()) }
+        // Blood pressure + pulse from the cuff (Health Connect).
+        BpImport.day(ctx, date)?.let { (bp, pulse, n) -> w.put("bp", bp).put("bpN", n); if (pulse > 0) w.put("pulse", pulse) }
         // Steps (Samsung Health, via Health Connect).
         DayStress.steps(ctx, date)?.takeIf { it > 0 }?.let { w.put("steps", it) }
         // HRV: the morning check (Polar H10), ms.
@@ -112,5 +113,35 @@ object DailySummary {
             } catch (e: Exception) { }
         }
         if (days) pr.edit().putBoolean("backSleep2", true).apply()
+        // Activities (the last 400 days) for the Command Center's Weekly / Monthly / Yearly fitness and goals.
+        try {
+            val from = LocalDate.now().minusDays(400).toString()
+            val keys = listOf("id", "date", "title", "type", "distance", "duration", "pace", "power", "heartRate", "elevGain", "calories", "cadence", "notes")
+            val arr = org.json.JSONArray()
+            S.list(ctx).filter { S.str(it, "date").take(10) >= from }.sortedBy { S.str(it, "date") }.forEach { a ->
+                val o = JSONObject(); keys.forEach { k -> a.opt(k)?.takeIf { it.toString().isNotBlank() && it.toString() != "null" }?.let { v -> o.put(k, if (k == "notes") v.toString().take(500) else v) } }
+                arr.put(o)
+            }
+            val sig = arr.toString().hashCode()
+            if (force || pr.getInt("actsig", 0) != sig) {
+                val c = (URL(Live.db(ctx) + "/nutrition/" + NutritionSync.key(ctx) + "/beyondstride/activities.json").openConnection() as HttpURLConnection).apply {
+                    requestMethod = "PUT"; doOutput = true; connectTimeout = 15_000; readTimeout = 30_000; setRequestProperty("Content-Type", "application/json") }
+                c.outputStream.use { it.write(JSONObject().put("list", arr).put("at", System.currentTimeMillis()).toString().toByteArray()) }
+                if (c.responseCode in 200..299) pr.edit().putInt("actsig", sig).apply()
+            }
+        } catch (e: Exception) { }
+        // Training plan days (a week back, three weeks ahead) for the Command Center's My Schedule.
+        try {
+            val days = PlanStore.data(ctx).optJSONObject("current")?.optJSONObject("days")
+            val o = JSONObject()
+            if (days != null) for (i in -7L..21L) { val d = LocalDate.now().plusDays(i).toString(); days.optString(d).takeIf { it.isNotBlank() }?.let { o.put(d, it.take(1500)) } }
+            val sig = o.toString().hashCode()
+            if (force || pr.getInt("plansig", 0) != sig) {
+                val c = (URL(Live.db(ctx) + "/nutrition/" + NutritionSync.key(ctx) + "/beyondstride/plan.json").openConnection() as HttpURLConnection).apply {
+                    requestMethod = "PUT"; doOutput = true; connectTimeout = 15_000; readTimeout = 20_000; setRequestProperty("Content-Type", "application/json") }
+                c.outputStream.use { it.write(JSONObject().put("days", o).put("at", System.currentTimeMillis()).toString().toByteArray()) }
+                if (c.responseCode in 200..299) pr.edit().putInt("plansig", sig).apply()
+            }
+        } catch (e: Exception) { }
     }
 }
