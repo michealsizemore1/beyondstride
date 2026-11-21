@@ -26,6 +26,7 @@ import android.text.TextWatcher
 import android.view.View
 import android.view.inputmethod.EditorInfo
 import android.webkit.JavascriptInterface
+import org.json.JSONArray
 import org.json.JSONObject
 import org.json.JSONTokener
 
@@ -87,6 +88,7 @@ class LifeActivity : Activity() {
     private var checksCard: ChecksCard? = null
     private var scheduleCard: ScheduleCard? = null
     private var reviewCard: ReviewCard? = null
+    private var pastReviews: PastReviewsCard? = null
     private var wellCard: WellnessCard? = null
     private var bibleCard: BibleCard? = null
     private var weekCard: WeeklyCard? = null
@@ -233,7 +235,8 @@ class LifeActivity : Activity() {
         web.evaluateJavascript("(function(){var b=document.getElementById('hm-$name');if(b)b.click();else if(typeof hmSwitch==='function')hmSwitch('$name',{preventDefault:function(){}});window.scrollTo(0,0);})()", null)
     }
     private fun showReviews(p: Int) {
-        val v = listOfNotNull(weekTab?.view, journalCard?.view, reviewCard?.view, weekCard?.view)   // 📝 Review: goals, journal, today's review, the weekly review
+        val v = listOfNotNull(weekTab?.view, journalCard?.view, reviewCard?.view, pastReviews?.view, weekCard?.view)   // 📝 Review: goals, journal, today's review, past reviews, the weekly review
+        pastReviews?.refresh()
         if (reviewsCol.childCount == v.size && v.withIndex().all { (i, x) -> reviewsCol.getChildAt(i) === x }) return
         reviewsCol.removeAllViews(); v.forEach { x -> (x.parent as? ViewGroup)?.removeView(x); reviewsCol.addView(x) }
         reviewsScroll.scrollTo(0, 0)
@@ -290,6 +293,7 @@ class LifeActivity : Activity() {
         biblePeriods = PeriodTables("Spirituality", "bible", drop = listening)
         libPeriods = PeriodTables("Spirituality", "lib", only = listening)
         reviewCard = ReviewCard()   // on 📝 Review (looking back), not Daily (planning the day)
+        pastReviews = PastReviewsCard()   // 📜 earlier days' reviews, right under today's
         journalCard = JournalCard()   // on 📝 Review, above today's review (AI Fill reads it)
         // Weekly · Monthly · Yearly · Review each get their own page (showReviews puts the right card on it).
         weekTab = WeekTabCard(); weekCard = WeeklyCard(); monthCard = PeriodCard("monthly"); yearCard = PeriodCard("yearly")
@@ -444,6 +448,41 @@ class LifeActivity : Activity() {
                 if (!et.hasFocus() && et.text.toString() != o.optString("value")) et.setText(o.optString("value")) }
             note.text = when { busy -> "✨ Writing your review…"; unsaved -> "Not saved yet — tap Save Review when it looks right."; !r.optBoolean("hasKey") -> "AI Fill needs the Command Center's AI key (one time)."; else -> "" }
             note.visibility = if (note.text.isEmpty()) View.GONE else View.VISIBLE
+        }
+    }
+
+    /** 📜 Past reviews — earlier days' Daily AI Reviews, one day at a time (‹ older · newer ›). Read-only. */
+    private inner class PastReviewsCard {
+        private var idx = 0
+        private var body: LinearLayout? = null
+        private val group = LifeUi.FoldGroup(this@LifeActivity, listOf(LifeUi.Fold("life_pastrev", "📜 Past reviews", false) { b -> body = b; draw() }))
+        val view: View = group.view
+        private fun d(v: Int) = RunUi.dp(this@LifeActivity, v)
+        fun refresh() { group.refresh() }
+        private fun draw() {
+            val b = body ?: return
+            web.evaluateJavascript("window.ccNative&&ccNative.pastReviews?ccNative.pastReviews():'[]'") { r ->
+                val arr = try { JSONArray((JSONTokener(r).nextValue() as? String) ?: "[]") } catch (e: Exception) { JSONArray() }
+                b.removeAllViews()
+                if (arr.length() == 0) { b.addView(RunUi.text(this@LifeActivity, "No earlier reviews saved yet.", RunUi.MUTED, 12f)); return@evaluateJavascript }
+                idx = idx.coerceIn(0, arr.length() - 1)
+                val o = arr.getJSONObject(idx)
+                val date = try { java.time.LocalDate.parse(o.optString("date")).format(java.time.format.DateTimeFormatter.ofPattern("EEE, MMM d, yyyy", java.util.Locale.US)) } catch (e: Exception) { o.optString("date") }
+                fun arrow(t: String, on: Boolean, go: () -> Unit) = RunUi.text(this@LifeActivity, t, if (on) RunUi.ACCENT else RunUi.DIM, 22f, true).apply {
+                    setPadding(d(14), d(4), d(14), d(4)); if (on) setOnClickListener { go(); draw() } }
+                b.addView(LinearLayout(this@LifeActivity).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL
+                    addView(arrow("‹", idx < arr.length() - 1) { idx++ })
+                    addView(RunUi.text(this@LifeActivity, date, Color.WHITE, 15f, true).apply { gravity = android.view.Gravity.CENTER },
+                        LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+                    addView(arrow("›", idx > 0) { idx-- }) })
+                val f = o.optJSONArray("fields") ?: JSONArray()
+                for (i in 0 until f.length()) { val x = f.getJSONObject(i); val v = x.optString("value").trim()
+                    b.addView(RunUi.text(this@LifeActivity, x.optString("label"), RunUi.ACCENT, 13f, true).apply { setPadding(0, d(10), 0, d(2)) })
+                    b.addView(RunUi.text(this@LifeActivity, v.ifEmpty { "—" }, if (v.isEmpty()) RunUi.DIM else Color.WHITE, 14f).apply {
+                        setTextIsSelectable(true); background = RunUi.rounded(0xFF26302C.toInt(), d(10).toFloat()); setPadding(d(10), d(8), d(10), d(8)) })
+                }
+                b.addView(RunUi.text(this@LifeActivity, "${idx + 1} of ${arr.length()} saved reviews. To change an older one: Tools → 📓 Full view, go to that day.", RunUi.DIM, 10f).apply { setPadding(0, d(8), 0, 0) })
+            }
         }
     }
 

@@ -505,6 +505,13 @@
       try{save();}catch(e){}refresh();return true;
     },
     /** Daily AI Review: change a field (saved like typing in the Command Center). */
+    // 📜 Past reviews: every earlier day with a saved Daily AI Review, newest first (read-only).
+    pastReviews:function(){var out=[],t=realKey();
+      try{for(var i=0;i<localStorage.length;i++){var k=localStorage.key(i);if(!k||k.indexOf('dayreview_')!==0)continue;var d=k.slice(10);if(!/^\d{4}-\d{2}-\d{2}$/.test(d)||d>=t)continue;
+        var v={};try{v=JSON.parse(localStorage.getItem(k)||'{}')||{};}catch(e){continue;}
+        var f=REV.map(function(r){return {label:r[1],value:String(v[r[0]]||'')};});if(!f.some(function(x){return x.value.trim();}))continue;
+        out.push({date:d,how:localStorage.getItem('autoDayRev_'+d)||'',fields:f});}}catch(e){}
+      out.sort(function(a,b){return a.date<b.date?1:-1;});return JSON.stringify(out);},
     setReview:function(id,value){
       if(!REV.some(function(r){return r[0]===id;}))return false;goRealDay();
       var el=document.getElementById(id);if(!el)return false;el.value=String(value||'');
