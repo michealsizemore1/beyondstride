@@ -65,6 +65,7 @@ class LifeActivity : Activity() {
     private var lifeBible: LifeBible? = null
     private var pickCb: ((Uri) -> Unit)? = null
     private var lifeLibrary: LifeLibrary? = null
+    private val brain by lazy { LifeBrain(this) }
     private var medHeader: LifeMeditate? = null
     private var wellPeriods: PeriodTables? = null
     private var biblePeriods: PeriodTables? = null
@@ -183,7 +184,8 @@ class LifeActivity : Activity() {
             Triple("🌱", "Habits", "habits2") to "All habits, add / edit, history",
             Triple("📚", "Library", "library") to "Books, audiobooks, finish plan",
             Triple("🧘", "Meditate", "meditate") to "Guided timer, scripture, session log",
-            Triple("❤️", "Wellness", "wellness") to "BP + report, meds, weight, sleep, movement")
+            Triple("❤️", "Wellness", "wellness") to "BP + report, meds, weight, sleep, movement",
+            Triple("🧠", "Brain Games", "brain") to "Memory, focus and quick math, a daily workout")
         items.chunked(2).forEach { row ->
             col.addView(LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; setPadding(0, d(8), 0, 0)
                 row.forEachIndexed { i, (t, desc) ->
@@ -209,6 +211,7 @@ class LifeActivity : Activity() {
             "library" -> listOfNotNull(lifeLibrary?.view, libPeriods?.view)
             "habits2" -> listOfNotNull(habitsCard?.view)
             "dash" -> listOfNotNull(dashCard?.view)
+            "brain" -> listOf(brain.view)
             else -> emptyList()
         }
         if (views.isEmpty()) { openCcPage(name); return }
@@ -216,14 +219,15 @@ class LifeActivity : Activity() {
         section = name
         sectionCol.removeAllViews()
         sectionCol.addView(LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL; setPadding(0, d(6), 0, 0)
-            addView(RunUi.text(this@LifeActivity, "‹", RunUi.ACCENT, 26f, true).apply { setPadding(d(2), 0, d(12), 0); setOnClickListener { showPage(5) } })
+            addView(RunUi.text(this@LifeActivity, "‹", RunUi.ACCENT, 26f, true).apply { setPadding(d(2), 0, d(12), 0); setOnClickListener { brain.stop(); showPage(5) } })
             addView(RunUi.text(this@LifeActivity, title, Color.WHITE, 20f, true)) })
         views.forEach { v -> (v.parent as? ViewGroup)?.removeView(v); sectionCol.addView(v) }
-        if (name != "dash") sectionCol.addView(RunUi.text(this, "Open the full ${title.substringAfter(' ')} page ›", 0xFFA78BFA.toInt(), 13f, true).apply {
+        if (name != "dash" && name != "brain") sectionCol.addView(RunUi.text(this, "Open the full ${title.substringAfter(' ')} page ›", 0xFFA78BFA.toInt(), 13f, true).apply {
             setPadding(0, d(14), 0, 0); setOnClickListener { openCcPage(name) } })
         showPage(6); sectionScroll.scrollTo(0, 0)
         if (name == "habits2") habitsCard?.load()
         if (name == "dash") dashCard?.load()
+        if (name == "brain") brain.show() else brain.stop()
         if (name == "meditate") { more.load(); more.loadSounds() }
         if (name == "bible") { lifeBible?.load(); biblePeriods?.load() }
         if (name == "wellness") wellPeriods?.load()
