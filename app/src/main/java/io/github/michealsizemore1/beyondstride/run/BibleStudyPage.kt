@@ -177,8 +177,7 @@ class BibleStudyPage(private val act: Activity, private val web: WebView, privat
     private fun link(u: String) { try { act.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(u))) } catch (e: Exception) { } }
 
     // ── 📖 Read: the passage, read aloud by the phone ──
-    private val verseViews = ArrayList<Pair<TextView, String>>()   // each verse's view and its spoken text
-    private val verseBase = ArrayList<SpannableString>()
+    private val verseViews = ArrayList<Pair<View, String>>()   // each verse's text block and its spoken text
     private fun drawRead(j: JSONObject) {
         val done = j.optJSONObject("done") ?: JSONObject()
         body.addView(LinearLayout(act).apply { orientation = LinearLayout.HORIZONTAL; setPadding(0, d(6), 0, 0)
@@ -188,7 +187,7 @@ class BibleStudyPage(private val act: Activity, private val web: WebView, privat
                 LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f)) })
         body.addView(RunUi.text(act, "Read in the NLT ↗", 0xFFA78BFA.toInt(), 13f, true).apply { setPadding(0, d(10), 0, 0); setOnClickListener { link(j.optString("nlt")) } })
         body.addView(RunUi.text(act, "Already listened to today's audiobook? Tap ✓ I listened — no need to read it again; it moves on to the study. Text: World English Bible. Purple is today's focus; gold is the key verse.", RunUi.MUTED, 12f).apply { setPadding(0, d(8), 0, 0) })
-        verseViews.clear(); verseBase.clear(); verseKeys.clear(); verseNum.clear()
+        verseViews.clear(); verseKeys.clear(); verseNum.clear(); verseNo.clear(); verseStart.clear(); verseBlock.clear(); blocks.clear()
         val lists = j.optJSONArray("verses")
         if (lists == null) { body.addView(card().apply { p("⏳ Loading today's passages…") }); return }
         hl = j.optJSONObject("hl") ?: JSONObject()
@@ -212,21 +211,22 @@ class BibleStudyPage(private val act: Activity, private val web: WebView, privat
             val seg = lists.getJSONObject(i); val vs = seg.optJSONArray("verses") ?: JSONArray()
             val c = card(); c.h(seg.optString("ref"))
             if (vs.length() == 0) { c.addView(RunUi.text(act, "Couldn't load this passage here — tap to read it in the NLT ↗", 0xFFA78BFA.toInt(), 13f).apply { setOnClickListener { link(seg.optString("nlt")) } }) }
-            var lastC = -1
-            for (k in 0 until vs.length()) {
-                val v = vs.getJSONObject(k)
-                if (v.optInt("c") != lastC) { lastC = v.optInt("c"); c.addView(RunUi.text(act, "Chapter $lastC", 0xFFA78BFA.toInt(), 12f, true).apply { setPadding(0, d(8), 0, d(2)) }) }
-                val num = v.optInt("v").toString() + "  "; val txt = v.optString("t")
-                val key = v.optString("b") + " " + v.optInt("c") + ":" + v.optInt("v")
-                val idx = verseViews.size
+            // One block of text per chapter, so a selection can run across several verses.
+            var lastC = -1; var blockIdx = ArrayList<Int>()
+            fun closeBlock() { if (blockIdx.isEmpty()) return
                 val tv = TextView(act).apply { setTextColor(Color.WHITE); textSize = 17f; typeface = Typeface.SERIF; setLineSpacing(0f, 1.3f); setPadding(d(4), d(3), d(4), d(3))
                     setTextIsSelectable(true); highlightColor = 0x667C3AED }
-                tv.tag = num.length
-                verseViews.add(tv to txt); verseKeys.add(key); verseNum.add(v.optInt("k"))
-                verseBase.add(base(idx))
-                tv.customSelectionActionModeCallback = hlMenu(idx)
-                c.addView(tv)
+                val bi = blocks.size; blocks.add(tv to ArrayList(blockIdx)); blockIdx.forEach { verseBlock[it] = bi; verseViews[it] = tv to verseViews[it].second }
+                tv.customSelectionActionModeCallback = hlMenu(bi)
+                c.addView(tv); blockIdx = ArrayList() }
+            for (k in 0 until vs.length()) {
+                val v = vs.getJSONObject(k)
+                if (v.optInt("c") != lastC) { closeBlock(); lastC = v.optInt("c"); c.addView(RunUi.text(act, "Chapter $lastC", 0xFFA78BFA.toInt(), 12f, true).apply { setPadding(0, d(8), 0, d(2)) }) }
+                blockIdx.add(verseViews.size)
+                verseViews.add(body to v.optString("t")); verseKeys.add(v.optString("b") + " " + v.optInt("c") + ":" + v.optInt("v")); verseNum.add(v.optInt("k"))
+                verseNo.add(v.optInt("v")); verseStart.add(0); verseBlock.add(-1)
             }
+            closeBlock()
             body.addView(c)
         }
         applySearch()
@@ -242,59 +242,72 @@ class BibleStudyPage(private val act: Activity, private val web: WebView, privat
     private val findInfo = RunUi.text(act, "", RunUi.MUTED, 12f)
     private val HL = listOf("Yellow" to 0xAAEAB308.toInt(), "Green" to 0xAA16A34A.toInt(), "Blue" to 0xAA2563EB.toInt(), "Pink" to 0xAADB2777.toInt())
 
-    /** A verse's text with its shading: focus / key verse, then your highlights on top. */
-    private fun base(i: Int): SpannableString {
-        val (_, txt) = verseViews[i]; val tv = verseViews[i].first; val off = tv.tag as? Int ?: 0
-        val num = (tv.tag as? Int)?.let { verseKeys[i].substringAfterLast(':') + "  " } ?: ""
-        val sp = SpannableString(num + txt)
-        sp.setSpan(ForegroundColorSpan(0xFFA78BFA.toInt()), 0, off, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-        when (verseNum[i]) { 1 -> sp.setSpan(BackgroundColorSpan(0x66B45309), off, sp.length, 0); 2 -> sp.setSpan(BackgroundColorSpan(0x335B21B6), off, sp.length, 0) }
-        val a = hl.optJSONArray(verseKeys[i]) ?: JSONArray()
-        for (k in 0 until a.length()) { val r = a.optJSONArray(k) ?: continue
-            val f = r.optInt(0).coerceIn(0, txt.length); val t = r.optInt(1).coerceIn(f, txt.length)
-            if (t > f) sp.setSpan(BackgroundColorSpan(r.optInt(2)), off + f, off + t, 0) }
-        return sp
+    private val verseNo = ArrayList<Int>()
+    private val verseStart = ArrayList<Int>()      // where each verse's words start inside its block
+    private val verseBlock = ArrayList<Int>()
+    private val blocks = ArrayList<Pair<TextView, List<Int>>>()
+    private var readWs = -1; private var readWe = -1
+
+    /** Draw one chapter block: verse numbers, focus / key shading, your highlights, search matches, the verse being read. */
+    private fun render(bi: Int) {
+        if (bi !in blocks.indices) return
+        val (tv, idx) = blocks[bi]; val sb = android.text.SpannableStringBuilder(); val q = query.lowercase(Locale.US)
+        idx.forEachIndexed { n, i ->
+            if (n > 0) sb.append("\n")
+            val ns = sb.length; sb.append(verseNo[i].toString() + "  ")
+            sb.setSpan(ForegroundColorSpan(0xFFA78BFA.toInt()), ns, sb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            val o = sb.length; val txt = verseViews[i].second; verseStart[i] = o; sb.append(txt)
+            when (verseNum[i]) { 1 -> sb.setSpan(BackgroundColorSpan(0x66B45309), o, sb.length, 0); 2 -> sb.setSpan(BackgroundColorSpan(0x335B21B6), o, sb.length, 0) }
+            val a = hl.optJSONArray(verseKeys[i]) ?: JSONArray()
+            for (k in 0 until a.length()) { val r = a.optJSONArray(k) ?: continue
+                val f = r.optInt(0).coerceIn(0, txt.length); val t = r.optInt(1).coerceIn(f, txt.length)
+                if (t > f) sb.setSpan(BackgroundColorSpan(r.optInt(2)), o + f, o + t, 0) }
+            if (q.length >= 2) { val low = txt.lowercase(Locale.US); var at = low.indexOf(q)
+                while (at >= 0) { sb.setSpan(BackgroundColorSpan(0xFFFACC15.toInt()), o + at, o + at + q.length, 0); sb.setSpan(ForegroundColorSpan(Color.BLACK), o + at, o + at + q.length, 0); at = low.indexOf(q, at + q.length) } }
+            if (reading && i == current) { sb.setSpan(BackgroundColorSpan(0xFF173A4A.toInt()), o, sb.length, 0)
+                if (readWs >= 0 && readWe > readWs && readWe <= txt.length) sb.setSpan(BackgroundColorSpan(0xFF7C3AED.toInt()), o + readWs, o + readWe, 0) }
+        }
+        tv.text = sb
     }
-    /** Show verse [i]: its shading plus any search matches. */
-    private fun show(i: Int) {
-        val tv = verseViews[i].first; val off = tv.tag as? Int ?: 0
-        if (query.length < 2) { tv.text = verseBase[i]; return }
-        val sp = SpannableString(verseBase[i]); val low = verseViews[i].second.lowercase(Locale.US); val q = query.lowercase(Locale.US)
-        var at = low.indexOf(q)
-        while (at >= 0) { sp.setSpan(BackgroundColorSpan(0xFFFACC15.toInt()), off + at, off + at + q.length, 0); sp.setSpan(ForegroundColorSpan(Color.BLACK), off + at, off + at + q.length, 0); at = low.indexOf(q, at + q.length) }
-        tv.text = sp
-    }
+    private fun show(i: Int) { if (i in verseBlock.indices) render(verseBlock[i]) }
     private fun applySearch() {
         hits.clear()
         val q = query.lowercase(Locale.US)
-        for (i in verseViews.indices) { if (i == current && reading) continue
-            show(i)
-            if (q.length >= 2) { var at = verseViews[i].second.lowercase(Locale.US).indexOf(q); while (at >= 0) { hits.add(i); at = verseViews[i].second.lowercase(Locale.US).indexOf(q, at + q.length) } } }
+        if (q.length >= 2) for (i in verseViews.indices) { val low = verseViews[i].second.lowercase(Locale.US); var at = low.indexOf(q); while (at >= 0) { hits.add(i); at = low.indexOf(q, at + q.length) } }
+        blocks.indices.forEach { render(it) }
         findInfo.text = when { q.length < 2 -> ""; hits.isEmpty() -> "No matches"; else -> "${hits.size} match${if (hits.size == 1) "" else "es"} in ${hits.distinct().size} verse${if (hits.distinct().size == 1) "" else "s"}" }
+    }
+    /** Scroll so verse [i] sits about a third of the way down. */
+    private fun scrollTo(i: Int) {
+        val bi = verseBlock.getOrNull(i) ?: return; val tv = blocks.getOrNull(bi)?.first ?: return
+        tv.post { val lay = tv.layout ?: return@post
+            val y = ((tv.parent as? View)?.top ?: 0) + tv.top + lay.getLineTop(lay.getLineForOffset(verseStart[i]))
+            scroll.smoothScrollTo(0, (y - scroll.height / 3).coerceAtLeast(0)) }
     }
     private fun jump(dir: Int) {
         if (hits.isEmpty()) return
         hit = ((if (hit < 0 && dir < 0) 0 else hit) + dir + hits.size) % hits.size
-        val tv = verseViews[hits[hit]].first
         findInfo.text = "${hit + 1} of ${hits.size} · ${verseKeys[hits[hit]]}"
-        tv.post { val y = (tv.parent as? View)?.let { it.top + tv.top } ?: tv.top; scroll.smoothScrollTo(0, (y - scroll.height / 3).coerceAtLeast(0)) }
+        scrollTo(hits[hit])
     }
-    /** The menu when you select text: highlight colors, or remove. */
-    private fun hlMenu(i: Int) = object : android.view.ActionMode.Callback {
+    /** The menu when you select text (it can cover several verses): highlight colors, or remove. */
+    private fun hlMenu(bi: Int) = object : android.view.ActionMode.Callback {
         override fun onCreateActionMode(mode: android.view.ActionMode, menu: android.view.Menu): Boolean {
             HL.forEachIndexed { n, (name, _) -> menu.add(0, 9100 + n, n, "🖍 $name") }
             menu.add(0, 9199, HL.size, "Remove highlight"); return true }
         override fun onPrepareActionMode(mode: android.view.ActionMode, menu: android.view.Menu) = false
         override fun onActionItemClicked(mode: android.view.ActionMode, item: android.view.MenuItem): Boolean {
             val id = item.itemId; if (id < 9100 || id > 9199) return false
-            val tv = verseViews[i].first; val off = tv.tag as? Int ?: 0; val len = verseViews[i].second.length
-            val f = (minOf(tv.selectionStart, tv.selectionEnd) - off).coerceIn(0, len); val t = (maxOf(tv.selectionStart, tv.selectionEnd) - off).coerceIn(0, len)
-            if (t > f) setHighlight(i, f, t, if (id == 9199) null else HL[id - 9100].second)
-            mode.finish(); return true }
+            val tv = blocks[bi].first; val s0 = minOf(tv.selectionStart, tv.selectionEnd); val s1 = maxOf(tv.selectionStart, tv.selectionEnd)
+            mode.finish()
+            blocks[bi].second.forEach { i -> val o = verseStart[i]; val len = verseViews[i].second.length
+                val f = (s0 - o).coerceIn(0, len); val t = (s1 - o).coerceIn(0, len)
+                if (t > f) setHighlight(i, f, t, if (id == 9199) null else HL[id - 9100].second, draw = false) }
+            render(bi); return true }
         override fun onDestroyActionMode(mode: android.view.ActionMode) {}
     }
     /** Paint [f, t) with [color] (or clear it), keep the rest, save. */
-    private fun setHighlight(i: Int, f: Int, t: Int, color: Int?) {
+    private fun setHighlight(i: Int, f: Int, t: Int, color: Int?, draw: Boolean = true) {
         val key = verseKeys[i]; val old = hl.optJSONArray(key) ?: JSONArray(); val out = JSONArray()
         for (k in 0 until old.length()) { val r = old.optJSONArray(k) ?: continue; val a = r.optInt(0); val b = r.optInt(1); val c = r.optInt(2)
             if (b <= f || a >= t) { out.put(r); continue }
@@ -302,7 +315,7 @@ class BibleStudyPage(private val act: Activity, private val web: WebView, privat
             if (b > t) out.put(JSONArray().put(t).put(b).put(c)) }
         if (color != null) out.put(JSONArray().put(f).put(t).put(color))
         if (out.length() == 0) hl.remove(key) else hl.put(key, out)
-        verseBase[i] = base(i); show(i)
+        if (draw) show(i)
         call("bibleStudy.nHl(${JSONObject.quote(key)},${JSONObject.quote(out.toString())})")
     }
 
@@ -338,22 +351,15 @@ class BibleStudyPage(private val act: Activity, private val web: WebView, privat
     /** Shade the verse being read and the word being spoken; keep the verse in view. */
     private fun mark(i: Int, ws: Int, we: Int) {
         if (!reading || i !in verseViews.indices) return
-        if (current != i && current in verseViews.indices) { val c0 = current; current = -1; show(c0); verseViews[c0].first.background = null }
-        current = i
-        val (tv, _) = verseViews[i]; val off = tv.tag as? Int ?: 0
-        val sp = SpannableString(verseBase[i])
-        if (ws >= 0 && we > ws && off + we <= sp.length) {
-            sp.setSpan(BackgroundColorSpan(0xFF7C3AED.toInt()), off + ws, off + we, 0)
-        }
-        tv.text = sp; tv.background = RunUi.rounded(0xFF173A4A.toInt(), d(6).toFloat())
-        val y = (tv.parent as? View)?.let { it.top + tv.top } ?: tv.top
-        if (ws < 0) scroll.smoothScrollTo(0, (y - scroll.height / 3).coerceAtLeast(0))
+        val prev = current; current = i; readWs = ws; readWe = we
+        if (prev in verseBlock.indices && verseBlock[prev] != verseBlock[i]) show(prev)
+        show(i)
+        if (ws < 0) scrollTo(i)
     }
     fun stopReading() {
         if (!reading && current < 0) return
         reading = false; try { tts?.stop() } catch (e: Exception) { }
-        if (current in verseViews.indices) { val c0 = current; current = -1; show(c0); verseViews[c0].first.background = null }
-        current = -1
+        val c0 = current; current = -1; readWs = -1; readWe = -1; if (c0 in verseViews.indices) show(c0)
     }
     fun destroy() { hide(); try { tts?.shutdown() } catch (e: Exception) { }; tts = null }
 
