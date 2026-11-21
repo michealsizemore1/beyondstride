@@ -381,14 +381,19 @@ var box=document.querySelector('.tri-check[data-key="'+key+'"]');if(!box)return;
     S._err='';if(!S.study)prepare();
     return 'ok';
   }
+  // 🖍 Your highlights, by verse ("Book C:V" → [[from,to,color],…], character positions in the verse text). Kept with the
+  // rest of the Life data (so they're in BeyondStride's Backup).
+  function hlAll(){return ls('bstudy_highlights')||{};}
+  function hlFor(lists){if(!lists)return {};var all=hlAll(),out={};lists.forEach(function(l){l.forEach(function(x){var k=x.b+' '+x.c+':'+x.v;if(all[k])out[k]=all[k];});});return out;}
+  function nHl(key,json){var all=hlAll(),v=[];try{v=JSON.parse(json)||[];}catch(e){}if(v.length)all[key]=v;else delete all[key];ls('bstudy_highlights',all);return 'ok';}
   function nState(){
     if(!S)return JSON.stringify({none:true});
     if(S.study&&S.step===1&&!S.verses)loadVerses();
     if(S.study&&S.step===4&&!S.closing)closing();
     var st=S.study,v=null;
-    if(S.verses)v=S.verses.map(function(list,i){return {ref:segLabel(S.segs[i]),nlt:nltLink([S.segs[i]]),verses:list.map(function(x){return {c:x.c,v:x.v,t:x.t,k:isKey(x)?1:inFocus(x)?2:0};})};});
+    if(S.verses)v=S.verses.map(function(list,i){return {ref:segLabel(S.segs[i]),nlt:nltLink([S.segs[i]]),verses:list.map(function(x){return {b:x.b,c:x.c,v:x.v,t:x.t,k:isKey(x)?1:inFocus(x)?2:0};})};});
     return JSON.stringify({date:S.date,label:S.label,ref:refText(),step:S.step,done:S.done,finished:!!S.finished,study:st||null,answers:S.answers,closing:S.closing||'',
-      preparing:!!S._preparing,error:S._err||'',verses:v,loadingVerses:!!S._loading,nlt:nltLink(S.segs),memory:memoryLine(),xref:S._x||{}});
+      preparing:!!S._preparing,error:S._err||'',verses:v,loadingVerses:!!S._loading,nlt:nltLink(S.segs),memory:memoryLine(),xref:S._x||{},hl:hlFor(S.verses)});
   }
   function nAnswer(k,val){if(!S)return false;if(k==='s'||k==='p')S.answers[k]=String(val||'');else{var arr=S.answers[k[0]];if(!arr)return false;arr[+k.slice(1)]=String(val||'');}persist();return true;}
   function nXref(i){
@@ -415,7 +420,7 @@ var box=document.querySelector('.tri-check[data-key="'+key+'"]');if(!box)return;
     keys.sort().reverse();return keys.map(function(k){return ls(k);}).filter(function(o){return o&&o.study;}).map(function(o){var a=o.answers||{},st=o.study||{};
       return {date:o.date,label:st.focus_label||'',theme:st.theme||'',ref:o.segs?o.segs.map(segLabel).join('; '):((o.book||'')+' '+(o.chapter||'')),
         s:a.s||'',o:(a.o||[]).filter(Boolean),a:(a.a||[]).filter(Boolean),p:a.p||'',finished:!!o.finished};});}
-  window.bibleStudy={nDay:nDay,nFix:nFix,nPlan:nPlan,nCard:nCard,nJournal:nJournal,info:info,nStart:nStart,nState:nState,nStep:function(i){stepTo(i);return nState();},nAnswer:nAnswer,nXref:nXref,
+  window.bibleStudy={nHl:nHl,nDay:nDay,nFix:nFix,nPlan:nPlan,nCard:nCard,nJournal:nJournal,info:info,nStart:nStart,nState:nState,nStep:function(i){stepTo(i);return nState();},nAnswer:nAnswer,nXref:nXref,
     nListened:function(){listened();return true;},nListenedApp:function(){listened();if(S&&S.step===1)stepTo(2);return true;},nRetry:function(){if(S){S._err='';S._preparing=false;if(!S.study)prepare();}return true;},open:open,close:close,step:function(d){stepTo(S.step+d);},go:function(i){stepTo(i);},listen:listen,listened:listened,listenedApp:listenedApp,xref:xref,plan:choosePlan,journal:journal,day:pickDay,fix:fixReading,
     retry:function(){S._preparing=false;render();}};
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',function(){setTimeout(renderCard,800);});else setTimeout(renderCard,800);
