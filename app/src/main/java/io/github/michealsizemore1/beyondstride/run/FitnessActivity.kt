@@ -264,7 +264,7 @@ class FitnessActivity : Activity() {
             col.addView(RunUi.section(this, "RACE FITNESS & CONDITIONS"))
             ActivityAnalysis(this, panels) { render() }.apply { racePredictor(col, acts); heatHumidity(col, acts) }
             ZonesCard.build(this, col, panels) { render() }
-            RacePacing.card(this, col, acts) { render() }
+            RacePacing.card(this, col, acts, panels) { render() }
         }
         RunUi.styleGroups(col)
         setContentView(RunUi.tabbed(this, ScrollView(this).apply {

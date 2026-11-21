@@ -19,12 +19,14 @@ import java.util.Locale
 /**
  * 🏁 Race Pacing Plan (Fitness tab): mile-by-mile splits for a goal time — your own goal, or the estimated time from your
  * recent running — even or negative split, slowed for race-day heat & humidity. "Send to watch" adds it to the watch's
- * workouts with a pace target for every mile.
+ * workouts with a pace target for every mile. Folded until tapped; 50K by default, using the upper (slower) estimate —
+ * the "Adjusted" 50K time from Estimated Race Times.
  */
 object RacePacing {
     private var redraw: () -> Unit = {}
     private fun p(a: Activity) = a.getSharedPreferences("racepacing", 0)
-    private val DISTS = listOf("Marathon" to 26.2188, "Half marathon" to 13.1094, "10K" to 6.21371, "5K" to 3.10686)
+    private val DISTS = listOf("Marathon" to 26.2188, "Half marathon" to 13.1094, "10K" to 6.21371, "5K" to 3.10686, "50K" to 31.0686)
+    private const val D50K = 4
     private fun dp(a: Activity, v: Int) = RunUi.dp(a, v)
 
     private fun hms(sec: Int): String { val h = sec / 3600; val m = sec % 3600 / 60; val s = sec % 60
@@ -41,24 +43,37 @@ object RacePacing {
             val pc = S.paceSec(S.str(a, "pace")); val mi = S.num(a, "distance")
             if (pc > 0 && mi >= 1 && (bestP == 0 || pc < bestP)) { bestP = pc; bestD = mi } }
         if (bestP == 0) return null
-        return Coaching.riegel(bestP * bestD, bestD, miles).toInt()
+        val flat = Coaching.riegel(bestP * bestD, bestD, miles)
+        return (if (miles > 30) flat * ultraAdj(miles) else flat).toInt()
     }
 
-    fun card(a: Activity, col: LinearLayout, acts: List<JSONObject>, redraw: () -> Unit = { a.recreate() }) {
+    /** The upper end for an ultra: Estimated Race Times' "Adjusted" 50K (+8% fatigue/fueling, 5,000 ft of climbing). */
+    private fun ultraAdj(miles: Double): Double {
+        fun cr(i: Double) = 155.4 * Math.pow(i, 5.0) - 30.4 * Math.pow(i, 4.0) - 43.3 * Math.pow(i, 3.0) + 46.3 * i * i + 19.5 * i + 3.6
+        val g = Math.min(5000 * 0.3048 / (miles * 1609.344 / 2), 0.45)
+        return 1.08 * ((cr(g) / cr(0.0) + cr(-g) / cr(0.0)) / 2)
+    }
+
+    fun card(a: Activity, col: LinearLayout, acts: List<JSONObject>, open: MutableSet<String>, redraw: () -> Unit = { a.recreate() }) {
         this.redraw = redraw
         val pr = p(a)
-        val di = pr.getInt("dist", 0).coerceIn(0, DISTS.lastIndex); val (dName, miles) = DISTS[di]
+        // Once: switch to 50K (the race you're training for).
+        if (!pr.getBoolean("v50k", false)) pr.edit().putInt("dist", D50K).putBoolean("v50k", true).apply()
+        val di = pr.getInt("dist", D50K).coerceIn(0, DISTS.lastIndex); val (dName, miles) = DISTS[di]
         val est = estimate(acts, miles)
         val goal = pr.getInt("goal_$di", 0).takeIf { it > 0 } ?: est
         val strat = pr.getString("strategy", "negative") ?: "negative"
         val temp = pr.getFloat("temp", 0f).toDouble(); val hum = pr.getFloat("hum", 0f).toDouble()
         val heat = if (temp > 0 && hum > 0) Heat.pct(temp, hum) else 0.0
+        // Folded until tapped, like the rows above it.
+        val isOpen = "pace" in open
+        col.addView(RunUi.groupRow(a, "🏁 Race Pacing Plan (" + dName + (goal?.let { " · " + hms(it) } ?: "") + ")", isOpen) { if (isOpen) open.remove("pace") else open.add("pace"); redraw() })
+        if (!isOpen) return
         col.addView(RunUi.card(a).apply {
-            addView(RunUi.text(a, "🏁 Race Pacing Plan", Color.WHITE, 16f, true))
             if (goal == null) {
                 addView(RunUi.text(a, "Set a goal time to see your mile splits (no recent run of 1+ mi to estimate from).", RunUi.MUTED, 12f))
             } else {
-                val src = if (pr.getInt("goal_$di", 0) > 0) "your goal" else "estimated from recent runs"
+                val src = if (pr.getInt("goal_$di", 0) > 0) "your goal" else if (miles > 30) "upper-end estimate from recent runs" else "estimated from recent runs"
                 addView(RunUi.text(a, "$dName · ${hms(goal)} ($src) · " + (if (strat == "even") "even pace" else "negative split"), RunUi.ACCENT, 13f, true))
                 if (heat > 0.05) addView(RunUi.text(a, String.format(Locale.US, "Race-day %.0f°F, %.0f%% humidity: +%.1f%% → finish %s", temp, hum, heat, hms((goal * (1 + heat / 100)).toInt())), 0xFFF97316.toInt(), 12f, true))
                 else if (temp > 0) addView(RunUi.text(a, String.format(Locale.US, "Race-day %.0f°F, %.0f%% humidity: no heat slowdown", temp, hum), RunUi.MUTED, 12f))
