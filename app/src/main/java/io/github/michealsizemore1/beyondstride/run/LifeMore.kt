@@ -38,7 +38,7 @@ import java.util.Locale
  * 🔍 journal search · 💬 Ask AI + saved answers · 🩺 BP report · 📁 files · ⚙️ settings (the 🧘 meditation timer is built here but shown in ☰ Tabs → Meditate).
  * Everything reads and changes the Command Center's own data through window.ccNative.
  */
-class LifeMore(private val act: Activity, private val web: WebView, private val needKey: () -> Unit) {
+class LifeMore(private val act: Activity, private val web: WebView, private val needKey: () -> Unit, private val openFull: () -> Unit = {}) {
     val col = LinearLayout(act).apply { orientation = LinearLayout.VERTICAL; setPadding(d(14), 0, d(14), d(24)) }
     private val ui = Handler(Looper.getMainLooper())
     lateinit var meditView: LinearLayout
@@ -73,7 +73,15 @@ class LifeMore(private val act: Activity, private val web: WebView, private val 
             fold("search", "🔍 Search your journal", searchCard()),
             fold("ask", "💬 Ask AI about your journal", askCard()),
             fold("files", "📁 Files", filesCard()),
-            fold("settings", "⚙️ Settings", settings))).view)
+            fold("settings", "⚙️ Settings", settings),
+            fold("full", "📓 Full view", fullCard()))).view)
+    }
+
+    // ── 📓 Full view: the whole planner page (inside the app, your Life data). A fallback for anything without its own screen. ──
+    private fun fullCard() = RunUi.card(act).apply {
+        title(this, "📓 Full view")
+        addView(note("The whole planner page, with your Life tab data (not the website). Use it for anything that doesn't have its own screen yet, like editing schedule times or past journal entries."))
+        addView(RunUi.button(act, "Open full view", 0xFF374151.toInt(), Color.WHITE) { openFull() }, lp())
     }
 
     // ── 🔍 Search ──

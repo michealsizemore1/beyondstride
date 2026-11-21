@@ -117,7 +117,7 @@ class LifeActivity : Activity() {
             addView(web, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
             addView(nativeScroll, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
             addView(reviewsScroll, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
-            more = LifeMore(this@LifeActivity, web) { needKey() }
+            more = LifeMore(this@LifeActivity, web, { needKey() }, { showPage(2) })
             moreScroll = ScrollView(this@LifeActivity).apply { setBackgroundColor(RunUi.BG); isFillViewport = true; addView(more.col) }
             addView(moreScroll, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
             tabsScroll = ScrollView(this@LifeActivity).apply { setBackgroundColor(RunUi.BG); isFillViewport = true; addView(tabsPage()) }
@@ -171,19 +171,18 @@ class LifeActivity : Activity() {
 
     private fun show(f: Boolean) = showPage(if (f) 2 else 0)
 
-    /** ☰ Tabs — the Command Center's ☰ menu pages as big buttons; each opens that page full screen. */
+    /** ☰ More — the other Life pages as big buttons (the full view is in Tools); each opens that page full screen. */
     private fun tabsPage(): LinearLayout {
         val d = { v: Int -> RunUi.dp(this, v) }
         val col = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(d(14), d(8), d(14), d(24)) }
         col.addView(RunUi.text(this, "☰ More", Color.WHITE, 16f, true))
-        col.addView(RunUi.text(this, "The pages from the Command Center's ☰ menu. Tap one to open it.", RunUi.MUTED, 12f).apply { setPadding(0, d(4), 0, d(6)) })
+        col.addView(RunUi.text(this, "More Life pages. Tap one to open it.", RunUi.MUTED, 12f).apply { setPadding(0, d(4), 0, d(6)) })
         val items = listOf(
             Triple("📖", "Bible", "bible") to "Bible reading archive, sermon & study notes",
             Triple("🌱", "Habits", "habits2") to "All habits, add / edit, history",
             Triple("📚", "Library", "library") to "Books, audiobooks, finish plan",
             Triple("🧘", "Meditate", "meditate") to "Guided timer, scripture, session log",
-            Triple("❤️", "Wellness", "wellness") to "BP + report, meds, weight, sleep, movement",
-            Triple("📓", "Full Command Center", "full") to "The whole website, as it looks in Chrome")
+            Triple("❤️", "Wellness", "wellness") to "BP + report, meds, weight, sleep, movement")
         items.chunked(2).forEach { row ->
             col.addView(LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; setPadding(0, d(8), 0, 0)
                 row.forEachIndexed { i, (t, desc) ->
@@ -343,7 +342,7 @@ class LifeActivity : Activity() {
             view.addView(bar, LinearLayout.LayoutParams(MATCH_PARENT, d(8)).apply { topMargin = d(8) })
             view.addView(nextLine.apply { setPadding(0, d(8), 0, d(2)) })
             view.addView(body)
-            view.addView(RunUi.text(this@LifeActivity, "Tap the circle: done → not done → not marked. Edit times, add or reorder items in 📓 Full Command Center.", RunUi.DIM, 10f).apply { setPadding(0, d(8), 0, 0) })
+            view.addView(RunUi.text(this@LifeActivity, "Tap the circle: done → not done → not marked. Edit times, add or reorder items in Tools → 📓 Full view.", RunUi.DIM, 10f).apply { setPadding(0, d(8), 0, 0) })
         }
         private fun paintDot(b: TextView, st: String, partial: Boolean) {
             val c = when { st == "green" -> 0xFF22C55E; st == "red" -> 0xFFEF4444; partial -> 0xFFA855F7; else -> 0 }.toInt()
@@ -424,8 +423,8 @@ class LifeActivity : Activity() {
             web.evaluateJavascript("window.ccNative&&ccNative.reviewFill?ccNative.reviewFill():false") { r ->
                 if (r.contains("nokey")) {
                     android.app.AlertDialog.Builder(this@LifeActivity).setTitle("AI key needed in the Command Center")
-                        .setMessage("AI Fill uses the Command Center's own AI key, which stays in each browser and isn't synced. Add it once here: 📓 Full Command Center → Settings → Anthropic API key.\n\n(BeyondStride's own key stays in the app and is never given to the Command Center.)")
-                        .setPositiveButton("Open Full Command Center") { _, _ -> show(true) }.setNegativeButton("Not now", null).show()
+                        .setMessage("AI Fill uses the Command Center's own AI key, which stays in each browser and isn't synced. Add it once here: Tools → 📓 Full view → Settings → Anthropic API key.\n\n(BeyondStride's own key stays in the app and is never given to the Command Center.)")
+                        .setPositiveButton("Open full view") { _, _ -> show(true) }.setNegativeButton("Not now", null).show()
                     return@evaluateJavascript
                 }
                 if (r == "true") { busy = true; note.text = "✨ Writing your review…"; fill.isEnabled = false; ui.postDelayed(poll, 2000) }
@@ -547,7 +546,7 @@ class LifeActivity : Activity() {
                 setOnFocusChangeListener { _, has -> if (!has) { ui.removeCallbacks(commit); commit.run() } }
             }
             view.addView(et, LinearLayout.LayoutParams(MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = d(8) })
-            view.addView(RunUi.text(this@LifeActivity, "Saves as you type. Past entries, search and the archive are in 📓 Full Command Center.", RunUi.DIM, 10f).apply { setPadding(0, d(6), 0, 0) })
+            view.addView(RunUi.text(this@LifeActivity, "Saves as you type. Past entries, search and the archive are in Tools → 📓 Full view.", RunUi.DIM, 10f).apply { setPadding(0, d(6), 0, 0) })
         }
         fun fill(j: JSONObject) {
             if (!j.has("journal")) { view.visibility = View.GONE; return }
@@ -812,7 +811,7 @@ class LifeActivity : Activity() {
             }
             view.addView(RunUi.button(this@LifeActivity, "Save Review", RunUi.ACCENT) { js("ccNative.saveWeekly()"); ui.postDelayed(reload, 400) },
                 LinearLayout.LayoutParams(MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = d(10) })
-            view.addView(RunUi.text(this@LifeActivity, "Typing here saves the week's review. After ✨ AI Fill, read it over and tap Save Review. Charts and the injury roll-up are in 📓 Full Command Center → Review.", RunUi.DIM, 10f).apply { setPadding(0, d(8), 0, 0) })
+            view.addView(RunUi.text(this@LifeActivity, "Typing here saves the week's review. After ✨ AI Fill, read it over and tap Save Review. Charts and the injury roll-up are in Tools → 📓 Full view → Review.", RunUi.DIM, 10f).apply { setPadding(0, d(8), 0, 0) })
         }
         private fun aiFill() {
             web.evaluateJavascript("window.ccNative&&ccNative.weeklyFill?ccNative.weeklyFill():false") { r ->
