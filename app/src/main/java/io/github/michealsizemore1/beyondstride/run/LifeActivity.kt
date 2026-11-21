@@ -234,7 +234,7 @@ class LifeActivity : Activity() {
         web.evaluateJavascript("(function(){var b=document.getElementById('hm-$name');if(b)b.click();else if(typeof hmSwitch==='function')hmSwitch('$name',{preventDefault:function(){}});window.scrollTo(0,0);})()", null)
     }
     private fun showReviews(p: Int) {
-        val v = listOfNotNull(weekTab?.view, journalCard?.view, reviewCard?.view, weekCard?.view)   // 📝 Review: goals, journal, the day's review (‹ › for earlier days), the weekly review
+        val v = listOfNotNull(journalCard?.view, reviewCard?.view, weekCard?.view)   // 📝 Review: journal, the day's review (‹ › for earlier days), the weekly review
         if (reviewsCol.childCount == v.size && v.withIndex().all { (i, x) -> reviewsCol.getChildAt(i) === x }) return
         reviewsCol.removeAllViews(); v.forEach { x -> (x.parent as? ViewGroup)?.removeView(x); reviewsCol.addView(x) }
         reviewsScroll.scrollTo(0, 0)
@@ -261,7 +261,7 @@ class LifeActivity : Activity() {
         val moreOn = p == 2 || p == 5 || p == 6
         tabTabs.setTextColor(if (moreOn) Color.WHITE else RunUi.MUTED); tabTabs.setBackgroundColor(if (moreOn) 0xFF2A3430.toInt() else 0xFF222B28.toInt())
         if (p == 0 || p == 1 || p == 6 || p in 7..9) reload.run()
-        if (p == 1 || p == 9) weekTab?.load()
+        // 📊 This Week (goals) card removed from Review at your request (Nov 21 2026).
         if (p == 7) monthCard?.load()
         if (p == 8) yearCard?.load()
     }
