@@ -369,6 +369,8 @@ var box=document.querySelector('.tri-check[data-key="'+key+'"]');if(!box)return;
   }
   // ── For BeyondStride's native Bible Study screen: the same session, driven without this page's overlay. ──
   // Same prompts, same saved session (bstudy_<date>), same checks ticked; the phone draws the screens.
+  // Days with a saved study (for ‹ › on the app's Bible Study screen), oldest first.
+  function nDates(){var out=[];try{for(var i=0;i<localStorage.length;i++){var k=localStorage.key(i);if(!/^bstudy_\d{4}-\d{2}-\d{2}$/.test(k))continue;var o=ls(k);if(o&&o.study)out.push(k.slice(7));}}catch(e){}return JSON.stringify(out.sort());}
   function nStart(date){
     if(!journalAIKey())return 'nokey';
     date=date||todayKey();var saved=ls(sessionKey(date));   // a past date reopens that day's saved study (from the Journal)
@@ -420,7 +422,7 @@ var box=document.querySelector('.tri-check[data-key="'+key+'"]');if(!box)return;
     keys.sort().reverse();return keys.map(function(k){return ls(k);}).filter(function(o){return o&&o.study;}).map(function(o){var a=o.answers||{},st=o.study||{};
       return {date:o.date,label:st.focus_label||'',theme:st.theme||'',ref:o.segs?o.segs.map(segLabel).join('; '):((o.book||'')+' '+(o.chapter||'')),
         s:a.s||'',o:(a.o||[]).filter(Boolean),a:(a.a||[]).filter(Boolean),p:a.p||'',finished:!!o.finished};});}
-  window.bibleStudy={nHl:nHl,nDay:nDay,nFix:nFix,nPlan:nPlan,nCard:nCard,nJournal:nJournal,info:info,nStart:nStart,nState:nState,nStep:function(i){stepTo(i);return nState();},nAnswer:nAnswer,nXref:nXref,
+  window.bibleStudy={nDates:nDates,nHl:nHl,nDay:nDay,nFix:nFix,nPlan:nPlan,nCard:nCard,nJournal:nJournal,info:info,nStart:nStart,nState:nState,nStep:function(i){stepTo(i);return nState();},nAnswer:nAnswer,nXref:nXref,
     nListened:function(){listened();return true;},nListenedApp:function(){listened();if(S&&S.step===1)stepTo(2);return true;},nRetry:function(){if(S){S._err='';S._preparing=false;if(!S.study)prepare();}return true;},open:open,close:close,step:function(d){stepTo(S.step+d);},go:function(i){stepTo(i);},listen:listen,listened:listened,listenedApp:listenedApp,xref:xref,plan:choosePlan,journal:journal,day:pickDay,fix:fixReading,
     retry:function(){S._preparing=false;render();}};
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',function(){setTimeout(renderCard,800);});else setTimeout(renderCard,800);

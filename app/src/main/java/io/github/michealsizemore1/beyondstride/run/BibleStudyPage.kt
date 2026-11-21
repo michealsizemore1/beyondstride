@@ -48,6 +48,28 @@ class BibleStudyPage(private val act: Activity, private val web: WebView, privat
     private val back = RunUi.button(act, "‹ Back", 0xFF374151.toInt(), Color.WHITE) { go(step - 1) }
     private val next = RunUi.button(act, "Next ›", 0xFF7C3AED.toInt(), Color.WHITE) { go(step + 1) }
     private var step = 0
+    private var shown = ""                       // the date on screen
+    private var dates = listOf<String>()         // days with a saved study
+    private val dayText = RunUi.text(act, "", Color.WHITE, 14f, true).apply { gravity = Gravity.CENTER }
+    private val prevArrow = RunUi.text(act, "‹", RunUi.ACCENT, 24f, true).apply { setPadding(d(12), 0, d(12), 0); setOnClickListener { stepDay(-1) } }
+    private val nextArrow = RunUi.text(act, "›", RunUi.ACCENT, 24f, true).apply { setPadding(d(12), 0, d(12), 0); setOnClickListener { stepDay(1) } }
+    private fun todayStr() = java.time.LocalDate.now().toString()
+    private fun paintDay() {
+        val t = todayStr(); val d0 = shown.ifEmpty { t }
+        dayText.text = (if (d0 == t) "Today · " else "") + try { java.time.LocalDate.parse(d0).format(java.time.format.DateTimeFormatter.ofPattern("EEE, MMM d, yyyy", Locale.US)) } catch (e: Exception) { d0 }
+        prevArrow.alpha = if (dates.any { it < d0 }) 1f else 0.25f
+        nextArrow.alpha = if (d0 < t) 1f else 0.25f
+    }
+    private fun loadDates(done: () -> Unit = {}) = web.evaluateJavascript("window.bibleStudy&&bibleStudy.nDates?bibleStudy.nDates():'[]'") { r ->
+        dates = try { JSONArray(unwrap(r ?: "")).let { a -> (0 until a.length()).map { a.getString(it) } } } catch (e: Exception) { emptyList() }; paintDay(); done() }
+    /** Previous / next day with a saved study; › past the newest goes back to today. */
+    private fun stepDay(dir: Int) {
+        val t = todayStr(); val d0 = shown.ifEmpty { t }
+        val target = if (dir < 0) dates.lastOrNull { it < d0 } else (dates.firstOrNull { it > d0 && it < t } ?: if (d0 < t) t else null)
+        target ?: return
+        stopReading()
+        open(if (target == t) null else target) { }
+    }
     private var sig = ""
     private var state: JSONObject? = null
     private var visible = false
@@ -61,6 +83,9 @@ class BibleStudyPage(private val act: Activity, private val web: WebView, privat
             addView(RunUi.text(act, "📖 Bible Study", Color.WHITE, 17f, true))
             addView(refText, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f).apply { marginStart = d(10) })
         })
+        // ‹ › Earlier days' studies (only days with a saved study) and back to today.
+        view.addView(LinearLayout(act).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(d(10), 0, d(10), d(6))
+            addView(prevArrow); addView(dayText, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f)); addView(nextArrow) })
         view.addView(HorizontalScrollView(act).apply { isHorizontalScrollBarEnabled = false; setPadding(d(10), 0, d(10), d(6)); addView(chips) })
         view.addView(scroll, LinearLayout.LayoutParams(MATCH_PARENT, 0, 1f))
         view.addView(LinearLayout(act).apply {
@@ -80,7 +105,7 @@ class BibleStudyPage(private val act: Activity, private val web: WebView, privat
     fun open(date: String?, onResult: (String) -> Unit) {
         call("bibleStudy.nStart(${if (date == null) "" else org.json.JSONObject.quote(date)})") { r ->
             val res = unwrap(r)
-            if (res == "ok") { visible = true; sig = ""; refresh() }
+            if (res == "ok") { visible = true; sig = ""; query = ""; hit = -1; scroll.scrollTo(0, 0); refresh(); loadDates() }
             onResult(res)
         }
     }
@@ -111,6 +136,7 @@ class BibleStudyPage(private val act: Activity, private val web: WebView, privat
     // ── Drawing ──
     private fun draw(j: JSONObject) {
         step = j.optInt("step")
+        if (j.optString("date") != shown) { shown = j.optString("date"); paintDay() }
         refText.text = j.optString("label").substringAfter("· ") + "\n" + j.optString("ref")
         val done = j.optJSONObject("done") ?: JSONObject()
         chips.removeAllViews()
