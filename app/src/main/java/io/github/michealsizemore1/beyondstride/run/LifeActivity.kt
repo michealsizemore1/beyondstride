@@ -301,6 +301,8 @@ class LifeActivity : Activity() {
     private var tries = 0
     private var refreshed = false
     private val reload: Runnable = Runnable {
+        // While you're in 📓 Full (maybe looking at another day), don't refresh: the refresh moves the page back to today.
+        if (page == 2) return@Runnable
         web.evaluateJavascript("(window.ccNative&&typeof load==='function')?(ccNative.all?ccNative.all():ccNative.focus()):null") { r ->
             val json = try { (JSONTokener(r).nextValue() as? String)?.let { JSONObject(it) } } catch (e: Exception) { null }
             if (json == null) { focusCard?.loading(); if (tries++ < 60) ui.postDelayed(reload, 700) ; return@evaluateJavascript }
