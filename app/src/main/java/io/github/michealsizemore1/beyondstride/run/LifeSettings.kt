@@ -45,7 +45,7 @@ object LifeSettings {
                     if (top != null && top.length() > 0) { storage.addView(RunUi.text(act, "Largest items:", RunUi.MUTED, 12f).apply { setPadding(0, d(4), 0, 0) })
                         for (i in 0 until top.length()) { val o = top.getJSONObject(i)
                             storage.addView(RunUi.text(act, "• ${o.optString("key")} — ${o.optInt("kb")} KB" + (o.optString("field").takeIf { it.isNotBlank() }?.let { " (mostly $it)" } ?: ""), RunUi.MUTED, 12f)) } }
-                    storage.addView(RunUi.text(act, if (pct >= 80) "Getting full — when it's full, new saves fail. Tell Claude \"Life storage is getting full\" to make room (nothing is lost: it's all in your backup and sync)."
+                    storage.addView(RunUi.text(act, if (pct >= 80) "Getting full — when it's full, new saves fail. Tell Claude \"Life storage is getting full\" to make room (nothing is lost: it's all in your backup)."
                         else "You'll get a heads-up at 80%.", if (pct >= 80) col else RunUi.DIM, 11f).apply { setPadding(0, d(4), 0, 0) })
                 }
             }
