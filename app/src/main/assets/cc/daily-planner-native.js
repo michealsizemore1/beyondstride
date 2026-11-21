@@ -512,6 +512,15 @@
         var f=REV.map(function(r){return {label:r[1],value:String(v[r[0]]||'')};});if(!f.some(function(x){return x.value.trim();}))continue;
         out.push({date:d,how:localStorage.getItem('autoDayRev_'+d)||'',fields:f});}}catch(e){}
       out.sort(function(a,b){return a.date<b.date?1:-1;});return JSON.stringify(out);},
+    // 🤖 Daily AI Review for any day (‹ › on the Life tab). Today goes through the page as before; earlier days are read / saved directly.
+    reviewDay:function(date){date=String(date||'');var v={};try{v=JSON.parse(localStorage.getItem('dayreview_'+date)||'{}')||{};}catch(e){}
+      return JSON.stringify({date:date,fields:REV.map(function(r){return {id:r[0],label:r[1],value:String(v[r[0]]||'')};})});},
+    setReviewDay:function(date,id,value){date=String(date||'');if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||!REV.some(function(r){return r[0]===id;}))return false;
+      if(date===realKey())return ccNative.setReview(id,value);
+      var k='dayreview_'+date,v={};try{v=JSON.parse(localStorage.getItem(k)||'{}')||{};}catch(e){}
+      REV.forEach(function(r){if(!(r[0] in v))v[r[0]]='';});v[id]=String(value||'');
+      try{localStorage.setItem(k,JSON.stringify(v));}catch(e){return false;}
+      try{if(dk(today)===date&&typeof renderDayReview==='function')renderDayReview();}catch(e){}return true;},
     setReview:function(id,value){
       if(!REV.some(function(r){return r[0]===id;}))return false;goRealDay();
       var el=document.getElementById(id);if(!el)return false;el.value=String(value||'');

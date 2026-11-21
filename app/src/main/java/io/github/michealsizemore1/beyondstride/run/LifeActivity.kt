@@ -88,7 +88,6 @@ class LifeActivity : Activity() {
     private var checksCard: ChecksCard? = null
     private var scheduleCard: ScheduleCard? = null
     private var reviewCard: ReviewCard? = null
-    private var pastReviews: PastReviewsCard? = null
     private var wellCard: WellnessCard? = null
     private var bibleCard: BibleCard? = null
     private var weekCard: WeeklyCard? = null
@@ -235,8 +234,7 @@ class LifeActivity : Activity() {
         web.evaluateJavascript("(function(){var b=document.getElementById('hm-$name');if(b)b.click();else if(typeof hmSwitch==='function')hmSwitch('$name',{preventDefault:function(){}});window.scrollTo(0,0);})()", null)
     }
     private fun showReviews(p: Int) {
-        val v = listOfNotNull(weekTab?.view, journalCard?.view, reviewCard?.view, pastReviews?.view, weekCard?.view)   // 📝 Review: goals, journal, today's review, past reviews, the weekly review
-        pastReviews?.refresh()
+        val v = listOfNotNull(weekTab?.view, journalCard?.view, reviewCard?.view, weekCard?.view)   // 📝 Review: goals, journal, the day's review (‹ › for earlier days), the weekly review
         if (reviewsCol.childCount == v.size && v.withIndex().all { (i, x) -> reviewsCol.getChildAt(i) === x }) return
         reviewsCol.removeAllViews(); v.forEach { x -> (x.parent as? ViewGroup)?.removeView(x); reviewsCol.addView(x) }
         reviewsScroll.scrollTo(0, 0)
@@ -293,7 +291,6 @@ class LifeActivity : Activity() {
         biblePeriods = PeriodTables("Spirituality", "bible", drop = listening)
         libPeriods = PeriodTables("Spirituality", "lib", only = listening)
         reviewCard = ReviewCard()   // on 📝 Review (looking back), not Daily (planning the day)
-        pastReviews = PastReviewsCard()   // 📜 earlier days' reviews, right under today's
         journalCard = JournalCard()   // on 📝 Review, above today's review (AI Fill reads it)
         // Weekly · Monthly · Yearly · Review each get their own page (showReviews puts the right card on it).
         weekTab = WeekTabCard(); weekCard = WeeklyCard(); monthCard = PeriodCard("monthly"); yearCard = PeriodCard("yearly")
@@ -396,12 +393,24 @@ class LifeActivity : Activity() {
         val view = RunUi.card(this@LifeActivity)
         private val note = RunUi.text(this@LifeActivity, "", RunUi.MUTED, 12f)
         private val fill = RunUi.button(this@LifeActivity, "✨ AI Fill Day Review", 0xFF7C3AED.toInt(), Color.WHITE) { aiFill() }
-        private val save = RunUi.button(this@LifeActivity, "Save Review", RunUi.ACCENT) { js("ccNative.saveReview()"); ui.postDelayed(reload, 400) }
+        private val save = RunUi.button(this@LifeActivity, "Save Review", RunUi.ACCENT) {
+            if (off == 0L) { js("ccNative.saveReview()"); ui.postDelayed(reload, 400) }
+            else { edits.forEach { (id, et) -> js("ccNative.setReviewDay(${JSONObject.quote(date().toString())},${JSONObject.quote(id)},${JSONObject.quote(et.text.toString())})") }
+                android.widget.Toast.makeText(this@LifeActivity, "Saved", android.widget.Toast.LENGTH_SHORT).show() } }
         private val edits = LinkedHashMap<String, EditText>()
         private var busy = false
+        private var off = 0L          // 0 = today, -1 = yesterday …
+        private val dayLabel = RunUi.text(this@LifeActivity, "", Color.WHITE, 14f, true).apply { gravity = android.view.Gravity.CENTER }
+        private lateinit var nextArrow: TextView
+        private fun date() = java.time.LocalDate.now().plusDays(off)
         private fun d(v: Int) = RunUi.dp(this@LifeActivity, v)
+        private fun arrow(t: String, n: Int) = RunUi.text(this@LifeActivity, t, RunUi.ACCENT, 22f, true).apply { setPadding(d(14), 0, d(14), 0)
+            setOnClickListener { if (off + n <= 0) { edits.values.forEach { it.clearFocus() }; off += n; showDay() } } }
         init {
             view.addView(RunUi.text(this@LifeActivity, "🤖 Daily AI Review", Color.WHITE, 16f, true))
+            nextArrow = arrow("›", 1)
+            view.addView(LinearLayout(this@LifeActivity).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL; setPadding(0, d(4), 0, 0)
+                addView(arrow("‹", -1)); addView(dayLabel, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)); addView(nextArrow) })
             view.addView(note)
             view.addView(fill, LinearLayout.LayoutParams(MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = d(8) })
             listOf("dayRevWins" to "Wins Today", "dayRevImprove" to "What to Improve", "dayRevFocus" to "Focus for Tomorrow", "dayRevLessons" to "Lessons Learned").forEach { (id, label) ->
@@ -410,7 +419,8 @@ class LifeActivity : Activity() {
                     setTextColor(Color.WHITE); setHintTextColor(RunUi.DIM); textSize = 14f; minLines = 2; gravity = android.view.Gravity.TOP
                     hint = when (id) { "dayRevWins" -> "What went well today?"; "dayRevImprove" -> "Areas to work on…"; "dayRevFocus" -> "Top priorities…"; else -> "Key takeaways…" }
                     background = RunUi.rounded(0xFF26302C.toInt(), d(10).toFloat()); setPadding(d(10), d(8), d(10), d(8))
-                    val commit = Runnable { js("ccNative.setReview(${JSONObject.quote(id)},${JSONObject.quote(text.toString())})") }
+                    val commit = Runnable { js(if (off == 0L) "ccNative.setReview(${JSONObject.quote(id)},${JSONObject.quote(text.toString())})"
+                        else "ccNative.setReviewDay(${JSONObject.quote(date().toString())},${JSONObject.quote(id)},${JSONObject.quote(text.toString())})") }
                     addTextChangedListener(object : TextWatcher {
                         override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
                         override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
@@ -421,7 +431,31 @@ class LifeActivity : Activity() {
                 edits[id] = et; view.addView(et)
             }
             view.addView(save, LinearLayout.LayoutParams(MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = d(10) })
-            view.addView(RunUi.text(this@LifeActivity, "Typing saves on its own. After ✨ AI Fill, read it over and tap Save Review (same as the Command Center). It's still filled in automatically at night if you haven't.", RunUi.DIM, 10f).apply { setPadding(0, d(8), 0, 0) })
+            view.addView(RunUi.text(this@LifeActivity, "Typing saves on its own. After ✨ AI Fill, read it over and tap Save Review. It's still filled in automatically at night if you haven't. ‹ › shows earlier days.", RunUi.DIM, 10f).apply { setPadding(0, d(8), 0, 0) })
+            paintDay()
+        }
+        private fun paintDay() {
+            val dt = date()
+            dayLabel.text = (if (off == 0L) "Today · " else if (off == -1L) "Yesterday · " else "") + dt.format(java.time.format.DateTimeFormatter.ofPattern("EEE, MMM d, yyyy", java.util.Locale.US))
+            nextArrow.alpha = if (off < 0) 1f else 0.25f
+            fill.visibility = if (off == 0L) View.VISIBLE else View.GONE      // AI Fill writes today's review
+            edits.forEach { (id, et) -> et.hint = when (id) { "dayRevWins" -> if (off == 0L) "What went well today?" else "What went well?"; "dayRevImprove" -> "Areas to work on…"; "dayRevFocus" -> "Top priorities…"; else -> "Key takeaways…" } }
+        }
+        /** Show the chosen day: today comes from the regular refresh; an earlier day is read directly. */
+        private fun showDay() {
+            paintDay()
+            if (off == 0L) { note.visibility = View.GONE; reload.run(); return }
+            val dt = date().toString()
+            web.evaluateJavascript("window.ccNative&&ccNative.reviewDay?ccNative.reviewDay(${JSONObject.quote(dt)}):null") { r ->
+                if (date().toString() != dt) return@evaluateJavascript
+                val j = try { (JSONTokener(r).nextValue() as? String)?.let { JSONObject(it) } } catch (e: Exception) { null } ?: return@evaluateJavascript
+                val arr = j.optJSONArray("fields") ?: return@evaluateJavascript
+                var any = false
+                for (i in 0 until arr.length()) { val o = arr.getJSONObject(i); val et = edits[o.optString("id")] ?: continue
+                    if (o.optString("value").isNotBlank()) any = true; et.setText(o.optString("value")) }
+                note.text = if (any) "An earlier day. Changes you type here save to that day." else "No review was saved for this day. You can type one here."
+                note.visibility = View.VISIBLE
+            }
         }
         private fun aiFill() {
             web.evaluateJavascript("window.ccNative&&ccNative.reviewFill?ccNative.reviewFill():false") { r ->
@@ -437,6 +471,8 @@ class LifeActivity : Activity() {
         private val poll: Runnable = Runnable { reload.run(); if (busy) ui.postDelayed(pollAgain, 2000) }
         private val pollAgain: Runnable = Runnable { poll.run() }
         fun fill(j: JSONObject) {
+            if (off != 0L) return          // looking at an earlier day: leave it on screen
+            paintDay()
             val r = j.optJSONObject("review") ?: return
             val wasBusy = busy; busy = r.optBoolean("busy")
             if (wasBusy && !busy) ui.removeCallbacks(pollAgain)
@@ -448,41 +484,6 @@ class LifeActivity : Activity() {
                 if (!et.hasFocus() && et.text.toString() != o.optString("value")) et.setText(o.optString("value")) }
             note.text = when { busy -> "✨ Writing your review…"; unsaved -> "Not saved yet — tap Save Review when it looks right."; !r.optBoolean("hasKey") -> "AI Fill needs the Command Center's AI key (one time)."; else -> "" }
             note.visibility = if (note.text.isEmpty()) View.GONE else View.VISIBLE
-        }
-    }
-
-    /** 📜 Past reviews — earlier days' Daily AI Reviews, one day at a time (‹ older · newer ›). Read-only. */
-    private inner class PastReviewsCard {
-        private var idx = 0
-        private var body: LinearLayout? = null
-        private val group = LifeUi.FoldGroup(this@LifeActivity, listOf(LifeUi.Fold("life_pastrev", "📜 Past reviews", false) { b -> body = b; draw() }))
-        val view: View = group.view
-        private fun d(v: Int) = RunUi.dp(this@LifeActivity, v)
-        fun refresh() { group.refresh() }
-        private fun draw() {
-            val b = body ?: return
-            web.evaluateJavascript("window.ccNative&&ccNative.pastReviews?ccNative.pastReviews():'[]'") { r ->
-                val arr = try { JSONArray((JSONTokener(r).nextValue() as? String) ?: "[]") } catch (e: Exception) { JSONArray() }
-                b.removeAllViews()
-                if (arr.length() == 0) { b.addView(RunUi.text(this@LifeActivity, "No earlier reviews saved yet.", RunUi.MUTED, 12f)); return@evaluateJavascript }
-                idx = idx.coerceIn(0, arr.length() - 1)
-                val o = arr.getJSONObject(idx)
-                val date = try { java.time.LocalDate.parse(o.optString("date")).format(java.time.format.DateTimeFormatter.ofPattern("EEE, MMM d, yyyy", java.util.Locale.US)) } catch (e: Exception) { o.optString("date") }
-                fun arrow(t: String, on: Boolean, go: () -> Unit) = RunUi.text(this@LifeActivity, t, if (on) RunUi.ACCENT else RunUi.DIM, 22f, true).apply {
-                    setPadding(d(14), d(4), d(14), d(4)); if (on) setOnClickListener { go(); draw() } }
-                b.addView(LinearLayout(this@LifeActivity).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL
-                    addView(arrow("‹", idx < arr.length() - 1) { idx++ })
-                    addView(RunUi.text(this@LifeActivity, date, Color.WHITE, 15f, true).apply { gravity = android.view.Gravity.CENTER },
-                        LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-                    addView(arrow("›", idx > 0) { idx-- }) })
-                val f = o.optJSONArray("fields") ?: JSONArray()
-                for (i in 0 until f.length()) { val x = f.getJSONObject(i); val v = x.optString("value").trim()
-                    b.addView(RunUi.text(this@LifeActivity, x.optString("label"), RunUi.ACCENT, 13f, true).apply { setPadding(0, d(10), 0, d(2)) })
-                    b.addView(RunUi.text(this@LifeActivity, v.ifEmpty { "—" }, if (v.isEmpty()) RunUi.DIM else Color.WHITE, 14f).apply {
-                        setTextIsSelectable(true); background = RunUi.rounded(0xFF26302C.toInt(), d(10).toFloat()); setPadding(d(10), d(8), d(10), d(8)) })
-                }
-                b.addView(RunUi.text(this@LifeActivity, "${idx + 1} of ${arr.length()} saved reviews. To change an older one: Tools → 📓 Full view, go to that day.", RunUi.DIM, 10f).apply { setPadding(0, d(8), 0, 0) })
-            }
         }
     }
 
@@ -666,7 +667,7 @@ class LifeActivity : Activity() {
                     if (!o.optString("label").contains("Audio")) continue
                     b.addView(LinearLayout(this@LifeActivity).apply { orientation = LinearLayout.HORIZONTAL; setPadding(0, d(6), 0, d(3))
                         addView(RunUi.text(this@LifeActivity, "🎧 " + o.optString("label") + " goal", Color.WHITE, 13f, true), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-                        addView(RunUi.text(this@LifeActivity, o.optString("value") + (if (o.optBoolean("reached")) "  ✓" else ""), if (o.optBoolean("reached")) 0xFF22C55E.toInt() else RunUi.MUTED, 12f, true)) })
+                        addView(RunUi.text(this@LifeActivity, o.optString("value").replace(Regex("^-\\s*/"), "0m /") + (if (o.optBoolean("reached")) "  ✓" else ""), if (o.optBoolean("reached")) 0xFF22C55E.toInt() else RunUi.MUTED, 12f, true)) })
                     val bar = FrameLayout(this@LifeActivity).apply { background = RunUi.rounded(0xFF2A3430.toInt(), d(4).toFloat()) }
                     val fillV = View(this@LifeActivity).apply { background = RunUi.rounded(if (o.optBoolean("reached")) 0xFF22C55E.toInt() else 0xFF818CF8.toInt(), d(4).toFloat()) }
                     bar.addView(fillV, FrameLayout.LayoutParams(0, d(8))); b.addView(bar, LinearLayout.LayoutParams(MATCH_PARENT, d(8)))
@@ -731,7 +732,7 @@ class LifeActivity : Activity() {
             j.optString("digest").takeIf { it.isNotBlank() }?.let { body.addView(RunUi.text(this@LifeActivity, it, RunUi.MUTED, 12f).apply { setPadding(0, d(10), 0, 0) }) }
             val secs = j.optJSONArray("sections") ?: return
             // The weekly / monthly / yearly tables now live in their own areas.
-            body.addView(RunUi.text(this@LifeActivity, "Weekly · Monthly · Yearly tables: 💚 Wellness and 📖 Spirituality in ☰ More → Wellness and Bible · 🏃 miles in Activities → Mileage · 🍎 food in Nutrition.", RunUi.DIM, 11f).apply { setPadding(0, d(10), 0, 0) })
+            body.addView(RunUi.text(this@LifeActivity, "Weekly, monthly and yearly tables: ☰ More → Wellness and Bible · Activities → Mileage · Nutrition.", RunUi.DIM, 11f).apply { setPadding(0, d(10), 0, 0) })
             if (secs.length() >= 0) return
             for (i in 0 until secs.length()) { val sec = secs.getJSONObject(i)
                 // Running numbers live in Activities and food in Nutrition now (each number in one place).
