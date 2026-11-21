@@ -180,11 +180,22 @@ object RunUi {
                 v.setPadding(dp(act, 6), dp(act, 6), dp(act, 6), dp(act, 6) + b); insets
             }
         }
+        val line = View(act).apply { setBackgroundColor(0x22FFFFFF) }
         return LinearLayout(act).apply {
             orientation = LinearLayout.VERTICAL; setBackgroundColor(BG)
             addView(content, LinearLayout.LayoutParams(MATCH_PARENT, 0, 1f))
-            addView(View(act).apply { setBackgroundColor(0x22FFFFFF) }, LinearLayout.LayoutParams(MATCH_PARENT, 1))
+            addView(line, LinearLayout.LayoutParams(MATCH_PARENT, 1))
             addView(bar, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
+            // ⌨️ Make room for the keyboard (the screen is drawn edge to edge, so it doesn't shrink by itself): while typing,
+            // the tab bar steps aside and the page ends above the keyboard, so the box you're typing in stays in view.
+            if (android.os.Build.VERSION.SDK_INT >= 30) setOnApplyWindowInsetsListener { v, insets ->
+                val ime = insets.getInsets(android.view.WindowInsets.Type.ime()).bottom
+                val open = insets.isVisible(android.view.WindowInsets.Type.ime()) && ime > 0
+                bar.visibility = if (open) View.GONE else View.VISIBLE; line.visibility = bar.visibility
+                v.setPadding(0, 0, 0, if (open) ime else 0)
+                if (open) v.post { (act.currentFocus)?.let { f -> val r = android.graphics.Rect(); f.getDrawingRect(r); f.requestRectangleOnScreen(r, false) } }
+                insets
+            }
         }
     }
 
