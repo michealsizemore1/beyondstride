@@ -187,6 +187,23 @@ object LifeUi {
      * 📝 Reviews easier to read: each "• " point gets a hanging indent and a little space after it, and a short
      * "Label:" at its start is bold. Only how it looks; the saved text stays exactly as written.
      */
+    /** A color for each kind of point, so the labels stand apart (and the same kind always looks the same). */
+    fun labelColor(label: String): Int {
+        val l = label.lowercase()
+        return when {
+            listOf("faith", "spirit", "bible", "prayer", "worship", "church").any { it in l } -> 0xFFC4B5FD.toInt()   // lavender
+            listOf("family", "wife", "son", "relationship", "friend").any { it in l } -> 0xFFF9A8D4.toInt()          // pink
+            listOf("training", "run", "workout", "recovery", "fitness", "race").any { it in l } -> 0xFFFDBA74.toInt() // orange
+            listOf("nutrition", "food", "sugar", "protein", "diet", "eating").any { it in l } -> 0xFF86EFAC.toInt()   // green
+            listOf("hydration", "fluid", "water").any { it in l } -> 0xFF67E8F9.toInt()                              // cyan
+            listOf("sleep", "rest").any { it in l } -> 0xFF93C5FD.toInt()                                             // blue
+            listOf("wellness", "health", "bp", "blood", "weight", "meds").any { it in l } -> 0xFFFCA5A5.toInt()      // coral
+            listOf("reading", "library", "book", "audible", "learning").any { it in l } -> 0xFFFDE68A.toInt()        // gold
+            listOf("habit", "routine", "work", "focus", "mindset").any { it in l } -> 0xFF5EEAD4.toInt()              // teal
+            else -> 0xFF7DD3FC.toInt()                                                                                 // sky
+        }
+    }
+
     fun bulletStyle(et: android.widget.EditText) {
         val ctx = et.context
         val gap = RunUi.dp(ctx, 8); val indent = et.paint.measureText("• ").toInt()
@@ -197,10 +214,12 @@ object LifeUi {
             }
         }
         class Bold : android.text.style.StyleSpan(android.graphics.Typeface.BOLD)
+        class Tint(c: Int) : android.text.style.ForegroundColorSpan(c)
         val style = Runnable {
             val e = et.text ?: return@Runnable
             e.getSpans(0, e.length, Gap::class.java).forEach { e.removeSpan(it) }
             e.getSpans(0, e.length, Bold::class.java).forEach { e.removeSpan(it) }
+            e.getSpans(0, e.length, Tint::class.java).forEach { e.removeSpan(it) }
             e.getSpans(0, e.length, android.text.style.LeadingMarginSpan.Standard::class.java).forEach { e.removeSpan(it) }
             var at = 0
             while (at < e.length) {
@@ -209,7 +228,10 @@ object LifeUi {
                 val bullet = line.startsWith("•") || line.startsWith("- ")
                 if (bullet) {
                     e.setSpan(android.text.style.LeadingMarginSpan.Standard(0, indent), at, end, android.text.Spanned.SPAN_INCLUSIVE_EXCLUSIVE)
-                    Regex("^[•\\-]\\s*([^:]{2,32}):").find(line)?.let { m -> e.setSpan(Bold(), at + m.range.first, at + m.range.last + 1, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE) }
+                    Regex("^[•\\-]\\s*([^:]{2,32}):").find(line)?.let { m ->
+                        val f = at + m.groups[1]!!.range.first; val t = at + m.range.last + 1
+                        e.setSpan(Bold(), f, t, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                        e.setSpan(Tint(labelColor(m.groupValues[1])), f, t, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE) }
                 }
                 if (end > at && end < e.length) e.setSpan(Gap(), at, end, android.text.Spanned.SPAN_INCLUSIVE_EXCLUSIVE)
                 at = end
