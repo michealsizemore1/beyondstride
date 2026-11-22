@@ -212,6 +212,7 @@ object NutritionUi {
 
     /** Which foods a micronutrient came from (tap a tile), like the Command Center's sources list. */
     fun microSources(act: Activity, nd: Nutrition.Day, m: Nutrition.Micro) {
+        if (m.field == "sugar") { sugarSources(act, nd); return }
         val rows = nd.foods.map { it to it.total(it.micros[m.field]) }.filter { it.second > 0.0001 }.sortedByDescending { it.second }
         val tot = rows.sumOf { it.second }
         fun fmt(v: Double) = if (m.unit == "mg" && v >= 100) String.format(Locale.US, "%,d", Math.round(v)) else (Math.round(v * 10) / 10.0).toString()
@@ -221,6 +222,41 @@ object NutritionUi {
                     (if (m.field != "sugar") "" else if (f.meal == "sports") " · fueling, not counted" else if (io.github.michealsizemore1.beyondstride.Food.naturalSugar(f)) " · natural, not counted" else " · added") } +
                 (if (m.field == "sugar") addedSugar(nd).let { "\n\nAdded sugar ${Math.round(it.added)}g of a 36g max. Natural sugar in whole fruit and plain dairy (and fueling during runs) doesn't count toward it." } else "")
         android.app.AlertDialog.Builder(act).setTitle("${m.name} sources").setMessage(msg).setPositiveButton("OK", null).show()
+    }
+
+    /** 🍬 Sugar sources, grouped: Added (counts toward the 36 g max), Natural and Fueling (don't count). */
+    private fun sugarSources(act: Activity, nd: Nutrition.Day) {
+        val F = io.github.michealsizemore1.beyondstride.Food
+        val rows = nd.foods.map { it to it.total(it.micros["sugar"]) }.filter { it.second > 0.0001 }.sortedByDescending { it.second }
+        fun g(v: Double) = if (v >= 10) "${Math.round(v)}g" else "${Math.round(v * 10) / 10.0}g"
+        val fuel = rows.filter { it.first.meal == "sports" }
+        val natural = rows.filter { it.first.meal != "sports" && F.naturalSugar(it.first) }
+        val added = rows - fuel.toSet() - natural.toSet()
+        val sb = android.text.SpannableStringBuilder()
+        fun span(text: String, color: Int, bold: Boolean = false, size: Float = 1f) {
+            val st = sb.length; sb.append(text)
+            sb.setSpan(android.text.style.ForegroundColorSpan(color), st, sb.length, 0)
+            if (bold) sb.setSpan(android.text.style.StyleSpan(android.graphics.Typeface.BOLD), st, sb.length, 0)
+            if (size != 1f) sb.setSpan(android.text.style.RelativeSizeSpan(size), st, sb.length, 0)
+        }
+        fun group(title: String, color: Int, list: List<Pair<io.github.michealsizemore1.beyondstride.Food.Item, Double>>, sub: String) {
+            if (list.isEmpty()) return
+            if (sb.isNotEmpty()) sb.append("\n\n")
+            span(title, color, true, 1.1f); sb.append("\n"); span(sub, 0xFFB0B8B5.toInt(), size = 0.9f)
+            list.forEach { (f, v) ->
+                sb.append("\n\n"); span(g(v), color, true); sb.append("   "); span(f.name, Color.WHITE)
+                sb.append("\n"); span("      " + (Nutrition.MEAL_NAMES[f.meal] ?: f.meal), 0xFF9AA3A0.toInt(), size = 0.85f)
+            }
+        }
+        val a = added.sumOf { it.second }
+        if (rows.isEmpty()) sb.append("None of the foods logged this day have sugar recorded yet.")
+        group("🍬 Added sugar · ${g(a)}", if (a > 36) 0xFFF87171.toInt() else 0xFF5FD38D.toInt(), added,
+            "Counts toward the 36g max · ${Math.round(a / 36.0 * 100)}% of max")
+        group("🍌 Natural sugar · ${g(natural.sumOf { it.second })}", 0xFF5FD38D.toInt(), natural, "Whole fruit and plain dairy · not counted")
+        group("🏃 Run fueling · ${g(fuel.sumOf { it.second })}", 0xFF60A5FA.toInt(), fuel, "Gels and sports drinks · not counted")
+        val tv = RunUi.text(act, "", Color.WHITE, 15f).apply { text = sb; setLineSpacing(0f, 1.15f); val p = RunUi.dp(act, 22); setPadding(p, RunUi.dp(act, 8), p, 0) }
+        android.app.AlertDialog.Builder(act).setTitle("Sugar sources · ${g(rows.sumOf { it.second })} total")
+            .setView(android.widget.ScrollView(act).apply { addView(tv) }).setPositiveButton("OK", null).show()
     }
 
     /** A 1–10 score on the red → green bar with a marker, like the Command Center's. */
