@@ -25,7 +25,7 @@ import io.github.michealsizemore1.beyondstride.run.RunUi
  * On/off in Settings → App lock. Phone only (the watch has no lock).
  */
 object AppLock {
-    const val RELOCK_AFTER_MS = 5_000L   // out of sight longer than this (closed, home, another app) asks again
+    const val RELOCK_AFTER_MS = 5 * 60_000L   // away longer than this (home, another app, screen off) asks again
     private const val TAG = "bs_applock"
     private var unlocked = false
     private var leftAt = 0L
@@ -41,10 +41,7 @@ object AppLock {
     private fun needed(ctx: Context) = !unlocked && enabled(ctx) && available(ctx)
 
     fun install(app: Application) {
-        // Screen off locks it too.
-        try { app.registerReceiver(object : android.content.BroadcastReceiver() {
-            override fun onReceive(c: Context, i: android.content.Intent) { unlocked = false }
-        }, android.content.IntentFilter(android.content.Intent.ACTION_SCREEN_OFF)) } catch (e: Exception) { }
+        // (Screen off no longer locks at once: it counts as time away, like going home.)
         app.registerActivityLifecycleCallbacks(callbacks)
     }
     private val callbacks = object : Application.ActivityLifecycleCallbacks {
