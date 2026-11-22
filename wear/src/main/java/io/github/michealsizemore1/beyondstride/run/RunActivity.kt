@@ -335,7 +335,7 @@ class RunActivity : Activity() {
     private fun weekTotals(month: Boolean = false): Pair<Double, Int> {
         val cal = java.util.Calendar.getInstance().apply {
             set(java.util.Calendar.HOUR_OF_DAY, 0); set(java.util.Calendar.MINUTE, 0); set(java.util.Calendar.SECOND, 0)
-            if (month) set(java.util.Calendar.DAY_OF_MONTH, 1) else set(java.util.Calendar.DAY_OF_WEEK, firstDayOfWeek)
+            if (month) set(java.util.Calendar.DAY_OF_MONTH, 1) else { firstDayOfWeek = java.util.Calendar.SUNDAY; set(java.util.Calendar.DAY_OF_WEEK, java.util.Calendar.SUNDAY) }
         }
         val from = cal.timeInMillis
         var meters = 0.0; var n = 0
@@ -2117,7 +2117,7 @@ class RunActivity : Activity() {
         var lastWeek = ""
         WatchWorkouts.upcoming(this, 400).forEach { (d, wk) ->
             val date = keyFmt.parse(d) ?: return@forEach
-            val wkStart = java.util.Calendar.getInstance().apply { time = date; set(java.util.Calendar.DAY_OF_WEEK, firstDayOfWeek) }.time
+            val wkStart = java.util.Calendar.getInstance().apply { time = date; firstDayOfWeek = java.util.Calendar.SUNDAY; set(java.util.Calendar.DAY_OF_WEEK, java.util.Calendar.SUNDAY) }.time
             val header = weekName.format(wkStart).uppercase()
             if (header != lastWeek) { lastWeek = header; col.addView(label(header, C.MUTED, 10f, true).apply { setPadding(0, dp(8), 0, 0) }) }
             val label = if (d == keyFmt.format(java.util.Date())) "Today" else dayName.format(date)

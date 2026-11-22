@@ -15,7 +15,7 @@ object WeeklyRunWrap {
     private val S = ActivityStore
     private fun p(ctx: Context) = ctx.getSharedPreferences("weeklywrap", 0)
 
-    fun monday(d: LocalDate = LocalDate.now()): LocalDate = d.minusDays((d.dayOfWeek.value - 1).toLong())
+    fun monday(d: LocalDate = LocalDate.now()): LocalDate = ActivityStore.weekStart(d)   // the week's Sunday (training weeks run Sunday–Saturday)
     fun label(week: String): String { val m = LocalDate.parse(week)
         return m.format(java.time.format.DateTimeFormatter.ofPattern("MMM d", Locale.US)) + " – " + m.plusDays(6).format(java.time.format.DateTimeFormatter.ofPattern("MMM d, yyyy", Locale.US)) }
 
@@ -55,7 +55,7 @@ object WeeklyRunWrap {
     fun maybeAuto(ctx: Context, force: Boolean = false) {
         if (!AiFood.hasKey(ctx)) return
         val today = LocalDate.now(); val t = java.time.LocalTime.now(); val mins = t.hour * 60 + t.minute
-        val sundayDue = today.dayOfWeek == java.time.DayOfWeek.SUNDAY && (force || mins >= DayReviewAi.REVIEW_AT)
+        val sundayDue = today.dayOfWeek == java.time.DayOfWeek.SATURDAY && (force || mins >= DayReviewAi.REVIEW_AT)   // the week's last day
         val weeks = listOfNotNull(if (sundayDue) monday(today).toString() else null, monday(today).minusWeeks(1).toString())
         val notes = S.weekNotes(ctx); val pr = p(ctx)
         for (w in weeks) {

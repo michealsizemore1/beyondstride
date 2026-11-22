@@ -36,7 +36,7 @@ class RunTileService : CoroutineTileService() {
 
     private fun week(): Pair<Double, Int> {
         val cal = Calendar.getInstance().apply {
-            set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.DAY_OF_WEEK, firstDayOfWeek)
+            set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); firstDayOfWeek = Calendar.SUNDAY; set(Calendar.DAY_OF_WEEK, Calendar.SUNDAY)
         }
         var m = 0.0; var n = 0
         RunStore.list(this).forEach { f ->

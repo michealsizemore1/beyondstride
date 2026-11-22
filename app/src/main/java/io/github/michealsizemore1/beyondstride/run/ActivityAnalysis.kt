@@ -32,7 +32,7 @@ class ActivityAnalysis(private val act: Activity, private val open: MutableSet<S
     private fun f2(v: Double) = String.format(Locale.US, "%.2f", v)
     private fun comma(v: Double) = String.format(Locale.US, "%,d", Math.round(v))
     private fun n(v: Double) = if (v == Math.floor(v)) v.toLong().toString() else v.toString()
-    private fun monday(d: LocalDate) = d.minusDays((d.dayOfWeek.value - 1).toLong())
+    private fun monday(d: LocalDate) = ActivityStore.weekStart(d)   // training week: Sunday–Saturday
 
     private fun card(col: LinearLayout, top: Int = 10) = RunUi.card(act).also { col.addView(it, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(top) }) }
     private fun head(t: String) = txt(t.uppercase(), RunUi.MUTED, 12f, true)

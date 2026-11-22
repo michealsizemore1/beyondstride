@@ -181,8 +181,8 @@ object CoachAi {
             }
         } catch (e: Exception) { }
         if ("history" in sc) try {
-            sb.append("\n## Weekly mileage (Mon–Sun, newest last)\n")
-            val all = runs(ctx); var mon = today.minusDays((today.dayOfWeek.value - 1).toLong()).minusWeeks(15)
+            sb.append("\n## Weekly mileage (Sun–Sat, newest last)\n")
+            val all = runs(ctx); var mon = ActivityStore.weekStart(today).minusWeeks(15)
             repeat(16) {
                 val end = mon.plusDays(6); val w = all.filter { S.str(it, "date").take(10) in mon.toString()..end.toString() }
                 val mi = w.sumOf { S.num(it, "distance") }; val long = w.maxOfOrNull { S.num(it, "distance") } ?: 0.0

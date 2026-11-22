@@ -551,7 +551,7 @@ class ActivitiesActivity : Activity() {
     private fun mileage(col: LinearLayout, all: List<JSONObject>) {
         val ctx = this
         val today = java.time.LocalDate.now()
-        val mon = today.minusDays((today.dayOfWeek.value - 1).toLong()); val lastMon = mon.minusDays(7)
+        val mon = S.weekStart(today); val lastMon = mon.minusDays(7)
         val mtd = today.withDayOfMonth(1); val ytd = today.withDayOfYear(1)
         class B { var mi = 0.0; var pace = 0; var paceN = 0; var w = 0.0; var wN = 0; var mins = 0.0 }
         val b = linkedMapOf("ThisWeek" to B(), "LastWeek" to B(), "MTD" to B(), "YTD" to B())
@@ -1048,7 +1048,7 @@ class ActivitiesActivity : Activity() {
     }
 
     // ══ Phase 4: Weekly Run Notes, Import / Export / Print ══
-    private fun wrnMonday() = java.time.LocalDate.now().let { it.minusDays((it.dayOfWeek.value - 1).toLong()) }.plusWeeks(wrnOff.toLong())
+    private fun wrnMonday() = S.weekStart().plusWeeks(wrnOff.toLong())   // the week's Sunday (training weeks start Sunday)
     private fun wrnLabel(): String { val m = wrnMonday(); return m.format(java.time.format.DateTimeFormatter.ofPattern("MMM d", Locale.US)) + " – " + m.plusDays(6).format(java.time.format.DateTimeFormatter.ofPattern("MMM d, yyyy", Locale.US)) }
 
     private fun weekNotes(col: LinearLayout) {
@@ -1058,7 +1058,7 @@ class ActivitiesActivity : Activity() {
         if (!isOpen) return
         val week = wrnMonday().toString()
         val note = EditText(this).apply {
-            setText(S.weekNotes(ctx)[week] ?: ""); hint = "Reflect on this week's runs — effort, progress, how your body felt, what to focus on next week..."
+            setText(S.weekNotes(ctx).let { it[week] ?: it[java.time.LocalDate.parse(week).plusDays(1).toString()] } ?: "")   // older notes were saved under the Monday; hint = "Reflect on this week's runs — effort, progress, how your body felt, what to focus on next week..."
             minLines = 5; gravity = Gravity.TOP; setTextColor(Color.WHITE); setHintTextColor(RunUi.DIM); textSize = 14f
             inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE or android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
             background = RunUi.rounded(0xFF26302C.toInt(), dp(8).toFloat()); setPadding(dp(10), dp(8), dp(10), dp(8))

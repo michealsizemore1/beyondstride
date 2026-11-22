@@ -152,13 +152,13 @@ object WeekTables {
             val periods: List<Triple<String, LocalDate, LocalDate>>; val label: String
             when (mode) {
                 "month" -> { val m1 = today.withDayOfMonth(1).plusMonths(off.toLong()); val last = m1.plusMonths(1).minusDays(1)
-                    var w = m1.minusDays((m1.dayOfWeek.value - 1).toLong()); val ps = ArrayList<Triple<String, LocalDate, LocalDate>>()
+                    var w = ActivityStore.weekStart(m1); val ps = ArrayList<Triple<String, LocalDate, LocalDate>>()
                     while (!w.isAfter(last)) { val e = w.plusDays(6); val f = DateTimeFormatter.ofPattern("MMM d", Locale.US)
                         ps += Triple("Wk " + w.format(f) + "–" + (if (e.month == w.month) e.dayOfMonth.toString() else e.format(f)), w, e); w = w.plusWeeks(1) }
                     periods = ps; label = m1.format(DateTimeFormatter.ofPattern("MMMM yyyy", Locale.US)) }
                 "year" -> { val y = today.year + off
                     periods = (1..12).map { mo -> val s = LocalDate.of(y, mo, 1); Triple(s.format(DateTimeFormatter.ofPattern("MMM", Locale.US)), s, s.plusMonths(1).minusDays(1)) }; label = "$y" }
-                else -> { val mon = today.minusDays((today.dayOfWeek.value - 1).toLong()).plusWeeks(off.toLong())
+                else -> { val mon = ActivityStore.weekStart(today).plusWeeks(off.toLong())   // training week: Sunday first
                     periods = (0..6).map { i -> val dt = mon.plusDays(i.toLong()); Triple(dt.format(DateTimeFormatter.ofPattern("EEE, M/d", Locale.US)), dt, dt) }; label = weekLabel(mon) }
             }
             val bs = periods.map { B() }

@@ -92,10 +92,13 @@ object ActivityStore {
     }
     /** This week (Mon–Sun) and this month, the Activities mileage way: every activity's distance plus journal-only miles. Null before Activities arrive. */
     data class Mileage(val week: Double, val runs: Int, val month: Double)
+    /** The training week starts on Sunday (like the plan weeks). */
+    fun weekStart(d: java.time.LocalDate = java.time.LocalDate.now()): java.time.LocalDate = d.minusDays((d.dayOfWeek.value % 7).toLong())
+
     fun mileage(ctx: Context): Mileage? {
         if (fetchedAt(ctx) == 0L) return null
         val all = list(ctx); val today = java.time.LocalDate.now()
-        val mon = today.minusDays((today.dayOfWeek.value - 1).toLong()).toString(); val m1 = today.withDayOfMonth(1).toString()
+        val mon = weekStart(today).toString(); val m1 = today.withDayOfMonth(1).toString()
         val covered = all.filter { num(it, "distance") > 0 }.map { str(it, "date") }.toSet()
         fun mi(from: String) = all.filter { str(it, "date") >= from }.sumOf { num(it, "distance") } + exMiles(ctx).filter { (d, _) -> d >= from && d !in covered }.values.sum()
         val runs = all.count { str(it, "date") >= mon && str(it, "type").lowercase().contains("run") }
@@ -110,7 +113,7 @@ object ActivityStore {
         if (fetchedAt(ctx) == 0L) return null
         val all = list(ctx); val today = java.time.LocalDate.now()
         fun d(a: JSONObject) = try { java.time.LocalDate.parse(str(a, "date").take(10)) } catch (e: Exception) { null }
-        val mon = today.minusDays((today.dayOfWeek.value - 1).toLong())
+        val mon = weekStart(today)
         val covered = all.filter { num(it, "distance") > 0 }.map { str(it, "date") }.toSet()
         val ex = exMiles(ctx)
         fun tile(t: String, from: java.time.LocalDate, to: java.time.LocalDate?, goal: Double): JSONObject {
