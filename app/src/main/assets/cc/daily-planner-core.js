@@ -2118,6 +2118,7 @@ function aiFillEntireDayReview(btn){
   // BeyondStride's training / nutrition / recovery summary for the day (read-only), fetched first.
   if(typeof window.bsReviewFetch==='function'&&!btn.__bsReady){var _k=dk(today);btn.disabled=true;window.bsReviewFetch(_k,_k,function(t){btn.__bsText=t||'';btn.__bsReady=true;btn.disabled=false;aiFillEntireDayReview(btn);});return;}
   const bsText=noTonightInput(btn.__bsText);btn.__bsReady=false;btn.__bsText='';
+  const revKey=dk(today);   // the day this review is for (was missing here, so every Day Review crashed when the AI answered — Nov 22 2026)
   const dayLabel=today.toLocaleDateString('en-US',{weekday:'long',month:'short',day:'numeric',year:'numeric'});
   const journal=getDayJournalText(today);
   const checksText=dayChecksText();

@@ -494,7 +494,7 @@ class LifeActivity : Activity() {
                     "nokey" -> android.app.AlertDialog.Builder(this@LifeActivity).setTitle("AI key needed in the Command Center")
                         .setMessage("AI Fill uses the Command Center's own AI key. Add it once here: Tools → 📓 Full view → Settings → Anthropic API key.")
                         .setPositiveButton("OK", null).show()
-                    else -> { note.visibility = View.VISIBLE; note.text = "Couldn't write the review ($msg). Try again in a minute." }
+                    else -> android.widget.Toast.makeText(this@LifeActivity, "Couldn't write the review ($msg). Try again in a minute.", android.widget.Toast.LENGTH_LONG).show()
                 }
             }
         }

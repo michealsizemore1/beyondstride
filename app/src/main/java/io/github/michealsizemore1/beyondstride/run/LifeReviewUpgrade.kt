@@ -26,8 +26,8 @@ object LifeReviewUpgrade {
 
     fun check(act: Activity) {
         val app = act.applicationContext; val today = LocalDate.now().toString()
-        if (running || p(app).getString("checked", "") == today) return
-        p(app).edit().putString("checked", today).apply()
+        if (running || p(app).getString("checked2", "") == today) return
+        p(app).edit().putString("checked2", today).apply()
         val day = LocalDate.now().minusDays(1).toString()
         val main = try { CcEngine.get(act) } catch (e: Exception) { return }
         main.evaluateJavascript("window.ccNative&&ccNative.reviewNeeds?ccNative.reviewNeeds('$day'):'no'") { r ->

@@ -540,6 +540,8 @@
         if(typeof journalAIKey!=='function'||!journalAIKey()){window.__upg='nokey';return 'nokey';}
         goDay(date);if(dk(today)!==date){window.__upg='error';return 'error';}
         var btn=document.getElementById('aiFillDayReviewBtn');if(!btn||btn.disabled||typeof aiFillEntireDayReview!=='function'){window.__upg='busy';return 'busy';}
+        // Start clean, so the AI writes the whole day instead of rewording the phone's training-and-food version.
+        REV.forEach(function(r){var e=document.getElementById(r[0]);if(e)e.value='';});
         localStorage.setItem('autoDayRev_'+date,'auto');window.__upg='running';
         btn.__auto=true;btn.__fallback=function(){window.__upg='error';};
         aiFillEntireDayReview(btn);
