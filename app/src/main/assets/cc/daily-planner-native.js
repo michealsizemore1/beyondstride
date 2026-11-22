@@ -525,6 +525,34 @@
       REV.forEach(function(r){if(!(r[0] in v))v[r[0]]='';});v[id]=String(value||'');
       try{localStorage.setItem(k,JSON.stringify(v));}catch(e){return false;}
       try{if(dk(today)===date&&typeof renderDayReview==='function')renderDayReview();}catch(e){}return true;},
+    // 🌙 Full Day Review for an earlier day, written in the app (since the website no longer writes it and syncs it in):
+    // 'yes' when that day's review is empty or is still just the phone's training-and-food backup (not edited by you).
+    reviewNeeds:function(date){date=String(date||'');if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||date>=realKey())return 'no';
+      try{if(localStorage.getItem('bsPhoneRev_'+date)==='cleared')return 'no';
+        var v={};try{v=JSON.parse(localStorage.getItem('dayreview_'+date)||'{}')||{};}catch(e){}
+        var vals=REV.map(function(r){return String(v[r[0]]||'').trim();});
+        var empty=vals.every(function(x){return !x;}),flag=localStorage.getItem('autoDayRev_'+date)||'';
+        var phoneOnly=flag==='phone'&&localStorage.getItem('bsPhoneRevText_'+date)===vals.join('\u241E');
+        return (empty||phoneOnly)?'yes':'no';}catch(e){return 'no';}},
+    // Runs in a separate, hidden copy of the page (so the Life tab you're using never jumps to another day).
+    upgradeReview:function(date){
+      try{
+        if(typeof journalAIKey!=='function'||!journalAIKey()){window.__upg='nokey';return 'nokey';}
+        goDay(date);if(dk(today)!==date){window.__upg='error';return 'error';}
+        var btn=document.getElementById('aiFillDayReviewBtn');if(!btn||btn.disabled||typeof aiFillEntireDayReview!=='function'){window.__upg='busy';return 'busy';}
+        localStorage.setItem('autoDayRev_'+date,'auto');window.__upg='running';
+        btn.__auto=true;btn.__fallback=function(){window.__upg='error';};
+        aiFillEntireDayReview(btn);
+        var seen=false,t=setInterval(function(){
+          if(btn.disabled){seen=true;return;}
+          if(!seen&&window.__upg==='running'){seen=true;return;}
+          clearInterval(t);if(window.__upg!=='running')return;
+          var full=REV.some(function(r){var e=document.getElementById(r[0]);return e&&e.value.trim();});
+          try{if(full)localStorage.setItem('autoRevText_'+date,REV.map(function(r){var e=document.getElementById(r[0]);return e?e.value.trim():'';}).join('\u241E'));}catch(e){}
+          window.__upg=full?'done':'error';
+        },1500);
+        return 'running';
+      }catch(e){window.__upg='error';return 'error';}},
     setReview:function(id,value){
       if(!REV.some(function(r){return r[0]===id;}))return false;goRealDay();
       var el=document.getElementById(id);if(!el)return false;el.value=String(value||'');

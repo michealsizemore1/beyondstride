@@ -55,17 +55,7 @@ object CcEngine {
                         return true
                     }
                     // The Command Center lives inside the app (assets/cc), served at the same web address so its saved data stays put.
-                    override fun shouldInterceptRequest(view: WebView, req: WebResourceRequest): android.webkit.WebResourceResponse? {
-                        val u = req.url
-                        if (u.host != "michealsizemore1.github.io") return null
-                        val path = u.path ?: return null
-                        if (!path.startsWith(LifeActivity.CC_DIR)) return null
-                        val name = path.removePrefix(LifeActivity.CC_DIR)
-                        if (name !in bundled) return null
-                        val mime = if (name.endsWith(".html")) "text/html" else "application/javascript"
-                        return try { android.webkit.WebResourceResponse(mime, "utf-8", view.context.applicationContext.assets.open("cc/$name")).apply {
-                            responseHeaders = mapOf("Cache-Control" to "no-store", "Access-Control-Allow-Origin" to "*") } } catch (e: Exception) { null }
-                    }
+                    override fun shouldInterceptRequest(view: WebView, req: WebResourceRequest): android.webkit.WebResourceResponse? = serve(view.context, req.url)
                 }
                 webChromeClient = object : WebChromeClient() {   // alert / confirm boxes use the current screen
                     override fun onShowFileChooser(v: WebView, cb: ValueCallback<Array<Uri>>, params: FileChooserParams): Boolean =
@@ -93,6 +83,21 @@ object CcEngine {
         }
         return w
     }
+
+    /** A built-in Command Center file (assets/cc) for [u], or null to load it normally. */
+    fun serve(ctx: android.content.Context, u: Uri): android.webkit.WebResourceResponse? {
+        if (u.host != "michealsizemore1.github.io") return null
+        val path = u.path ?: return null
+        if (!path.startsWith(LifeActivity.CC_DIR)) return null
+        val name = path.removePrefix(LifeActivity.CC_DIR)
+        if (bundled.isEmpty()) bundled = (try { ctx.assets.list("cc")?.toSet() } catch (e: Exception) { null }) ?: emptySet()
+        if (name !in bundled) return null
+        val mime = if (name.endsWith(".html")) "text/html" else "application/javascript"
+        return try { android.webkit.WebResourceResponse(mime, "utf-8", ctx.applicationContext.assets.open("cc/$name")).apply {
+            responseHeaders = mapOf("Cache-Control" to "no-store", "Access-Control-Allow-Origin" to "*") } } catch (e: Exception) { null }
+    }
+    /** Tell every screen showing Life data to refresh. */
+    fun notifyChanged() { web?.post { listeners.toList().forEach { it.changed() } } }
 
     /** [act] is going away: take the page off its screen (it keeps running for the other screens). */
     fun release(act: Activity) {
@@ -171,6 +176,7 @@ object CcEngine {
     fun markLifeRestorePending(ctx: android.content.Context) = lp(ctx).edit().putBoolean("pending", true).apply()
     fun ready(act: Activity) {
         checkStorage(act)
+        LifeReviewUpgrade.check(act)
         if (!lp(act).getBoolean("pending", false)) return
         lp(act).edit().putBoolean("pending", false).apply()
         val app = act.applicationContext; val w = web ?: return
