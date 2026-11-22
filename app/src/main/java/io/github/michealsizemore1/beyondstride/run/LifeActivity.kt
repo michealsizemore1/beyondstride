@@ -450,7 +450,7 @@ class LifeActivity : Activity() {
             val dt = date()
             dayLabel.text = (if (off == 0L) "Today · " else if (off == -1L) "Yesterday · " else "") + dt.format(java.time.format.DateTimeFormatter.ofPattern("EEE, MMM d, yyyy", java.util.Locale.US))
             nextArrow.alpha = if (off < 0) 1f else 0.25f
-            fill.visibility = if (off == 0L) View.VISIBLE else View.GONE      // AI Fill writes today's review
+            fill.visibility = View.VISIBLE      // earlier days too: written in a hidden copy of the page
             edits.forEach { (id, et) -> et.hint = when (id) { "dayRevWins" -> if (off == 0L) "What went well today?" else "What went well?"; "dayRevImprove" -> "Areas to work on…"; "dayRevFocus" -> "Top priorities…"; else -> "Key takeaways…" } }
         }
         /** Show the chosen day: today comes from the regular refresh; an earlier day is read directly. */
@@ -470,6 +470,7 @@ class LifeActivity : Activity() {
             }
         }
         private fun aiFill() {
+            if (off != 0L) { pastFill(); return }
             web.evaluateJavascript("window.ccNative&&ccNative.reviewFill?ccNative.reviewFill():false") { r ->
                 if (r.contains("nokey")) {
                     android.app.AlertDialog.Builder(this@LifeActivity).setTitle("AI key needed in the Command Center")
@@ -478,6 +479,23 @@ class LifeActivity : Activity() {
                     return@evaluateJavascript
                 }
                 if (r == "true") { busy = true; note.text = "✨ Writing your review…"; fill.isEnabled = false; ui.postDelayed(poll, 2000) }
+            }
+        }
+        /** ✨ AI Fill for an earlier day: the full review (journal, Wellness, Bible, habits, Library, training, food), saved to that day. */
+        private fun pastFill() {
+            val dt = date().toString()
+            edits.values.forEach { it.clearFocus() }
+            fill.isEnabled = false; fill.alpha = 0.5f; note.visibility = View.VISIBLE; note.text = "✨ Writing the review for this day… (about 30 seconds)"
+            LifeReviewUpgrade.fill(applicationContext, dt) { msg ->
+                fill.isEnabled = true; fill.alpha = 1f
+                if (date().toString() == dt) showDay()
+                when (msg) {
+                    "done" -> android.widget.Toast.makeText(this@LifeActivity, "✨ Review written and saved", android.widget.Toast.LENGTH_SHORT).show()
+                    "nokey" -> android.app.AlertDialog.Builder(this@LifeActivity).setTitle("AI key needed in the Command Center")
+                        .setMessage("AI Fill uses the Command Center's own AI key. Add it once here: Tools → 📓 Full view → Settings → Anthropic API key.")
+                        .setPositiveButton("OK", null).show()
+                    else -> { note.visibility = View.VISIBLE; note.text = "Couldn't write the review ($msg). Try again in a minute." }
+                }
             }
         }
         private val poll: Runnable = Runnable { reload.run(); if (busy) ui.postDelayed(pollAgain, 2000) }

@@ -31,12 +31,14 @@ object LifeReviewUpgrade {
         val day = LocalDate.now().minusDays(1).toString()
         val main = try { CcEngine.get(act) } catch (e: Exception) { return }
         main.evaluateJavascript("window.ccNative&&ccNative.reviewNeeds?ccNative.reviewNeeds('$day'):'no'") { r ->
-            if (r?.contains("yes") == true) write(app, day)
+            if (r?.contains("yes") == true) fill(app, day) { }
         }
     }
 
+    /** Writes [day]'s full review in a hidden copy of the page; [done] gets "done", "nokey", "busy" or what went wrong. */
     @SuppressLint("SetJavaScriptEnabled")
-    private fun write(app: Context, day: String) {
+    fun fill(app: Context, day: String, done: (String) -> Unit) {
+        if (running) { done("busy"); return }
         running = true
         val ui = Handler(Looper.getMainLooper())
         val w = WebView(app).apply {
@@ -54,6 +56,7 @@ object LifeReviewUpgrade {
             p(app).edit().putString("last", "$day · $msg").apply()
             try { w.destroy() } catch (e: Exception) { }
             if (msg == "done") CcEngine.notifyChanged()
+            try { done(msg) } catch (e: Exception) { }
         }
         var started = false
         w.webViewClient = object : WebViewClient() {
