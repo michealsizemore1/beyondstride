@@ -31,7 +31,16 @@ object Food {
 
     private fun d(o: JSONObject, k: String): Double? = if (o.has(k) && !o.isNull(k)) o.optDouble(k).takeIf { !it.isNaN() } else null
 
-    fun fromJson(o: JSONObject, meal: String? = null): Item {
+    /** Drinks you always have decaf (Nov 22 2026: "the Caramel Brulée is always decaf"): named Decaf, with a decaf latte's ~15 mg caffeine. */
+    private val ALWAYS_DECAF = Regex("caramel\\s*br[uû]l[eé]e?", RegexOption.IGNORE_CASE)
+    private fun decafFix(i: Item): Item {
+        if (!ALWAYS_DECAF.containsMatchIn(i.name) || i.name.contains("decaf", true)) return i
+        val m = HashMap(i.micros); if ((m["caffeine"] ?: 0.0) > 15.0) m["caffeine"] = 15.0
+        return i.copy(name = "Decaf " + i.name, micros = m)
+    }
+
+    fun fromJson(o: JSONObject, meal: String? = null): Item = decafFix(fromJson0(o, meal))
+    private fun fromJson0(o: JSONObject, meal: String? = null): Item {
         val m = HashMap<String, Double>()
         MICROS.forEach { k -> d(o, k)?.let { m[k] = it } }
         return Item(o.optString("id").ifEmpty { newId() }, meal ?: o.optString("meal", "snack").ifEmpty { "snack" },
@@ -116,7 +125,8 @@ object Food {
     // ── Drinks logged as foods count toward fluids, like the Command Center: Sports Nutrition foods → Sports drinks,
     //    Liquids foods → Other drinks, using the fluid ounces in the serving (caffeinated drinks don't count). ──
     private val CAF = Regex("\\b(coffee|espresso|latte|cappuccino|mocha|americano|cold\\s*brew|black\\s*tea|green\\s*tea|energy\\s*drinks?|red\\s*bull|monster(?:\\s*energy)?|celsius|bang\\s*energy|rockstar|reign|ghost\\s*energy|c4\\s*energy|alani\\s*nu)\\b")
-    fun caffeinated(i: Item) = CAF.containsMatchIn(i.name.lowercase()) || (i.micros["caffeine"] ?: 0.0) > 0
+    /** Decaf drinks count as fluid (a decaf latte still has a little caffeine, which doesn't dehydrate). */
+    fun caffeinated(i: Item) = !i.name.contains("decaf", true) && (CAF.containsMatchIn(i.name.lowercase()) || (i.micros["caffeine"] ?: 0.0) > 0)
 
     /** Fluid ounces in a serving label: "20 fl oz", "1 Bottle (591 mL)", "2 cups", "500 ml", "8 oz water"…; 0 if none. */
     fun fluidOz(label: String): Double {
