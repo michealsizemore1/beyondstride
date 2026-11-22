@@ -478,7 +478,7 @@ class NutritionActivity : Activity() {
             col.addView(RunUi.section(this, "THIS WEEK"))
             chart("Calories", null, 0xFFF39C12.toInt(), "") { it.cal.toDouble().takeIf { _ -> it.count > 0 } ?: 0.0 }
             chart("Water", null, 0xFF3498DB.toInt(), " oz") { (if (it.water + it.sportsOz + it.otherOz > 0) it.water else it.waterOz).toDouble() }
-            chart("Total liquids (excl. caffeine)", "Water + sports drinks + other drinks, minus coffee, energy drinks and black/green tea. GU drink mix still counts.",
+            chart("Total liquids (excl. caffeine)", "Water + sports drinks + other drinks, minus caffeinated coffee, energy drinks and black/green tea. Decaf drinks and GU drink mix count.",
                 0xFF16A085.toInt(), " oz") { it.waterOz.toDouble() }
         }
 

@@ -41,6 +41,27 @@ object Hydration {
     private fun local(ctx: Context): JSONObject = try { JSONObject(p(ctx).getString("days", "{}")) } catch (e: Exception) { JSONObject() }
 
     /** Stand-alone: the days with values entered here, and clearing them once they're saved as BeyondStride's own. */
+    /**
+     * One time (Nov 22 2026): the Caramel Brulée is always decaf, so it counts toward liquids now. Fluids are added up
+     * when a food is logged, so lattes logged before the change were never counted: returns (date, oz) to add.
+     */
+    fun decafCatchUp(ctx: Context): List<Pair<String, Int>> {
+        val pr = p(ctx); if (pr.getBoolean("decafFix1", false)) return emptyList()
+        val out = ArrayList<Pair<String, Int>>(); val l = local(ctx)
+        val brulee = Regex("caramel\\s*br[uû]l[eé]e?", RegexOption.IGNORE_CASE)
+        l.keys().forEach { date ->
+            val a = l.optJSONObject(date)?.optJSONArray("foods") ?: return@forEach
+            var oz = 0.0
+            for (k in 0 until a.length()) { val f = a.optJSONObject(k) ?: continue
+                val name = f.optString("name")
+                if (f.optString("meal") != "liquids" || !brulee.containsMatchIn(name) || name.contains("decaf", true)) continue
+                oz += Food.fluidOz(f.optString("servingLabel")) * (f.optDouble("servings", 1.0).takeIf { !it.isNaN() && it > 0 } ?: 1.0) }
+            if (oz >= 1) out += date to Math.round(oz).toInt()
+        }
+        pr.edit().putBoolean("decafFix1", true).apply()
+        return out
+    }
+
     fun localDates(ctx: Context): List<String> = local(ctx).keys().asSequence().toList()
     fun clearLocal(ctx: Context, dates: Collection<String>) { val l = local(ctx); dates.forEach { l.remove(it) }; p(ctx).edit().putString("days", l.toString()).apply() }
 
