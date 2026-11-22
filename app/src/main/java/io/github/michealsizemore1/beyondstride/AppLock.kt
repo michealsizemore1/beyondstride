@@ -25,7 +25,7 @@ import io.github.michealsizemore1.beyondstride.run.RunUi
  * On/off in Settings → App lock. Phone only (the watch has no lock).
  */
 object AppLock {
-    const val RELOCK_AFTER_MS = 5 * 60_000L
+    const val RELOCK_AFTER_MS = 5_000L   // out of sight longer than this (closed, home, another app) asks again
     private const val TAG = "bs_applock"
     private var unlocked = false
     private var leftAt = 0L
@@ -49,9 +49,10 @@ object AppLock {
     }
     private val callbacks = object : Application.ActivityLifecycleCallbacks {
         override fun onActivityStarted(a: Activity) {
-            if (started == 0 && unlocked && leftAt > 0 && System.currentTimeMillis() - leftAt > RELOCK_AFTER_MS) unlocked = false
+            if (started == 0 && unlocked && leftAt > 0 && System.currentTimeMillis() - leftAt > RELOCK_AFTER_MS) { unlocked = false; note(a, "Locked: app was out of sight") }
             started++
         }
+        override fun onActivityPostStarted(a: Activity) { if (needed(a)) cover(a, ask = false) }
         override fun onActivityStopped(a: Activity) { started = (started - 1).coerceAtLeast(0); if (started == 0) leftAt = System.currentTimeMillis() }
         override fun onActivityResumed(a: Activity) { if (needed(a)) cover(a) else uncover(a) }
         override fun onActivityCreated(a: Activity, b: Bundle?) { alive++ }
@@ -61,7 +62,7 @@ object AppLock {
     }
 
     /** Hide the screen behind a lock panel and ask. */
-    private fun cover(a: Activity) {
+    private fun cover(a: Activity, ask: Boolean = true) {
         val root = a.window.decorView as? ViewGroup ?: return
         if (root.findViewWithTag<View>(TAG) == null) {
             val dp = { v: Int -> RunUi.dp(a, v) }
@@ -75,21 +76,32 @@ object AppLock {
                 }, FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER))
             }, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         }
-        ask(a)
+        if (ask) ask(a)
     }
     private fun uncover(a: Activity) { (a.window.decorView as? ViewGroup)?.let { r -> r.findViewWithTag<View>(TAG)?.let { r.removeView(it) } } }
 
+    /** What the lock last did (shown in Settings → App lock), to see why it did or didn't ask. */
+    fun last(ctx: Context) = ctx.getSharedPreferences("applock", 0).getString("last", "") ?: ""
+    private fun note(ctx: Context, what: String) {
+        val t = java.text.SimpleDateFormat("MMM d, h:mm:ss a", java.util.Locale.US).format(java.util.Date())
+        ctx.getSharedPreferences("applock", 0).edit().putString("last", "$t · $what").apply()
+    }
+    private var fails = 0
+
     private fun ask(a: Activity) {
         if (prompting || Build.VERSION.SDK_INT < 28) return
-        prompting = true
+        prompting = true; note(a, "Asked for fingerprint")
         val b = BiometricPrompt.Builder(a).setTitle("Unlock BeyondStride").setSubtitle("Use your fingerprint or screen lock")
         if (Build.VERSION.SDK_INT >= 30) b.setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_WEAK or BiometricManager.Authenticators.DEVICE_CREDENTIAL)
         else @Suppress("DEPRECATION") b.setDeviceCredentialAllowed(true)
         try {
             b.build().authenticate(CancellationSignal(), a.mainExecutor, object : BiometricPrompt.AuthenticationCallback() {
-                override fun onAuthenticationSucceeded(r: BiometricPrompt.AuthenticationResult?) { prompting = false; unlocked = true; uncover(a) }
-                override fun onAuthenticationError(code: Int, msg: CharSequence?) { prompting = false }   // stays locked: tap Unlock to try again
+                override fun onAuthenticationSucceeded(r: BiometricPrompt.AuthenticationResult?) { prompting = false; fails = 0; unlocked = true; uncover(a); note(a, "Unlocked") }
+                override fun onAuthenticationError(code: Int, msg: CharSequence?) { prompting = false; note(a, "Not unlocked ($code: $msg) · tap Unlock") }   // stays locked
             })
-        } catch (e: Exception) { prompting = false; unlocked = true; uncover(a) }   // never lock you out because the prompt itself failed
+        } catch (e: Exception) {
+            prompting = false; note(a, "Prompt failed: ${e.javaClass.simpleName} ${e.message ?: ""}")
+            if (++fails >= 2) { fails = 0; unlocked = true; uncover(a) }   // never lock you out because the prompt itself keeps failing
+        }
     }
 }

@@ -414,7 +414,7 @@ class RunSettingsActivity : Activity() {
             (if (Backup.auto(ctx) && Backup.uri(ctx) != null) " · auto" else "") } ?: "Not set up") { page = "backup"; render() }
         row("📓", "Life tab", if (LifeTab.on(ctx)) "Command Center settings, AI key, sync, storage" else "Hidden · tap to show it again") { page = "life"; render() }
         run { val L = io.github.michealsizemore1.beyondstride.AppLock
-            row("🔒", "App lock", if (!L.available(ctx)) "Needs a screen lock on the phone (Settings → Lock screen)" else if (L.enabled(ctx)) "On · fingerprint or screen lock when you open the app after closing it, after the screen turns off, or after 5 min away · tap to turn off" else "Off · tap to require fingerprint or screen lock") {
+            row("🔒", "App lock", if (!L.available(ctx)) "Needs a screen lock on the phone (Settings → Lock screen)" else if (L.enabled(ctx)) "On · asks when you come back to the app (closed, home or another app), and after the screen turns off · tap to turn off" + L.last(ctx).let { if (it.isEmpty()) "" else "\nLast: $it" } else "Off · tap to require fingerprint or screen lock") {
                 L.setEnabled(ctx, !L.enabled(ctx)); render() } }
         row("ⓘ", "About", "Phone app " + packageManager.getPackageInfo(packageName, 0).versionName) { page = "about"; render() }
         row("☰", "Menu style", "Cards · tap to switch back to classic (phone and watch)") { setMenuStyle("classic") }
