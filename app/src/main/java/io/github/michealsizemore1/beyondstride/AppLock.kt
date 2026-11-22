@@ -20,7 +20,8 @@ import io.github.michealsizemore1.beyondstride.run.RunUi
 
 /**
  * 🔒 App lock (like the Retirement Planner's): asks for your fingerprint or the phone's screen lock when BeyondStride
- * opens and after it has been away for 5 minutes. Needs a screen lock on the phone; without one the app just opens.
+ * opens, every time you close it (swipe it away or back out), when the screen turns off, and after 5 minutes away.
+ * (The app keeps running in the background for steps, LiveTrack and sync, so "opening" alone wasn't enough.) Needs a screen lock on the phone; without one the app just opens.
  * On/off in Settings → App lock. Phone only (the watch has no lock).
  */
 object AppLock {
@@ -29,6 +30,7 @@ object AppLock {
     private var unlocked = false
     private var leftAt = 0L
     private var started = 0
+    private var alive = 0        // screens that exist; 0 = you closed the app
     private var prompting = false
 
     fun enabled(ctx: Context) = ctx.getSharedPreferences("applock", 0).getBoolean("enabled", true)
@@ -38,18 +40,25 @@ object AppLock {
         (ctx.getSystemService(Context.KEYGUARD_SERVICE) as? KeyguardManager)?.isDeviceSecure == true
     private fun needed(ctx: Context) = !unlocked && enabled(ctx) && available(ctx)
 
-    fun install(app: Application) = app.registerActivityLifecycleCallbacks(object : Application.ActivityLifecycleCallbacks {
+    fun install(app: Application) {
+        // Screen off locks it too.
+        try { app.registerReceiver(object : android.content.BroadcastReceiver() {
+            override fun onReceive(c: Context, i: android.content.Intent) { unlocked = false }
+        }, android.content.IntentFilter(android.content.Intent.ACTION_SCREEN_OFF)) } catch (e: Exception) { }
+        app.registerActivityLifecycleCallbacks(callbacks)
+    }
+    private val callbacks = object : Application.ActivityLifecycleCallbacks {
         override fun onActivityStarted(a: Activity) {
             if (started == 0 && unlocked && leftAt > 0 && System.currentTimeMillis() - leftAt > RELOCK_AFTER_MS) unlocked = false
             started++
         }
         override fun onActivityStopped(a: Activity) { started = (started - 1).coerceAtLeast(0); if (started == 0) leftAt = System.currentTimeMillis() }
         override fun onActivityResumed(a: Activity) { if (needed(a)) cover(a) else uncover(a) }
-        override fun onActivityCreated(a: Activity, b: Bundle?) {}
+        override fun onActivityCreated(a: Activity, b: Bundle?) { alive++ }
         override fun onActivityPaused(a: Activity) {}
         override fun onActivitySaveInstanceState(a: Activity, b: Bundle) {}
-        override fun onActivityDestroyed(a: Activity) {}
-    })
+        override fun onActivityDestroyed(a: Activity) { alive = (alive - 1).coerceAtLeast(0); if (alive == 0 && !a.isChangingConfigurations) unlocked = false }   // closed: ask next time
+    }
 
     /** Hide the screen behind a lock panel and ask. */
     private fun cover(a: Activity) {
