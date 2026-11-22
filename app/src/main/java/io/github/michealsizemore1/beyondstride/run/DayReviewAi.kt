@@ -63,7 +63,7 @@ object DayReviewAi {
             "Return ONLY one valid JSON object with exactly these four string keys:\n{\"wins\":\"\",\"improve\":\"\",\"focus\":\"\",\"lessons\":\"\"}\n\n" +
             "- wins: 1-3 specific achievements or positive moments from today\n- improve: 1-3 constructive, realistic improvements\n" +
             "- focus: 1-2 specific priorities for tomorrow\n- lessons: 1-3 concise takeaways from today\n" +
-            "Use short bullet-style lines inside each string. Do not invent events. Use numbers exactly as written; HRV in ms is not a readiness score.\n" +
+            "Format (easy to scan): inside each string, one point per line, each line starting with \"• \" and separated by \\n. Start every point with a 1–3 word label and a colon (\"• Training:\", \"• Nutrition:\", \"• Sleep:\", \"• Recovery:\") then one clear sentence under 25 words. Do not invent events. Use numbers exactly as written; HRV in ms is not a readiness score.\n" +
             "This is a reflective record of the day, kept for later. Do NOT include tonight's to-dos: " +
             "no lights-out / bedtime times, no bedtime or recovery snack, no drinking before bed, no laying out gear. Focus for tomorrow is about the day itself " +
             "(training, eating habits), not tonight. Prefer patterns and lessons over restating numbers.\n\n" +

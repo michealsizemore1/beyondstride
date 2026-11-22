@@ -182,4 +182,44 @@ object LifeUi {
         })
         return box
     }
+
+    /**
+     * 📝 Reviews easier to read: each "• " point gets a hanging indent and a little space after it, and a short
+     * "Label:" at its start is bold. Only how it looks; the saved text stays exactly as written.
+     */
+    fun bulletStyle(et: android.widget.EditText) {
+        val ctx = et.context
+        val gap = RunUi.dp(ctx, 8); val indent = et.paint.measureText("• ").toInt()
+        class Gap : android.text.style.LineHeightSpan {
+            override fun chooseHeight(t: CharSequence, start: Int, end: Int, spanstartv: Int, v: Int, fm: android.graphics.Paint.FontMetricsInt) {
+                val sp = t as? android.text.Spanned ?: return
+                if (end == sp.getSpanEnd(this) && end < t.length) { fm.descent += gap; fm.bottom += gap }
+            }
+        }
+        class Bold : android.text.style.StyleSpan(android.graphics.Typeface.BOLD)
+        val style = Runnable {
+            val e = et.text ?: return@Runnable
+            e.getSpans(0, e.length, Gap::class.java).forEach { e.removeSpan(it) }
+            e.getSpans(0, e.length, Bold::class.java).forEach { e.removeSpan(it) }
+            e.getSpans(0, e.length, android.text.style.LeadingMarginSpan.Standard::class.java).forEach { e.removeSpan(it) }
+            var at = 0
+            while (at < e.length) {
+                val nl = e.indexOf('\n', at).let { if (it < 0) e.length else it }
+                val line = e.substring(at, nl); val end = if (nl < e.length) nl + 1 else nl
+                val bullet = line.startsWith("•") || line.startsWith("- ")
+                if (bullet) {
+                    e.setSpan(android.text.style.LeadingMarginSpan.Standard(0, indent), at, end, android.text.Spanned.SPAN_INCLUSIVE_EXCLUSIVE)
+                    Regex("^[•\\-]\\s*([^:]{2,32}):").find(line)?.let { m -> e.setSpan(Bold(), at + m.range.first, at + m.range.last + 1, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE) }
+                }
+                if (end > at && end < e.length) e.setSpan(Gap(), at, end, android.text.Spanned.SPAN_INCLUSIVE_EXCLUSIVE)
+                at = end
+            }
+        }
+        et.addTextChangedListener(object : android.text.TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+            override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+            override fun afterTextChanged(s: android.text.Editable?) { et.removeCallbacks(style); et.post(style) }
+        })
+        et.post(style)
+    }
 }

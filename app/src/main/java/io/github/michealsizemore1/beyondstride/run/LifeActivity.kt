@@ -440,7 +440,7 @@ class LifeActivity : Activity() {
                     })
                     setOnFocusChangeListener { _, has -> if (!has) { ui.removeCallbacks(commit); commit.run() } }
                 }
-                edits[id] = et; view.addView(et)
+                LifeUi.bulletStyle(et); edits[id] = et; view.addView(et)
             }
             view.addView(save, LinearLayout.LayoutParams(MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = d(10) })
             view.addView(RunUi.text(this@LifeActivity, "Typing saves on its own. After ✨ AI Fill, read it over and tap Save Review. It's still filled in automatically at night if you haven't. ‹ › shows earlier days.", RunUi.DIM, 10f).apply { setPadding(0, d(8), 0, 0) })
@@ -877,7 +877,7 @@ class LifeActivity : Activity() {
                     })
                     setOnFocusChangeListener { _, has -> if (!has) { ui.removeCallbacks(commit); commit.run() } }
                 }
-                edits[id] = et; view.addView(et)
+                LifeUi.bulletStyle(et); edits[id] = et; view.addView(et)
             }
             view.addView(RunUi.button(this@LifeActivity, "Save Review", RunUi.ACCENT) { js("ccNative.saveWeekly()"); ui.postDelayed(reload, 400) },
                 LinearLayout.LayoutParams(MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = d(10) })
