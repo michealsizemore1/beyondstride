@@ -328,17 +328,20 @@ class RunSettingsActivity : Activity() {
             } catch (e: Exception) { "Watch app: not connected" }
             runOnUiThread { watchVer.text = v }
         }.start()
-        // App updates (from GitHub).
+        // ⬆️ App Updates card (from GitHub), styled like M&C Money's: status line and one button.
         val U = io.github.michealsizemore1.beyondstride.Updater
-        val upStatus = RunUi.text(this, "", RunUi.MUTED, 13f).apply { setPadding(dp(4), dp(10), 0, 0) }
-        val upBtn = RunUi.text(this, "Check for updates", RunUi.ACCENT, 15f, true).apply { setPadding(dp(4), dp(12), 0, dp(4)) }
+        val upStatus = RunUi.text(this, "", Color.WHITE, 15f).apply { setPadding(0, dp(8), 0, 0) }
+        val upWhen = RunUi.text(this, "", RunUi.DIM, 11f).apply { setPadding(0, dp(8), 0, 0) }
+        lateinit var upBtn: android.widget.TextView
         fun showUp() {
             val r = U.available(ctx)
+            upStatus.text = if (r != null) "Build ${r.build} is ready (you're on build ${U.currentBuild(ctx)}). The watch shows its own update." else "You're up to date (build ${U.currentBuild(ctx)})."
             upBtn.text = if (r != null) "⬆ Install build ${r.build}" else "Check for updates"
-            upStatus.text = if (r != null) "Build ${r.build} is ready (you're on ${U.currentBuild(ctx)}). Tap to install on this phone — the watch shows its own update."
-                else "Up to date · build ${U.currentBuild(ctx)}" + (if (U.lastChecked(ctx) > 0) " · checked " + android.text.format.DateUtils.getRelativeTimeSpanString(U.lastChecked(ctx)) else "")
+            upBtn.background = RunUi.rounded(if (r != null) RunUi.ACCENT else 0xFF374151.toInt(), dp(14).toFloat())
+            upBtn.setTextColor(if (r != null) Color.BLACK else Color.WHITE)
+            upWhen.text = if (U.lastChecked(ctx) > 0) "Last checked " + android.text.format.DateUtils.getRelativeTimeSpanString(U.lastChecked(ctx)) else ""
         }
-        upBtn.setOnClickListener {
+        upBtn = RunUi.button(this, "Check for updates", 0xFF374151.toInt(), Color.WHITE) {
             val r = U.available(ctx)
             if (r != null) U.start(this, r) { upStatus.text = it }
             else {
@@ -347,7 +350,13 @@ class RunSettingsActivity : Activity() {
                 Thread { U.check(ctx, false); runOnUiThread { showUp() } }.start()
             }
         }
-        col.addView(upBtn); col.addView(upStatus); showUp()
+        col.addView(RunUi.card(this).apply {
+            addView(RunUi.text(ctx, "⬆️ App Updates", Color.WHITE, 18f, true))
+            addView(upStatus)
+            addView(upBtn, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(14) })
+            addView(upWhen)
+        }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(16) })
+        showUp()
         }
 
         show(col)
