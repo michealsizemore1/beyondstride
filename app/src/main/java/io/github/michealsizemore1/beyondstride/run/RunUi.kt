@@ -121,6 +121,14 @@ object RunUi {
         }
 
     const val TAB_TODAY = 0; const val TAB_FITNESS = 1; const val TAB_NUTRITION = 2; const val TAB_PLAN = 3; const val TAB_RUNS = 3   // the Plan screen opens from Activities (⌚ Watch workouts)
+    /**
+     * Run [render] right after the screen has been shown. Switching tabs then shows the screen at once (with what it had),
+     * and the fresh version replaces it a moment later, instead of the tap waiting for the whole rebuild.
+     */
+    fun afterShown(act: android.app.Activity, render: () -> Unit) {
+        val v = act.window.decorView
+        v.postOnAnimation { v.post { if (!act.isFinishing && !act.isDestroyed) render() } }
+    }
     const val TAB_LIFE = 4   // 📓 the Command Center (Settings → Life tab turns it off)
 
 

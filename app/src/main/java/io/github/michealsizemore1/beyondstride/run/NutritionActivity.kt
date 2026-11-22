@@ -13,6 +13,7 @@ import java.util.Locale
 
 /** The Nutrition tab: today, fluids, micronutrients, meals and the week, shown here (like the watch). */
 class NutritionActivity : Activity() {
+    private var shownOnce = false   // after the first time, a tab switch shows at once and refreshes right after
     private var dbTab = "recent"
     private var dbShown = 6
     private var dbQuery = ""
@@ -62,7 +63,7 @@ class NutritionActivity : Activity() {
 
     override fun onResume() {
         io.github.michealsizemore1.beyondstride.Theme.load(this, "runsettings")
-        super.onResume(); render()
+        super.onResume(); if (shownOnce) RunUi.afterShown(this) { render() } else { shownOnce = true; render() }
         Thread { if (NutritionSync.refreshIfStale(this, 30_000L)) runOnUiThread { if (!isFinishing) render() } }.start()
     }
 

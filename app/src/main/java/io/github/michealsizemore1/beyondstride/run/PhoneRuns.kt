@@ -24,14 +24,27 @@ object PhoneRuns {
     private fun flags(ctx: Context) = ctx.getSharedPreferences("runflags", 0)
 
     fun save(ctx: Context, json: JSONObject): File =
-        File(dir(ctx), "${json.optLong("start")}.json").apply { writeText(json.toString()) }
+        File(dir(ctx), "${json.optLong("start")}.json").apply { writeText(json.toString()); parsed.remove(path) }
 
     fun list(ctx: Context): List<File> =
         dir(ctx).listFiles { f -> f.name.endsWith(".json") }?.sortedByDescending { it.name }.orEmpty()
 
     fun file(ctx: Context, start: Long) = File(dir(ctx), "$start.json")
-    fun read(f: File): JSONObject? = try { JSONObject(f.readText()) } catch (e: Exception) { null }
-    fun read(ctx: Context, start: Long): JSONObject? = file(ctx, start).takeIf { it.exists() }?.let { read(it) }
+    /**
+     * For scanning the list (Today, Fitness, insights…): runs that haven't changed are kept in memory instead of being
+     * re-read and re-parsed on every screen (each run holds every GPS point and heartbeat). Treat the result as read-only;
+     * to change a run use read(ctx, start), which always gives a fresh copy, then save().
+     */
+    fun read(f: File): JSONObject? {
+        val stamp = f.lastModified() * 31 + f.length()
+        parsed[f.path]?.let { (st, o) -> if (st == stamp) return o }
+        val o = try { JSONObject(f.readText()) } catch (e: Exception) { null } ?: return null
+        parsed[f.path] = stamp to o
+        if (parsed.size > 300) parsed.keys.firstOrNull()?.let { parsed.remove(it) }
+        return o
+    }
+    private val parsed = java.util.concurrent.ConcurrentHashMap<String, Pair<Long, JSONObject>>()
+    fun read(ctx: Context, start: Long): JSONObject? = file(ctx, start).takeIf { it.exists() }?.let { try { JSONObject(it.readText()) } catch (e: Exception) { null } }
 
     /** Deletes the run here and tells the watch to delete its copy too. */
     fun deleteEverywhere(ctx: Context, start: Long) {

@@ -17,6 +17,7 @@ import java.util.Locale
 
 /** The phone's Running home: runs from the watch, and where they've been sent. */
 open class RunsActivity : Activity() {
+    private var shownOnce = false   // after the first time, a tab switch shows at once and refreshes right after
     private var askedSms = false
 
     /** True when this file was installed on the wrong kind of device (a message is shown instead). */
@@ -62,7 +63,7 @@ open class RunsActivity : Activity() {
             requestPermissions(arrayOf(android.Manifest.permission.SEND_SMS), 31)
         }
         WorkoutStore.pushToWatch(this)   // keeps the watch's "today" plan current
-        render()
+        if (shownOnce) RunUi.afterShown(this) { render() } else { shownOnce = true; render() }
         todayLife?.start()
         // New BeyondStride build out? (asks GitHub at most every 3 hours)
         Thread {

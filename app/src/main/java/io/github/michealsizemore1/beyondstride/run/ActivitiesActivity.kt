@@ -21,6 +21,7 @@ import java.util.Locale
  * the stats bar, search · type · source · sort · dates · group by day, and every activity card with the same lines.
  */
 class ActivitiesActivity : Activity() {
+    private var shownOnce = false   // after the first time, a tab switch shows at once and refreshes right after
     private val S = ActivityStore
     private var search = ""; private var fType = ""; private var fSource = "all"; private var sort = "newest"
     private var from = ""; private var to = ""; private var groupByDay = false
@@ -36,7 +37,7 @@ class ActivitiesActivity : Activity() {
 
     override fun onResume() {
         io.github.michealsizemore1.beyondstride.Theme.load(this, "runsettings")
-        super.onResume(); render()
+        super.onResume(); if (shownOnce) RunUi.afterShown(this) { render() } else { shownOnce = true; render() }
         Thread { val a = S.refresh(this); val b = PlanStore.refresh(this); PlanStore.syncWatchIfNeeded(applicationContext); if (a || b) runOnUiThread { if (!isFinishing) render() } }.start()
     }
 

@@ -15,8 +15,9 @@ import io.github.michealsizemore1.beyondstride.RunMath
 
 /** Fitness details: training load, Zone 2 trend, personal bests, aerobic decoupling (from the home screen's Fitness card). */
 class FitnessActivity : Activity() {
+    private var shownOnce = false   // after the first time, a tab switch shows at once and refreshes right after
     override fun onResume() {
-        super.onResume(); render()
+        super.onResume(); if (shownOnce) RunUi.afterShown(this) { render() } else { shownOnce = true; render() }
         Thread { if (NutritionSync.refreshIfStale(this, 60_000L)) runOnUiThread { if (!isFinishing) render() } }.start()
     }
 
