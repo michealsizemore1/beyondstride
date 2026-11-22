@@ -58,7 +58,12 @@ object DailySummary {
             if (nd.micros.isNotEmpty()) {
                 lines += "Micronutrients: ${f1(Math.round(nd.microScore * 10) / 10.0)}/10"
                 nd.micros.filter { it.status == "Low" && it.field != "caffeine" }.takeIf { it.isNotEmpty() }?.let { l -> lines += "Low: " + l.joinToString(", ") { "${it.name} ${Math.round(it.pct)}%" } }
-                nd.micros.filter { it.status == "High" }.takeIf { it.isNotEmpty() }?.let { l -> lines += "Over limit: " + l.joinToString(", ") { "${it.name} ${Math.round(it.pct)}%" } }
+                nd.micros.filter { it.status == "High" && it.field != "sugar" }.takeIf { it.isNotEmpty() }?.let { l -> lines += "Over limit: " + l.joinToString(", ") { "${it.name} ${Math.round(it.pct)}%" } }
+                // 🍬 Added sugar only, like the Nutrition tab: natural sugar (whole fruit, plain dairy) and run fueling don't count.
+                if (nd.micros.any { it.field == "sugar" }) NutritionUi.addedSugar(nd).let { sg ->
+                    val extra = listOfNotNull(sg.natural.takeIf { it >= 0.5 }?.let { "natural ${Math.round(it)} g" }, sg.fuel.takeIf { it >= 0.5 }?.let { "fueling ${Math.round(it)} g" })
+                    lines += "Added sugar: ${Math.round(sg.added)} g of a 36 g max (${Math.round(sg.added / 36.0 * 100)}%" + (if (sg.added > 36) ", over" else "") + ")" +
+                        (if (extra.isNotEmpty()) " · " + extra.joinToString(" and ") + " not counted" else "") }
             }
             lines += "Fluids: ${nd.waterOz} oz (water ${nd.water} · sports ${nd.sportsOz} · other ${nd.otherOz})"
             if (nd.weight > 0) lines += "Weight: wake-up ${f1(nd.weight)} lb" + (if (nd.preWeight > 0) " · pre-run ${f1(nd.preWeight)} lb" else "") + (if (nd.postWeight > 0) " · post-run ${f1(nd.postWeight)} lb" else "") +
