@@ -274,7 +274,7 @@ class LifeActivity : Activity() {
     private fun buildNative() {
         nativeCol.removeAllViews()
         nativeCol.addView(RunUi.text(this, "Your Command Center, as BeyondStride screens. Changes save to the Command Center right away and sync with Chrome and your computer.", RunUi.MUTED, 12f).apply { setPadding(0, RunUi.dp(this@LifeActivity, 6), 0, 0) })
-        calendar = LifeCalendar(this, web).also { nativeCol.addView(it.view) }
+        calendar = LifeCalendar(this, web) { pickDay(it) }.also { nativeCol.addView(it.view) }
         focusCard = FocusCard().also { nativeCol.addView(it.view) }
         scheduleCard = ScheduleCard().also { nativeCol.addView(it.view) }
         // (The old "Daily Checks · Planning & Review" card is gone: those two checks are hidden leftovers in the Command Center.)
@@ -302,12 +302,20 @@ class LifeActivity : Activity() {
         nativeCol.addView(RunUi.text(this, "Bible, Habits, Library, Meditate, Wellness (with the BP report) and the full Command Center are in ☰ More; search, Ask AI, files and settings are in Tools. Your journal and the day's and week's reviews are in 📝 Review.", RunUi.DIM, 11f).apply { setPadding(0, RunUi.dp(this@LifeActivity, 12), 0, 0) })
     }
 
+    /** 📅 The day the Daily screen shows (picked on its calendar); null = today. Other pages always show today. */
+    private var viewDate: String? = null
+    private fun dayArg() = viewDate?.takeIf { page == 0 && it != java.time.LocalDate.now().toString() }?.let { "," + JSONObject.quote(it) } ?: ""
+    private fun pickDay(date: String) {
+        currentFocus?.clearFocus()   // saves anything being typed to the day it was typed on
+        viewDate = if (date == java.time.LocalDate.now().toString()) null else date
+        reload.run()
+    }
     private var tries = 0
     private var refreshed = false
     private val reload: Runnable = Runnable {
         // While you're in 📓 Full (maybe looking at another day), don't refresh: the refresh moves the page back to today.
         if (page == 2) return@Runnable
-        web.evaluateJavascript("(window.ccNative&&typeof load==='function')?(ccNative.all?ccNative.all():ccNative.focus()):null") { r ->
+        web.evaluateJavascript("(window.ccNative&&typeof load==='function')?(ccNative.all?ccNative.all(${dayArg().removePrefix(",")}):ccNative.focus()):null") { r ->
             val json = try { (JSONTokener(r).nextValue() as? String)?.let { JSONObject(it) } } catch (e: Exception) { null }
             if (json == null) { focusCard?.loading(); if (tries++ < 60) ui.postDelayed(reload, 700) ; return@evaluateJavascript }
             tries = 0; CcEngine.ready(this@LifeActivity); focusCard?.fill(json); if (page == 0) calendar?.load(); scheduleCard?.fill(json); checksCard?.fill(json); bibleChecks?.fill(json); meditCard?.fill(json); wellCard?.fill(json); bibleCard?.fill(json); libCard?.fill(json); if (page == 6 && section == "habits2") habitsCard?.load(); if (page == 6 && section == "bible") lifeBible?.load(); if (page == 6 && section == "library") lifeLibrary?.load(); medHeader?.fill(json); reviewCard?.fill(json); journalCard?.fill(json); weekCard?.fill(json)
@@ -383,7 +391,7 @@ class LifeActivity : Activity() {
                     val id = o.optString("id"); var st = o.optString("state")
                     dot.setOnClickListener {
                         st = when (st) { "green" -> "red"; "red" -> ""; else -> "green" }; paintDot(dot, st, false)
-                        js("ccNative.scheduleTap(${JSONObject.quote(id)})")
+                        js("ccNative.scheduleTap(${JSONObject.quote(id)}${dayArg()})")
                     }
                     row.addView(dot, LinearLayout.LayoutParams(d(30), d(30)).apply { marginStart = d(8) })
                 }
@@ -1195,8 +1203,8 @@ class LifeActivity : Activity() {
                     row.setOnClickListener {
                         st = if (id.isNotEmpty()) (if (st == "green") "" else "green") else CYCLE[(CYCLE.indexOf(st) + 1) % CYCLE.size]
                         paintBox(box, st)
-                        if (id.isNotEmpty()) js("ccNative.setBox(${JSONObject.quote(id)},${st == "green"})")
-                        else js("ccNative.setCheck(${JSONObject.quote(key)},${JSONObject.quote(st)})")
+                        if (id.isNotEmpty()) js("ccNative.setBox(${JSONObject.quote(id)},${st == "green"}${dayArg()})")
+                        else js("ccNative.setCheck(${JSONObject.quote(key)},${JSONObject.quote(st)}${dayArg()})")
                     }
                     body.addView(row)
                 }
@@ -1211,10 +1219,11 @@ class LifeActivity : Activity() {
         private val status = RunUi.text(this@LifeActivity, "Loading your Command Center…", RunUi.MUTED, 12f)
         private val boxes = HashMap<String, TextView>(); private val edits = HashMap<String, EditText>(); private val states = HashMap<String, String>()
         private val ORDER = listOf("", "green", "black", "purple", "red")
+        private val title = RunUi.text(this@LifeActivity, "🎯 Today's Focus", Color.WHITE, 16f, true)
         private fun d(v: Int) = RunUi.dp(this@LifeActivity, v)
         init {
             view.addView(LinearLayout(this@LifeActivity).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL
-                addView(RunUi.text(this@LifeActivity, "🎯 Today's Focus", Color.WHITE, 16f, true), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+                addView(title, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
                 addView(count) })
             view.addView(status)
             group("✅ Priority Tasks", 0xFF818CF8.toInt(), listOf("pt0", "pt1", "pt2"), "Task")
@@ -1225,11 +1234,11 @@ class LifeActivity : Activity() {
             view.addView(RunUi.text(this@LifeActivity, title, color, 13f, true).apply { setPadding(0, d(10), 0, d(2)) })
             ids.forEachIndexed { i, id ->
                 val box = TextView(this@LifeActivity).apply { gravity = android.view.Gravity.CENTER; textSize = 16f; setTypeface(typeface, android.graphics.Typeface.BOLD)
-                    setOnClickListener { val n = ORDER[(ORDER.indexOf(states[id] ?: "") + 1) % ORDER.size]; paint(id, n); js("ccNative.setState(${JSONObject.quote(id)},${JSONObject.quote(n)})"); recount() } }
+                    setOnClickListener { val n = ORDER[(ORDER.indexOf(states[id] ?: "") + 1) % ORDER.size]; paint(id, n); js("ccNative.setState(${JSONObject.quote(id)},${JSONObject.quote(n)}${dayArg()})"); recount() } }
                 val et = EditText(this@LifeActivity).apply {
                     hint = "$word ${i + 1}…"; setTextColor(Color.WHITE); setHintTextColor(RunUi.DIM); textSize = 15f; isSingleLine = true
                     imeOptions = EditorInfo.IME_ACTION_DONE; background = null; setPadding(d(10), d(6), 0, d(6))
-                    val commit = Runnable { js("ccNative.setText(${JSONObject.quote(id)},${JSONObject.quote(text.toString())})") }
+                    val commit = Runnable { js("ccNative.setText(${JSONObject.quote(id)},${JSONObject.quote(text.toString())}${dayArg()})") }
                     addTextChangedListener(object : TextWatcher {
                         override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
                         override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
@@ -1255,6 +1264,8 @@ class LifeActivity : Activity() {
         fun loading() { status.visibility = View.VISIBLE }
         fun fill(j: JSONObject) {
             status.visibility = View.GONE
+            val v = j.optString("viewing")
+            title.text = if (v.isEmpty()) "🎯 Today's Focus" else "🎯 Focus · " + try { java.time.LocalDate.parse(v).format(java.time.format.DateTimeFormatter.ofPattern("EEE, MMM d", java.util.Locale.US)) } catch (e: Exception) { v }
             val items = j.optJSONArray("items") ?: return
             for (i in 0 until items.length()) { val o = items.getJSONObject(i); val id = o.optString("id")
                 paint(id, o.optString("state"))

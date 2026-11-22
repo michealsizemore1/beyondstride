@@ -25,7 +25,7 @@ import java.util.Locale
  * 📅 Calendar card for the Life tab — the Command Center's calendar: each day's status (complete / partly / saved),
  * event dots, the chosen day's events (yours, training plan, habits, bills) and add / edit / delete for your own.
  */
-class LifeCalendar(private val act: Activity, private val web: WebView) {
+class LifeCalendar(private val act: Activity, private val web: WebView, private val onDay: (String) -> Unit = {}) {
     val view = RunUi.card(act)
     private var month = LocalDate.now().withDayOfMonth(1)
     private var selected = LocalDate.now().toString()
@@ -85,7 +85,7 @@ class LifeCalendar(private val act: Activity, private val web: WebView) {
                         if (dot != 0) addView(View(act).apply { background = RunUi.rounded(dot, d(3).toFloat()) }, LinearLayout.LayoutParams(d(6), d(6)).apply { marginEnd = d(2) })
                         if (o.optBoolean("event")) addView(View(act).apply { background = RunUi.rounded(0xFFF59E0B.toInt(), d(3).toFloat()) }, LinearLayout.LayoutParams(d(6), d(6)))
                     }, LinearLayout.LayoutParams(WRAP_CONTENT, d(8)))
-                    setOnClickListener { selected = date; load() }
+                    setOnClickListener { selected = date; load(); onDay(date) }   // the whole Daily screen follows the picked day
                 }
                 grid.addView(box, cell(d(44)))
             }

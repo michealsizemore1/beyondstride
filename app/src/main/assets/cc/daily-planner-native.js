@@ -21,14 +21,18 @@
   }
   // The native Today screen always shows the real today; bring the page there if it's on another date.
   function goRealDay(){if(!onRealDay()){try{today=new Date();load();if(typeof syncPeriodsToDay==='function')syncPeriodsToDay();}catch(e){}}}
-  function checks(){
-    goRealDay();
+  // 📅 The Life tab's Daily screen can show another day (picked on its calendar): bring the page to that date.
+  // No date (or today's) = the real today, as before.
+  function goDay(date){date=String(date||'');if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||date===realKey()){goRealDay();return;}
+    try{if(dk(today)!==date){today=new Date(date+'T00:00:00');load();if(typeof syncPeriodsToDay==='function')syncPeriodsToDay();}}catch(e){}}
+  function checks(date){
+    goDay(date);
     var list=typeof collectDailyChecks==='function'?collectDailyChecks():[];
     return list.filter(function(i){return !/^(?:pt|dg)[0-2]c$/.test(i.key||'');}).map(function(i){
       return {key:i.key||'',id:i.id||'',group:i.group,label:String(i.label||'').replace(/\s*-\s*Actual\s*$/i,''),state:i.status==='blank'?'':i.status};});
   }
-  function schedule(){
-    goRealDay();
+  function schedule(date){
+    goDay(date);var other=!!date&&date!==realKey();
     try{renderJournalSchedule();}catch(e){}
     var map=window._journalScheduleItemsById||{},items=Object.keys(map).map(function(id){return map[id];});
     var now=new Date(),cur=now.getHours()*60+now.getMinutes(),next=-1;
@@ -37,7 +41,7 @@
     return items.map(function(it,i){
       var st=it.scheduleStatus||(it.done?'green':'');if(st==='blank')st='';
       return {id:it.id,time:it.time||'',label:String(it.label||''),detail:String(it.detail||'').replace(/<[^>]*>/g,''),done:!!it.done,
-        partial:!!it.partial,fixed:!!it.fixed,state:st,next:i===next};});
+        partial:!!it.partial,fixed:!!it.fixed,state:st,next:!other&&i===next};});
   }
   var REV=[['dayRevWins','Wins Today'],['dayRevImprove','What to Improve'],['dayRevFocus','Focus for Tomorrow'],['dayRevLessons','Lessons Learned']];
   function review(){
@@ -532,15 +536,18 @@
     reviewFill:function(){goRealDay();var b=document.getElementById('aiFillDayReviewBtn');if(!b||b.disabled)return false;
       if(!(typeof journalAIKey==='function'&&journalAIKey()))return 'nokey';aiFillEntireDayReview(b);return true;},
     /** Everything the native Today screen shows: {date, focus:[…], checks:[{key|id, group, label, state}]} */
-    all:function(){goRealDay();var f=JSON.parse(window.ccNative.focus());f.checks=checks();f.schedule=schedule();f.review=review();f.wellness=wellness();try{var sd=document.getElementById('bsSleepDetail');f.sleepDetail=sd&&sd.style.display!=='none'?sd.textContent:'';}catch(e){f.sleepDetail='';}f.bible=bible();f.meditation=meditation();f.weekly=weekly();f.journal=journalText();f.library=library();return JSON.stringify(f);},
+    all:function(date){goRealDay();var f=JSON.parse(window.ccNative.focus());f.checks=checks();f.schedule=schedule();f.review=review();f.wellness=wellness();try{var sd=document.getElementById('bsSleepDetail');f.sleepDetail=sd&&sd.style.display!=='none'?sd.textContent:'';}catch(e){f.sleepDetail='';}f.bible=bible();f.meditation=meditation();f.weekly=weekly();f.journal=journalText();f.library=library();
+      // Another day picked on the Daily calendar: its Focus, checks and schedule (the rest stays today's).
+      if(date&&date!==realKey()){var g=JSON.parse(window.ccNative.focus(date));f.items=g.items;f.date=g.date;f.checks=checks(date);f.schedule=schedule(date);f.viewing=date;}
+      return JSON.stringify(f);},
     /** My Schedule: tap cycles done → not done → not marked, exactly like the Command Center's own button. */
-    scheduleTap:function(id){goRealDay();try{renderJournalSchedule();
+    scheduleTap:function(id,date){goDay(date);try{renderJournalSchedule();
       // Same as tapping the circle on the page: done / not-done items (Personal Hygiene, your own items) toggle their own flag; the rest cycle green → red → clear.
       var it=(typeof _journalScheduleItemsById!=='undefined'&&_journalScheduleItemsById)?_journalScheduleItemsById[id]:null;
       if(it&&it.manual&&it.manual!=='eveningPlanning')journalToggleScheduleManual(it.manual);else journalScheduleCycleStatus(null,id);}catch(e){return false;}refresh();try{if(window.BSNative&&BSNative.changed)BSNative.changed();}catch(e){}return true;},
     /** Set a daily check (tri-check key like 'wBP') to '', green, black, purple or red. */
-    setCheck:function(key,state){
-      if(!key||STATES.indexOf(state)<0)return false;goRealDay();
+    setCheck:function(key,state,date){
+      if(!key||STATES.indexOf(state)<0)return false;goDay(date);
       var els=document.querySelectorAll('.tri-check[data-key="'+key+'"]');if(!els.length)return false;
       els.forEach(function(e){applyTriState(e,state);});
       try{save();}catch(e){}refresh();
@@ -548,15 +555,16 @@
       return true;
     },
     /** Plain checkboxes (Planning & Review). */
-    setBox:function(id,on){
-      if(id!=='reviewCheck'&&id!=='prepJournalCheck')return false;goRealDay();
+    setBox:function(id,on,date){
+      if(id!=='reviewCheck'&&id!=='prepJournalCheck')return false;goDay(date);
       var el=document.getElementById(id);if(!el)return false;
       if(el.checked!==!!on){el.checked=!!on;try{el.dispatchEvent(new Event('change',{bubbles:true}));}catch(e){}try{save();}catch(e){}refresh();}
       return true;
     },
     /** Today's Focus for the real today: {date, items:[{id, kind, text, state}]} */
-    focus:function(){
-      var live=onRealDay(),d=live?null:stored(),out=[];
+    focus:function(date){
+      var other=!!date&&date!==realKey();if(other)goDay(date);
+      var live=other||onRealDay(),d=live?null:stored(),out=[];
       IDS.forEach(function(id){
         var text='',state='';
         if(live){
@@ -565,20 +573,22 @@
         }else{text=d[id+'t']||'';state=d[id+'c']||'';}
         out.push({id:id,kind:id.charAt(0)==='p'?'task':'goal',text:text,state:state});
       });
-      return JSON.stringify({date:realKey(),items:out});
+      return JSON.stringify({date:other?date:realKey(),items:out});
     },
-    setText:function(id,value){
+    setText:function(id,value,date){
       if(IDS.indexOf(id)<0)return false;value=String(value||'');
-      if(onRealDay()){
+      if(date&&date!==realKey())goDay(date);
+      if(onRealDay()||(date&&date!==realKey())){
         var row=document.getElementById(id),tx=row&&row.querySelector('input[type=text]');if(!tx)return false;
         if(tx.value===value)return true;
         tx.value=value;try{save();}catch(e){}refresh();return true;
       }
       return writeStored(function(d){d[id+'t']=value;});
     },
-    setState:function(id,state){
+    setState:function(id,state,date){
       if(IDS.indexOf(id)<0||STATES.indexOf(state)<0)return false;
-      if(onRealDay()){
+      if(date&&date!==realKey())goDay(date);
+      if(onRealDay()||(date&&date!==realKey())){
         document.querySelectorAll('.tri-check[data-key="'+id+'c"]').forEach(function(e){applyTriState(e,state);});
         var row=document.getElementById(id);if(row)row.classList.toggle('done',state==='green');
         try{save();}catch(e){}refresh();return true;
