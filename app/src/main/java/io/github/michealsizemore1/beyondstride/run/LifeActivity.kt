@@ -601,13 +601,39 @@ class LifeActivity : Activity() {
         val view = RunUi.card(this@LifeActivity)
         private val et = EditText(this@LifeActivity)
         private fun d(v: Int) = RunUi.dp(this@LifeActivity, v)
+        private var off = 0L          // 0 = today, -1 = yesterday …
+        private fun date() = java.time.LocalDate.now().plusDays(off)
+        private val dayLabel = RunUi.text(this@LifeActivity, "", Color.WHITE, 14f, true).apply { gravity = android.view.Gravity.CENTER }
+        private lateinit var nextArrow: TextView
+        private fun arrow(t: String, n: Int) = RunUi.text(this@LifeActivity, t, RunUi.ACCENT, 22f, true).apply { setPadding(d(14), 0, d(14), 0)
+            setOnClickListener { if (off + n <= 0) { et.clearFocus(); off += n; showDay() } } }
+        private fun paintDay() {
+            dayLabel.text = (if (off == 0L) "Today · " else if (off == -1L) "Yesterday · " else "") + date().format(java.time.format.DateTimeFormatter.ofPattern("EEE, MMM d, yyyy", java.util.Locale.US))
+            nextArrow.alpha = if (off < 0) 1f else 0.25f
+            et.hint = if (off == 0L) "Write whatever's on your mind today…" else "Nothing written this day. You can add to it here."
+        }
+        /** Show the chosen day's entry: today from the regular refresh, an earlier day read directly. */
+        private fun showDay() {
+            paintDay()
+            if (off == 0L) { reload.run(); return }
+            val dt = date().toString()
+            web.evaluateJavascript("window.ccNative&&ccNative.journalDay?ccNative.journalDay(${JSONObject.quote(dt)}):''") { r ->
+                if (date().toString() != dt) return@evaluateJavascript
+                val t = try { JSONTokener(r).nextValue() as? String } catch (e: Exception) { null } ?: ""
+                if (!et.hasFocus()) et.setText(t)
+            }
+        }
         init {
             view.addView(RunUi.text(this@LifeActivity, "✍️ Daily Journal", Color.WHITE, 16f, true))
+            nextArrow = arrow("›", 1)
+            view.addView(LinearLayout(this@LifeActivity).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL; setPadding(0, d(4), 0, 0)
+                addView(arrow("‹", -1)); addView(dayLabel, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)); addView(nextArrow) })
             et.apply {
                 hint = "Write whatever's on your mind today…"; setTextColor(Color.WHITE); setHintTextColor(RunUi.DIM); textSize = 15f
                 minLines = 5; gravity = android.view.Gravity.TOP
                 background = RunUi.rounded(0xFF26302C.toInt(), d(10).toFloat()); setPadding(d(12), d(10), d(12), d(10))
-                val commit = Runnable { js("ccNative.setJournal(${JSONObject.quote(text.toString())})") }
+                val commit = Runnable { js(if (off == 0L) "ccNative.setJournal(${JSONObject.quote(text.toString())})"
+                    else "ccNative.setJournalDay(${JSONObject.quote(date().toString())},${JSONObject.quote(text.toString())})") }
                 addTextChangedListener(object : TextWatcher {
                     override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
                     override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
@@ -616,11 +642,14 @@ class LifeActivity : Activity() {
                 setOnFocusChangeListener { _, has -> if (!has) { ui.removeCallbacks(commit); commit.run() } }
             }
             view.addView(et, LinearLayout.LayoutParams(MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = d(8) })
-            view.addView(RunUi.text(this@LifeActivity, "Saves as you type. Past entries, search and the archive are in Tools → 📓 Full view.", RunUi.DIM, 10f).apply { setPadding(0, d(6), 0, 0) })
+            view.addView(RunUi.text(this@LifeActivity, "Saves as you type, to the day shown. ‹ › shows earlier days. Search and the archive are in Tools → 📓 Full view.", RunUi.DIM, 10f).apply { setPadding(0, d(6), 0, 0) })
+            paintDay()
         }
         fun fill(j: JSONObject) {
             if (!j.has("journal")) { view.visibility = View.GONE; return }
             view.visibility = View.VISIBLE
+            if (off != 0L) return          // looking at an earlier day: leave it on screen
+            paintDay()
             val t = j.optString("journal"); if (!et.hasFocus() && et.text.toString() != t) et.setText(t)
         }
     }

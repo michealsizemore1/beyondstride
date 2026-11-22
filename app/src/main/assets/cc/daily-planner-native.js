@@ -488,6 +488,13 @@
     deleteEvent:function(id){calSave(journalCalendarEventsAll().filter(function(e){return e.id!==id;}));return true;},
     period:function(kind,off){return JSON.stringify(period(kind==='yearly'?'yearly':'monthly',off));},
     /** ✍️ Daily Journal (today). */
+    // ✍️ The Daily Journal for an earlier day (‹ › on the Life tab): read / save that day's entry directly.
+    journalDay:function(date){date=String(date||'');if(date===realKey())return journalText();try{var d=JSON.parse(localStorage.getItem('planner_'+date)||'{}')||{};return String(d.jNotes||'');}catch(e){return '';}},
+    setJournalDay:function(date,value){date=String(date||'');value=String(value||'');if(!/^\d{4}-\d{2}-\d{2}$/.test(date))return false;
+      if(date===realKey())return window.ccNative.setJournal(value);
+      try{if(dk(today)===date){var el=document.getElementById('jNotes');if(el){el.value=value;el.dispatchEvent(new Event('input'));if(typeof save==='function')save();return true;}}
+        var k='planner_'+date,d=JSON.parse(localStorage.getItem(k)||'{}')||{};d.jNotes=value;localStorage.setItem(k,JSON.stringify(d));
+        try{if(window.BSNative&&BSNative.changed)BSNative.changed();}catch(e2){}return true;}catch(e){return false;}},
     setJournal:function(value){goRealDay();var el=document.getElementById('jNotes');if(!el)return false;value=String(value||'');if(el.value===value)return true;
       el.value=value;try{el.dispatchEvent(new Event('input',{bubbles:true}));}catch(e){}try{save();}catch(e){}return true;},
     /** 📖 Bible Study / 🧘 Meditation: open the Command Center's own guided session or meditation screen. */
