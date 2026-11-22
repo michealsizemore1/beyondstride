@@ -70,10 +70,11 @@ object AppLock {
                 tag = TAG; setBackgroundColor(RunUi.BG); isClickable = true; isFocusable = true
                 addView(LinearLayout(a).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_HORIZONTAL
                     addView(TextView(a).apply { text = "🔒"; textSize = 48f; gravity = Gravity.CENTER })
-                    addView(TextView(a).apply { text = "BeyondStride is locked"; textSize = 20f; setTextColor(Color.WHITE); gravity = Gravity.CENTER; setPadding(0, dp(12), 0, dp(6)) })
-                    addView(TextView(a).apply { text = "Use your fingerprint or screen lock"; textSize = 14f; setTextColor(RunUi.MUTED); gravity = Gravity.CENTER })
+                    addView(TextView(a).apply { text = "BeyondStride is locked"; textSize = 20f; setTextColor(Color.WHITE); gravity = Gravity.CENTER; setPadding(0, dp(12), 0, dp(6)) }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+                    addView(TextView(a).apply { text = "Use your fingerprint or screen lock"; textSize = 14f; setTextColor(RunUi.MUTED); gravity = Gravity.CENTER }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
                     addView(RunUi.button(a, "Unlock", RunUi.ACCENT) { ask(a) }, LinearLayout.LayoutParams(dp(200), ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(24) })
-                }, FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER))
+                    setPadding(dp(24), 0, dp(24), 0)
+                }, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER))
             }, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         }
         if (ask) ask(a)
@@ -101,7 +102,7 @@ object AppLock {
             })
         } catch (e: Exception) {
             prompting = false; note(a, "Prompt failed: ${e.javaClass.simpleName} ${e.message ?: ""}")
-            if (++fails >= 2) { fails = 0; unlocked = true; uncover(a) }   // never lock you out because the prompt itself keeps failing
+            if (++fails >= 3) { fails = 0; unlocked = true; uncover(a) }   // never lock you out because the prompt itself keeps failing
         }
     }
 }
