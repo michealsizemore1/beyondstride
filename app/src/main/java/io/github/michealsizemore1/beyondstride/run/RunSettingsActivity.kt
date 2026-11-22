@@ -413,6 +413,9 @@ class RunSettingsActivity : Activity() {
         row("⇪", "Backup", Backup.lastAt(ctx).takeIf { it > 0 }?.let { "Last: " + java.text.SimpleDateFormat("MMM d, h:mm a", java.util.Locale.getDefault()).format(java.util.Date(it)) +
             (if (Backup.auto(ctx) && Backup.uri(ctx) != null) " · auto" else "") } ?: "Not set up") { page = "backup"; render() }
         row("📓", "Life tab", if (LifeTab.on(ctx)) "Command Center settings, AI key, sync, storage" else "Hidden · tap to show it again") { page = "life"; render() }
+        run { val L = io.github.michealsizemore1.beyondstride.AppLock
+            row("🔒", "App lock", if (!L.available(ctx)) "Needs a screen lock on the phone (Settings → Lock screen)" else if (L.enabled(ctx)) "On · fingerprint or screen lock when the app opens and after 5 min away · tap to turn off" else "Off · tap to require fingerprint or screen lock") {
+                L.setEnabled(ctx, !L.enabled(ctx)); render() } }
         row("ⓘ", "About", "Phone app " + packageManager.getPackageInfo(packageName, 0).versionName) { page = "about"; render() }
         row("☰", "Menu style", "Cards · tap to switch back to classic (phone and watch)") { setMenuStyle("classic") }
         row("◐", "Background", if (io.github.michealsizemore1.beyondstride.Theme.light) "Lighter · tap for dark" else "Dark · tap for lighter") { toggleBg() }
