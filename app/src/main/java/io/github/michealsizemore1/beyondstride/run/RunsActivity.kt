@@ -282,6 +282,16 @@ open class RunsActivity : Activity() {
             io.github.michealsizemore1.beyondstride.ReadinessSync.nights(this), runs.take(120), R.today(), fuelYesterday = io.github.michealsizemore1.beyondstride.NutritionStore.yesterday(this))
         val todayW = WorkoutStore.plan(this).optJSONObject(WorkoutStore.dayFmt.format(Date()))
         col.addView(RunUi.section(this, "TODAY"))
+        // 📈 Markets (the stock indexes and futures from MSIZ Terminal).
+        col.addView(RunUi.card(this).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { bottomMargin = dp(8) }
+            val card = this
+            TodayMarkets.fill(ctx, card)
+            fun refresh() = Thread { TodayMarkets.fetch(ctx); runOnUiThread { if (!isFinishing) TodayMarkets.fill(ctx, card) } }.start()
+            setOnClickListener { refresh() }
+            if (TodayMarkets.stale(ctx)) refresh()
+        })
         // 🌤 Weather.
         col.addView(RunUi.card(this).apply {
             orientation = LinearLayout.VERTICAL
