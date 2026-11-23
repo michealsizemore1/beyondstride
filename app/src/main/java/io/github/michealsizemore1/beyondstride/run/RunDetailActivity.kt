@@ -72,12 +72,14 @@ class RunDetailActivity : Activity() {
             )))
         })
 
-        // Add to Activities.
-        col.addView(LinearLayout(this).apply {
+        // Activities: runs go in automatically, so this is just a ✓. The button only shows if this run somehow isn't in yet.
+        if (PhoneRuns.sentToCommandCenter(ctx, start))
+            col.addView(RunUi.text(ctx, "✓ In Activities", 0xFF4ADE80.toInt(), 13f, true).apply { setPadding(dp(4), dp(10), 0, 0) })
+        else col.addView(LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             setPadding(0, dp(10), 0, 0)
             addView(RunUi.button(ctx, "Add to Activities",
-                RunUi.CC, Color.WHITE) { CommandCenter.send(ctx, listOf(start)) },
+                RunUi.CC, Color.WHITE) { CommandCenter.send(ctx, listOf(start)); col.postDelayed({ recreate() }, 1500) },
                 LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
         })
 

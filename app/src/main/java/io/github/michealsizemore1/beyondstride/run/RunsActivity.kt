@@ -398,9 +398,9 @@ open class RunsActivity : Activity() {
                 setOnClickListener { onClick() }
             }
             val lp = { last: Boolean -> LinearLayout.LayoutParams(0, MATCH_PARENT, 1f).apply { if (!last) marginEnd = dp(6) } }
-            addView(tile("Activities", if (unsentCc.isEmpty()) "✓ added" else "Add ${unsentCc.size}", RunUi.CC) {
-                if (unsentCc.isEmpty()) Toast.makeText(ctx, "All runs are already in Activities", Toast.LENGTH_SHORT).show()
-                else Thread {
+            // Runs go into Activities automatically; this tile only shows when some didn't make it in.
+            if (unsentCc.isNotEmpty()) addView(tile("Activities", "Add ${unsentCc.size}", RunUi.CC) {
+                Thread {
                     val n = CommandCenter.upload(ctx, unsentCc)
                     runOnUiThread { Toast.makeText(ctx, if (n > 0) "Added $n to Activities" else "Couldn't add them — try again", Toast.LENGTH_SHORT).show(); recreate() }
                 }.start()
