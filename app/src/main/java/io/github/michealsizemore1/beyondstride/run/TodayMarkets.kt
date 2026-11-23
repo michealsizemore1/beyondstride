@@ -13,7 +13,7 @@ import java.net.URL
 /**
  * 📈 Markets on the Today tab: the stock indexes and futures from MSIZ Terminal (S&P 500, Dow, Nasdaq) and Bitcoin. Same numbers
  * as the Terminal: its market file is refreshed about every 15 minutes during market hours (prices ~15 min delayed).
- * Kept on the phone so the card shows instantly; tap to refresh, "Open MSIZ Terminal ›" for the full page.
+ * Kept on the phone so the card shows instantly; tap to refresh.
  */
 object TodayMarkets {
     private const val URL_DATA = "https://michealsizemore1.github.io/ChatGPT-The-Master-App/data/market-quotes.json"
@@ -42,11 +42,6 @@ object TodayMarkets {
         val j = try { JSONObject(p(ctx).getString("json", "") ?: "") } catch (e: Exception) { null }
         card.addView(LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
             addView(RunUi.text(ctx, "📈 Markets", Color.WHITE, 16f, true), LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
-            addView(RunUi.text(ctx, "Open MSIZ Terminal ›", RunUi.ACCENT, 12f, true).apply {
-                setPadding(d(8), d(4), 0, d(4))
-                setOnClickListener { val u = Uri.parse(URL_TERMINAL)
-                    try { ctx.startActivity(Intent(Intent.ACTION_VIEW, u).setPackage("com.android.chrome")) } catch (e: Exception) { try { ctx.startActivity(Intent(Intent.ACTION_VIEW, u)) } catch (e2: Exception) { } } }
-            })
         })
         if (j == null) { card.addView(RunUi.text(ctx, "Loading market numbers…", RunUi.MUTED, 12f).apply { setPadding(0, d(6), 0, 0) }); return }
         val q = j.optJSONObject("quotes") ?: JSONObject(); val f = j.optJSONObject("futures") ?: JSONObject()
