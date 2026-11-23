@@ -81,7 +81,7 @@ object NutritionStore {
 
     /** Phone: this week's / month's miles as Activities counts them (all sources), sent to the watch so both show the same. */
     fun setMileage(ctx: Context, week: Double, runs: Int, month: Double) {
-        val mon = java.time.LocalDate.now().let { it.minusDays((it.dayOfWeek.value - 1).toLong()) }.toString()
+        val mon = java.time.LocalDate.now().let { it.minusDays((it.dayOfWeek.value % 7).toLong()) }.toString()   // the week's Sunday
         val json = org.json.JSONObject().put("week", Math.round(week * 100) / 100.0).put("runs", runs).put("month", Math.round(month * 100) / 100.0).put("monday", mon).put("ym", mon.take(7).let { java.time.LocalDate.now().toString().take(7) }).toString()
         if (json == p(ctx).getString("mileage", "")) return
         p(ctx).edit().putString("mileage", json).apply()
@@ -99,7 +99,7 @@ object NutritionStore {
     fun acts(ctx: Context): org.json.JSONObject? = try { org.json.JSONObject(p(ctx).getString("acts", "") ?: "").takeIf { it.has("count") } } catch (e: Exception) { null }
     /** Watch: that mileage, if it's for the current week. */
     fun mileage(ctx: Context): org.json.JSONObject? = try { org.json.JSONObject(p(ctx).getString("mileage", "") ?: "").takeIf {
-        it.optString("monday") == java.time.LocalDate.now().let { d -> d.minusDays((d.dayOfWeek.value - 1).toLong()) }.toString() } } catch (e: Exception) { null }
+        it.optString("monday") == java.time.LocalDate.now().let { d -> d.minusDays((d.dayOfWeek.value % 7).toLong()) }.toString() } } catch (e: Exception) { null }
 
     /** The calorie target's settings and breakdown (phone sets it; sent to the watch with the days). */
     fun setCalc(ctx: Context, json: String) = p(ctx).edit().putString("calc", json).apply()

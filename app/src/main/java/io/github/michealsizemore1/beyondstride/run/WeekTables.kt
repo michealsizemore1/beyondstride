@@ -63,14 +63,14 @@ object WeekTables {
                 addView(RunUi.text(act, "›", RunUi.ACCENT, 22f, true).apply { setPadding(d(14), 0, d(4), 0); setOnClickListener { shift(1) } }) }) }
     }
 
-    /** 🍎 Nutrition + 🧪 Micronutrients, Mon–Sun, ‹ › for other weeks. */
+    /** 🍎 Nutrition + 🧪 Micronutrients, Sun–Sat (the run week), ‹ › for other weeks. */
     class NutritionWeek(private val act: Activity) {
         val view = LinearLayout(act).apply { orientation = LinearLayout.VERTICAL }
         private var off = 0
         init { draw() }
         fun draw() {
             view.removeAllViews()
-            val today = LocalDate.now(); val mon = today.minusDays((today.dayOfWeek.value - 1).toLong()).plusWeeks(off.toLong())
+            val today = LocalDate.now(); val mon = ActivityStore.weekStart(today).plusWeeks(off.toLong())
             val dates = (0..6).map { mon.plusDays(it.toLong()) }
             val byDate = try { io.github.michealsizemore1.beyondstride.NutritionStore.days(act).associateBy { it.date } } catch (e: Exception) { emptyMap() }
             view.addView(nav(act, "", weekLabel(mon), RunUi.ACCENT) { s -> off = if (s == 0) 0 else minOf(0, off + s); draw() })
@@ -211,7 +211,7 @@ object WeekTables {
             val today = LocalDate.now()
             val periods: List<Triple<String, LocalDate, LocalDate>>; val label: String
             if (kind == "month") { val m1 = today.withDayOfMonth(1).plusMonths(off.toLong()); val last = m1.plusMonths(1).minusDays(1)
-                var w = m1.minusDays((m1.dayOfWeek.value - 1).toLong()); val ps = ArrayList<Triple<String, LocalDate, LocalDate>>(); val f = DateTimeFormatter.ofPattern("MMM d", Locale.US)
+                var w = ActivityStore.weekStart(m1); val ps = ArrayList<Triple<String, LocalDate, LocalDate>>(); val f = DateTimeFormatter.ofPattern("MMM d", Locale.US)
                 while (!w.isAfter(last)) { val e = w.plusDays(6); ps += Triple("Wk " + w.format(f) + "–" + (if (e.month == w.month) e.dayOfMonth.toString() else e.format(f)), maxOf(w, m1), minOf(e, last)); w = w.plusWeeks(1) }
                 periods = ps; label = m1.format(DateTimeFormatter.ofPattern("MMMM yyyy", Locale.US))
             } else { val y = today.year + off

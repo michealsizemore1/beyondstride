@@ -17,7 +17,7 @@ class WeekChart(ctx: Context, private val values: List<Double?>, @Suppress("UNUS
     // Every chart uses BeyondStride's lime so the line stands out on the dark cards.
     private val lineColor = LIME
     private val d = ctx.resources.displayMetrics.density
-    private val days = listOf("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
+    private val days = listOf("Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat")
     private val text = Paint(Paint.ANTI_ALIAS_FLAG).apply { this.color = 0xFF9AA5A1.toInt(); textSize = (if (small) 8f else 11f) * d }
     private val grid = Paint(Paint.ANTI_ALIAS_FLAG).apply { this.color = 0x2E94A3B8; strokeWidth = d }
     private val line = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = lineColor; strokeWidth = (if (small) 1.5f else 2.5f) * d; style = Paint.Style.STROKE; strokeJoin = Paint.Join.ROUND }
@@ -93,10 +93,10 @@ class WeekChart(ctx: Context, private val values: List<Double?>, @Suppress("UNUS
 
     companion object {
         const val LIME = 0xFFD4E635.toInt()
-        /** This week's dates, Monday first. */
+        /** This week's dates, Sunday first (the run week). */
         fun weekDates(): List<String> {
             val t = java.time.LocalDate.now()
-            val mon = t.minusDays((t.dayOfWeek.value - 1).toLong())
+            val mon = t.minusDays((t.dayOfWeek.value % 7).toLong())
             return (0..6).map { mon.plusDays(it.toLong()).toString() }
         }
         /** "2295 weekly average · 1646 to 2984 range" (or "No data logged this week"). */

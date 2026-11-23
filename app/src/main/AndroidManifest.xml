@@ -34,6 +34,7 @@
         <package android:name="com.sizemore.mcmoney" />
         <package android:name="com.sizemore.retirement" />
         <package android:name="com.sizemore.benefits" />
+        <package android:name="com.sizemore.msiz" />
     </queries>
 
     <application

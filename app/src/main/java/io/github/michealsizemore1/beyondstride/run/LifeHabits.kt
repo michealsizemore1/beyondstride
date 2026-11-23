@@ -149,7 +149,7 @@ class LifeHabits(private val act: Activity, private val web: WebView, private va
         // Week strip
         val week = h.optString("week")
         c.addView(LinearLayout(act).apply { orientation = LinearLayout.HORIZONTAL
-            listOf("M", "T", "W", "T", "F", "S", "S").forEachIndexed { i, l -> addView(LinearLayout(act).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_HORIZONTAL
+            listOf("S", "M", "T", "W", "T", "F", "S").forEachIndexed { i, l -> addView(LinearLayout(act).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_HORIZONTAL
                 addView(RunUi.text(act, l, RunUi.DIM, 10f).apply { gravity = Gravity.CENTER })
                 addView(View(act).apply { background = RunUi.rounded(color(week.getOrElse(i) { 'o' }), d(4).toFloat()) }, LinearLayout.LayoutParams(MATCH_PARENT, d(8)).apply { topMargin = d(3) }) },
                 LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f).apply { marginEnd = if (i < 6) d(4) else 0 }) } })

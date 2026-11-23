@@ -1287,7 +1287,8 @@ function renderMonthly(){const now=new Date(),ref=new Date(now.getFullYear(),now
     const existingDows=hmGrid.querySelectorAll('.heatmap-dow');
     while(hmGrid.children.length>7)hmGrid.removeChild(hmGrid.lastChild);
     // pad to start on correct weekday (Mon=0)
-    const firstDow=(new Date(yr,mo,1).getDay()+6)%7;
+    const firstDow=wkDow(new Date(yr,mo,1));   // Monday first on the website, Sunday first in the app
+    if(SUNDAY_WEEKS)existingDows.forEach(function(e,i){e.textContent=['S','M','T','W','T','F','S'][i]||e.textContent;});
     for(let p=0;p<firstDow;p++){const e=document.createElement('div');e.className='heatmap-cell hm-empty';hmGrid.appendChild(e);}
     const todayStr=dk(new Date());
     for(let d=1;d<=dim;d++){

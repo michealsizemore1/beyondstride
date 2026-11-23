@@ -139,7 +139,7 @@
     var ev=new Set();try{journalCalendarCombinedEvents().forEach(function(e){ev.add(e.date);});}catch(e){}
     var first=new Date(y,m,1),dim=new Date(y,m+1,0).getDate(),days=[];
     for(var d=1;d<=dim;d++){var k=dk(new Date(y,m,d)),st='';try{st=journalCalendarStatus(k,acts);}catch(e){}days.push({d:d,date:k,status:st,event:ev.has(k)});}
-    return {title:first.toLocaleDateString('en-US',{month:'long',year:'numeric'}),lead:(first.getDay()+6)%7,days:days,today:dk(new Date())};
+    return {title:first.toLocaleDateString('en-US',{month:'long',year:'numeric'}),lead:first.getDay(),days:days,today:dk(new Date())};
   }
   function calEvents(date){
     var list=[];try{list=journalCalendarCombinedEvents().filter(function(e){return e.date===date;});}catch(e){}

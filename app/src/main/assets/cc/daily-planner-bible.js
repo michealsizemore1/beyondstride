@@ -1240,7 +1240,8 @@ function h2State(){
 function h2SaveState(state){try{localStorage.setItem('habits2_state',JSON.stringify(state));return true;}catch(e){alert('Habits 2 could not save because this browser storage is full. Use Backup, then remove older large transcripts or uploads.');return false;}}
 function h2Key(date){return date.getFullYear()+'-'+String(date.getMonth()+1).padStart(2,'0')+'-'+String(date.getDate()).padStart(2,'0');}
 function h2Date(key){var p=String(key).split('-').map(Number);return new Date(p[0],p[1]-1,p[2],12);}
-function h2StartWeek(date){var d=new Date(date),day=d.getDay();d.setDate(d.getDate()-((day+6)%7));d.setHours(12,0,0,0);return d;}
+function h2StartWeek(date){var d=new Date(date),day=d.getDay();d.setDate(d.getDate()-(window.BSNative?day:(day+6)%7));   // Sunday weeks in the app
+d.setHours(12,0,0,0);return d;}
 function h2Log(state,id,dateKey){return(state.logs[dateKey]&&state.logs[dateKey][id])||{value:0,status:''};}
 function h2IsComplete(habit,log){return log&&((log.status==='done')||Number(log.value)>=Number(habit.target||1));}
 function h2WeekDone(state,habit,date){var start=h2StartWeek(date),count=0;for(var i=0;i<7;i++){var d=new Date(start);d.setDate(d.getDate()+i);if(h2IsComplete(habit,h2Log(state,habit.id,h2Key(d))))count++;}return count;}

@@ -203,15 +203,15 @@ class LifeActivity : Activity() {
         // 📱 Shortcuts to your other apps (they open as their own apps, with their own app lock).
         col.addView(RunUi.text(this, "📱 My apps", Color.WHITE, 16f, true).apply { setPadding(0, d(20), 0, 0) })
         col.addView(RunUi.text(this, "Tap one to open it.", RunUi.MUTED, 12f).apply { setPadding(0, d(4), 0, d(6)) })
-        // Two per row: your three apps, plus MSIZ Terminal (a web page, opened in Chrome where its portfolio is saved).
-        val tiles = MY_APPS.map { (pkg, name, emoji) -> Triple(pkg, name, emoji) } + Triple("", "MSIZ Terminal", "msiz")
+        // Two per row: your four apps. (MSIZ Terminal is its own app now; if it isn't installed, the web page opens in Chrome.)
+        val tiles = MY_APPS
         tiles.chunked(2).forEach { row ->
             col.addView(LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; setPadding(0, d(8), 0, 0)
                 row.forEachIndexed { i, (pkg, name, emoji) ->
                     addView(LinearLayout(this@LifeActivity).apply {
                         orientation = LinearLayout.VERTICAL; gravity = android.view.Gravity.CENTER_HORIZONTAL
                         setPadding(d(8), d(14), d(8), d(12)); background = RunUi.rounded(RunUi.CARD, d(16).toFloat())
-                        val icon = if (pkg.isEmpty()) null else try { packageManager.getApplicationIcon(pkg) } catch (e: Exception) { null }
+                        val icon = try { packageManager.getApplicationIcon(pkg) } catch (e: Exception) { null }
                         when {
                             icon != null -> addView(android.widget.ImageView(this@LifeActivity).apply { setImageDrawable(icon) }, LinearLayout.LayoutParams(d(56), d(56)))
                             emoji == "msiz" -> addView(TextView(this@LifeActivity).apply {   // a terminal-style icon: green MSIZ on black
@@ -221,9 +221,9 @@ class LifeActivity : Activity() {
                             else -> addView(RunUi.text(this@LifeActivity, emoji, Color.WHITE, 36f))
                         }
                         addView(RunUi.text(this@LifeActivity, name, Color.WHITE, 13f, true).apply { gravity = android.view.Gravity.CENTER; setPadding(0, d(8), 0, 0) })
-                        if (pkg.isNotEmpty() && icon == null) addView(RunUi.text(this@LifeActivity, "Not installed", RunUi.DIM, 10f).apply { gravity = android.view.Gravity.CENTER })
+                        if (emoji != "msiz" && icon == null) addView(RunUi.text(this@LifeActivity, "Not installed", RunUi.DIM, 10f).apply { gravity = android.view.Gravity.CENTER })
                         setOnClickListener {
-                            if (pkg.isEmpty()) {
+                            if (emoji == "msiz" && packageManager.getLaunchIntentForPackage(pkg) == null) {
                                 val url = android.net.Uri.parse("https://michealsizemore1.github.io/ChatGPT-The-Master-App/msiz-terminal.html")
                                 try { startActivity(Intent(Intent.ACTION_VIEW, url).setPackage("com.android.chrome")) } catch (e: Exception) { try { startActivity(Intent(Intent.ACTION_VIEW, url)) } catch (e2: Exception) { } }
                                 return@setOnClickListener }
@@ -242,7 +242,8 @@ class LifeActivity : Activity() {
     private val MY_APPS = listOf(
         Triple("com.sizemore.mcmoney", "M&C Money", "💵"),
         Triple("com.sizemore.retirement", "Retirement", "📈"),
-        Triple("com.sizemore.benefits", "Family Hub", "🏠"))
+        Triple("com.sizemore.benefits", "Family Hub", "🏠"),
+        Triple("com.sizemore.msiz", "MSIZ Terminal", "msiz"))
     /** A ☰ Tabs section as BeyondStride screens (Uploads still opens the Command Center's own page). */
     private fun openSection(name: String, title: String) {
         val views: List<View> = when (name) {
@@ -893,7 +894,7 @@ class LifeActivity : Activity() {
         private fun heat(h: String) {
             body.addView(RunUi.text(this@LifeActivity, "Habit completion (Bible audio · prayer · exercise)", RunUi.MUTED, 12f).apply { setPadding(0, d(8), 0, d(4)) })
             val grid = android.widget.GridLayout(this@LifeActivity).apply { columnCount = 7 }
-            listOf("M", "T", "W", "T", "F", "S", "S").forEach { grid.addView(RunUi.text(this@LifeActivity, it, RunUi.DIM, 11f, true).apply { gravity = android.view.Gravity.CENTER }, android.widget.GridLayout.LayoutParams().apply { width = d(40); height = d(20) }) }
+            listOf("S", "M", "T", "W", "T", "F", "S").forEach { grid.addView(RunUi.text(this@LifeActivity, it, RunUi.DIM, 11f, true).apply { gravity = android.view.Gravity.CENTER }, android.widget.GridLayout.LayoutParams().apply { width = d(40); height = d(20) }) }
             var day = 0
             h.forEach { c ->
                 val cell = TextView(this@LifeActivity).apply { gravity = android.view.Gravity.CENTER; textSize = 11f }

@@ -463,7 +463,7 @@ class NutritionActivity : Activity() {
         col.addView(RunUi.section(this, "WEEKLY · MONTHLY · YEARLY"))
         WeekTables.nutritionSections(this).forEach { col.addView(it) }
 
-        // THIS WEEK: the Command Center's three charts (Mon–Sun).
+        // THIS WEEK: the Command Center's three charts (Sun–Sat).
         run {
             val W = io.github.michealsizemore1.beyondstride.WeekChart
             val byDate = days.associateBy { it.date }

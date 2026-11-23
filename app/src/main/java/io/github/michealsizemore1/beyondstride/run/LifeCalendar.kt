@@ -70,7 +70,7 @@ class LifeCalendar(private val act: Activity, private val web: WebView, private 
             val j = try { JSONObject(r) } catch (e: Exception) { null } ?: run { view.visibility = View.GONE; return@js }
             view.visibility = View.VISIBLE
             title.text = j.optString("title"); grid.removeAllViews()
-            listOf("M", "T", "W", "T", "F", "S", "S").forEach { grid.addView(RunUi.text(act, it, RunUi.DIM, 11f, true).apply { gravity = Gravity.CENTER }, cell(d(20))) }
+            listOf("S", "M", "T", "W", "T", "F", "S").forEach { grid.addView(RunUi.text(act, it, RunUi.DIM, 11f, true).apply { gravity = Gravity.CENTER }, cell(d(20))) }
             repeat(j.optInt("lead")) { grid.addView(View(act), cell(d(40))) }
             val days = j.optJSONArray("days") ?: JSONArray(); val today = j.optString("today")
             for (i in 0 until days.length()) {
