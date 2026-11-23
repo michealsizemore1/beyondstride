@@ -200,8 +200,34 @@ class LifeActivity : Activity() {
                 if (row.size == 1) addView(View(this@LifeActivity), LinearLayout.LayoutParams(0, 1, 1f))
             })
         }
+        // 📱 Shortcuts to your other apps (they open as their own apps, with their own app lock).
+        col.addView(RunUi.text(this, "📱 My apps", Color.WHITE, 16f, true).apply { setPadding(0, d(20), 0, 0) })
+        col.addView(RunUi.text(this, "Tap one to open it.", RunUi.MUTED, 12f).apply { setPadding(0, d(4), 0, d(6)) })
+        col.addView(LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; setPadding(0, d(4), 0, 0)
+            MY_APPS.forEachIndexed { i, (pkg, name, emoji) ->
+                addView(LinearLayout(this@LifeActivity).apply {
+                    orientation = LinearLayout.VERTICAL; gravity = android.view.Gravity.CENTER_HORIZONTAL
+                    setPadding(d(8), d(14), d(8), d(12)); background = RunUi.rounded(RunUi.CARD, d(16).toFloat())
+                    val icon = try { packageManager.getApplicationIcon(pkg) } catch (e: Exception) { null }
+                    if (icon != null) addView(android.widget.ImageView(this@LifeActivity).apply { setImageDrawable(icon) }, LinearLayout.LayoutParams(d(56), d(56)))
+                    else addView(RunUi.text(this@LifeActivity, emoji, Color.WHITE, 36f))
+                    addView(RunUi.text(this@LifeActivity, name, Color.WHITE, 13f, true).apply { gravity = android.view.Gravity.CENTER; setPadding(0, d(8), 0, 0) })
+                    if (icon == null) addView(RunUi.text(this@LifeActivity, "Not installed", RunUi.DIM, 10f).apply { gravity = android.view.Gravity.CENTER })
+                    setOnClickListener {
+                        val go = packageManager.getLaunchIntentForPackage(pkg)
+                        if (go != null) startActivity(go)
+                        else android.widget.Toast.makeText(this@LifeActivity, "$name isn't installed on this phone", android.widget.Toast.LENGTH_SHORT).show()
+                    }
+                }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { if (i < MY_APPS.size - 1) marginEnd = d(8) })
+            }
+        })
         return col
     }
+    /** Your other apps (package, name, fallback icon). Listed in the manifest's <queries> so Android lets us open them. */
+    private val MY_APPS = listOf(
+        Triple("com.sizemore.mcmoney", "M&C Money", "💵"),
+        Triple("com.sizemore.retirement", "Retirement", "📈"),
+        Triple("com.sizemore.benefits", "Family Hub", "🏠"))
     /** A ☰ Tabs section as BeyondStride screens (Uploads still opens the Command Center's own page). */
     private fun openSection(name: String, title: String) {
         val views: List<View> = when (name) {
