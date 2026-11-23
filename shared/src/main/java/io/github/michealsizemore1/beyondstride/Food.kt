@@ -125,8 +125,15 @@ object Food {
     // ── Drinks logged as foods count toward fluids, like the Command Center: Sports Nutrition foods → Sports drinks,
     //    Liquids foods → Other drinks, using the fluid ounces in the serving (caffeinated drinks don't count). ──
     private val CAF = Regex("\\b(coffee|espresso|latte|cappuccino|mocha|americano|cold\\s*brew|black\\s*tea|green\\s*tea|energy\\s*drinks?|red\\s*bull|monster(?:\\s*energy)?|celsius|bang\\s*energy|rockstar|reign|ghost\\s*energy|c4\\s*energy|alani\\s*nu)\\b")
-    /** Decaf drinks count as fluid (a decaf latte still has a little caffeine, which doesn't dehydrate). */
-    fun caffeinated(i: Item) = !i.name.contains("decaf", true) && (CAF.containsMatchIn(i.name.lowercase()) || (i.micros["caffeine"] ?: 0.0) > 0)
+    /**
+     * Decaf drinks count as fluid (a decaf latte still has a little caffeine, which doesn't dehydrate), and so do drinks
+     * with only a trace (hot chocolate has ~5 mg from the cocoa; a cup of coffee has ~95 mg). Over 15 mg = caffeinated.
+     */
+    fun caffeinated(i: Item) = !i.name.contains("decaf", true) && (CAF.containsMatchIn(i.name.lowercase()) || (i.micros["caffeine"] ?: 0.0) > 15.0)
+
+    /** Hot chocolate / cocoa mixes are logged by the packet (grams): a packet makes about a 10 oz mug (8 oz water + mix). */
+    val HOT_COCOA = Regex("hot\\s*(chocolate|cocoa)|swiss\\s*miss|\\bcocoa\\s*mix", RegexOption.IGNORE_CASE)
+    const val COCOA_OZ = 10.0
 
     /** Fluid ounces in a serving label: "20 fl oz", "1 Bottle (591 mL)", "2 cups", "500 ml", "8 oz water"…; 0 if none. */
     fun fluidOz(label: String): Double {
@@ -151,6 +158,7 @@ object Food {
     fun liquidOz(items: List<Item>, meal: String): Int = Math.round(items.filter { it.meal == meal && !caffeinated(it) }.sumOf { i ->
         var oz = fluidOz(i.servingLabel)
         if (oz == 0.0) Products.SPORTS.firstOrNull { i.name.lowercase().contains(it.line.lowercase()) }?.let { oz = fluidOz(it.serving) }
+        if (oz == 0.0 && HOT_COCOA.containsMatchIn(i.name)) oz = COCOA_OZ
         oz * i.servings
     }).toInt()
 
