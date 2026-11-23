@@ -204,6 +204,40 @@ class BibleStudyPage(private val act: Activity, private val web: WebView, privat
 
     // ── 📖 Read: the passage, read aloud by the phone ──
     private val verseViews = ArrayList<Pair<View, String>>()   // each verse's text block and its spoken text
+    /** 🎧 Audible's progress (same as its player screen): title, bar, elapsed / remaining. Updates every second. */
+    private fun audibleBar(): View {
+        val box = LinearLayout(act).apply { orientation = LinearLayout.VERTICAL; background = RunUi.rounded(0xFF1B2230.toInt(), d(14).toFloat()); setPadding(d(14), d(10), d(14), d(10)) }
+        val lp = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = d(10) }; box.layoutParams = lp
+        if (!AudibleNow.allowed(act)) {
+            box.addView(RunUi.text(act, "🎧 Show your Audible progress here", Color.WHITE, 14f, true))
+            box.addView(RunUi.text(act, "Tap, then turn on BeyondStride under Notification access. It only reads Audible's player (like your lock screen) and keeps nothing.", RunUi.MUTED, 11f))
+            box.setOnClickListener { try { act.startActivity(AudibleNow.askIntent()) } catch (e: Exception) { } }
+            return box
+        }
+        val title = RunUi.text(act, "", Color.WHITE, 14f, true)
+        val bar = android.widget.ProgressBar(act, null, android.R.attr.progressBarStyleHorizontal).apply {
+            max = 1000; progressTintList = android.content.res.ColorStateList.valueOf(0xFFF5A623.toInt()); progressBackgroundTintList = android.content.res.ColorStateList.valueOf(0xFF3A4A66.toInt()) }
+        val times = LinearLayout(act).apply { orientation = LinearLayout.HORIZONTAL }
+        val left = RunUi.text(act, "", RunUi.MUTED, 12f, true); val mid = RunUi.text(act, "", RunUi.MUTED, 11f).apply { gravity = Gravity.CENTER }; val right = RunUi.text(act, "", RunUi.MUTED, 12f, true)
+        times.addView(left); times.addView(mid, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f)); times.addView(right)
+        box.addView(title); box.addView(bar, LinearLayout.LayoutParams(MATCH_PARENT, d(14)).apply { topMargin = d(6) }); box.addView(times)
+        val tick = object : Runnable { override fun run() {
+            if (!box.isAttachedToWindow && box.tag != null) return
+            box.tag = 1
+            val a = AudibleNow.read(act)
+            if (a == null || a.durMs <= 0) { title.text = "🎧 Audible isn't playing right now"; bar.progress = 0; left.text = ""; right.text = ""; mid.text = "Start today's reading in Audible and it shows here" }
+            else {
+                title.text = "🎧 " + a.title + if (a.playing) "" else "  ·  paused"
+                bar.progress = (a.posMs * 1000 / a.durMs).toInt()
+                left.text = AudibleNow.clock(a.posMs); right.text = "-" + AudibleNow.clock(a.durMs - a.posMs)
+                mid.text = if (a.durMs - a.posMs < 15_000) "Finished? Tap ✓ I listened" else "${(a.posMs * 100 / a.durMs)}%"
+            }
+            box.postDelayed(this, 1000)
+        } }
+        box.post(tick)
+        return box
+    }
+
     private fun drawRead(j: JSONObject) {
         val done = j.optJSONObject("done") ?: JSONObject()
         body.addView(LinearLayout(act).apply { orientation = LinearLayout.HORIZONTAL; setPadding(0, d(6), 0, 0)
@@ -212,6 +246,7 @@ class BibleStudyPage(private val act: Activity, private val web: WebView, privat
             addView(RunUi.button(act, if (done.optBoolean("audio")) "✓ Listened" else "✓ I listened", RunUi.ACCENT) { stopReading(); call("bibleStudy.nListenedApp()") { sig = ""; refresh() } },
                 LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f)) })
         body.addView(RunUi.text(act, "Read in the NLT ↗", 0xFFA78BFA.toInt(), 13f, true).apply { setPadding(0, d(10), 0, 0); setOnClickListener { link(j.optString("nlt")) } })
+        body.addView(audibleBar())
         body.addView(RunUi.text(act, "Already listened to today's audiobook? Tap ✓ I listened — no need to read it again; it moves on to the study. Text: World English Bible. Purple is today's focus; gold is the key verse.", RunUi.MUTED, 12f).apply { setPadding(0, d(8), 0, 0) })
         verseViews.clear(); verseKeys.clear(); verseNum.clear(); verseNo.clear(); verseStart.clear(); verseBlock.clear(); blocks.clear()
         val lists = j.optJSONArray("verses")
