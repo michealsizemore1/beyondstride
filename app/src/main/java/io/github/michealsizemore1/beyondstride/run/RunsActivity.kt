@@ -118,10 +118,10 @@ open class RunsActivity : Activity() {
         return RunUi.card(this).apply {
             orientation = LinearLayout.VERTICAL
             layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(12) }
-            background = RunUi.rounded(RunUi.CARD, dp(14).toFloat()).apply { setStroke(dp(1), RunUi.ACCENT) }
-            addView(RunUi.text(ctx, "📝 My notes ${if (t.isBlank()) "▸" else "✎"}", RunUi.ACCENT, 15f, true))
-            addView(RunUi.text(ctx, t.ifBlank { "Tap to jot down ideas — things to add or change later." }, if (t.isBlank()) RunUi.MUTED else Color.WHITE, 14f).apply {
-                setPadding(0, dp(4), 0, 0) })
+            background = RunUi.rounded(RunUi.CARD, dp(14).toFloat())
+            addView(RunUi.text(ctx, "📝 My notes ${if (t.isBlank()) "▸" else "✎"}", RunUi.ACCENT, 14f, true))
+            addView(RunUi.text(ctx, t.ifBlank { "Ideas to add or change later." }, if (t.isBlank()) RunUi.MUTED else Color.WHITE, 13f).apply {
+                setPadding(0, dp(2), 0, 0); maxLines = 3; ellipsize = android.text.TextUtils.TruncateAt.END })
             setOnClickListener { editNotes() }
         }
     }
@@ -264,16 +264,7 @@ open class RunsActivity : Activity() {
         fun divider() = android.view.View(ctx).apply { setBackgroundColor(0x22FFFFFF) }
             .also { it.layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, dp(1)).apply { topMargin = dp(10); bottomMargin = dp(10) } }
 
-        // 📝 My notes — ideas to add later (top of Today).
-        col.addView(notesCard())
-        // 🧠 Coach AI.
-        col.addView(RunUi.card(this).apply {
-            background = RunUi.rounded(0xFF2A2140.toInt(), dp(14).toFloat())
-            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(8) }
-            addView(RunUi.text(ctx, "🧠 Coach AI ▸", Color.WHITE, 16f, true))
-            addView(RunUi.text(ctx, "Analyze and compare runs — plus sleep, HRV, Body Battery, food, weight, the plan… whatever you pick", RunUi.MUTED, 12f))
-            setOnClickListener { startActivity(Intent(ctx, CoachActivity::class.java)) }
-        })
+        // (📝 My notes is at the bottom of Today; 🧠 Coach AI sits under "This morning".)
 
         // 0. Update available.
         io.github.michealsizemore1.beyondstride.Updater.available(this)?.let { up ->
@@ -351,6 +342,9 @@ open class RunsActivity : Activity() {
             try { val bb = bodyBatteryCard(); bb.background = null; bb.setPadding(0, 0, 0, 0)
                 bb.layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT); addView(divider()); addView(bb) } catch (e: Exception) { }
         })
+        // 🧠 Coach AI: one compact row, right after the morning check.
+        col.addView(RunUi.compactRow(this, "🧠", "Ask Coach AI", "Runs, recovery, food, the plan… whatever you pick", 0xFF2A2140.toInt()) {
+            startActivity(Intent(ctx, CoachActivity::class.java)) })
         // Today's workout.
         col.addView(RunUi.card(this).apply {
             addView(LinearLayout(ctx).apply {
@@ -483,6 +477,8 @@ open class RunsActivity : Activity() {
                 setOnClickListener { startActivity(Intent(ctx, RunDetailActivity::class.java).putExtra("start", start)) }
             })
         }
+        // 📝 My notes: ideas to add later (bottom of Today).
+        if (!showAll) col.addView(notesCard())
         setContentView(RunUi.tabbed(this, ScrollView(this).apply {
             setBackgroundColor(RunUi.BG)
             addView(col, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))

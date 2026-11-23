@@ -94,6 +94,11 @@ class ActivityEditActivity : Activity() {
             addView(RunUi.button(ctx, "Cancel", RunUi.CARD, Color.WHITE) { finish() }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f).apply { marginEnd = dp(8) })
             addView(RunUi.button(ctx, if (a == null) "Save Activity" else "Save Changes", 0xFFE67E22.toInt(), Color.WHITE) { save() }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
         })
+        // 🧠 Ask Coach about this run (opens Coach AI with just this run picked).
+        orig?.takeIf { CoachAi.isRun(it) }?.let { run ->
+            col.addView(RunUi.compactRow(this, "🧠", "Ask Coach about this run", "Coach AI with this run picked", 0xFF2A2140.toInt()) {
+                startActivity(android.content.Intent(this, CoachActivity::class.java).putExtra("runId", CoachAi.id(run))) })
+        }
         setContentView(ScrollView(this).apply { setBackgroundColor(RunUi.BG); addView(col, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT)) })
     }
 

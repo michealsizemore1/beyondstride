@@ -65,6 +65,13 @@ class CoachActivity : Activity() {
             v.setPadding(0, top, 0, bottom); ins
         }
         setContentView(root)
+        // Opened from a run (Activities) or from Nutrition: look at that, with a starter question ready to send or edit.
+        intent.getStringExtra("runId")?.let { id ->
+            val sel = CoachAi.scopes(this); sel.add("runs"); CoachAi.setScopes(this, sel); CoachAi.setRunIds(this, listOf(id))
+            input.setText("How did this run go, and what should I take from it?") }
+        if (intent.getStringExtra("scope") == "food") {
+            val sel = CoachAi.scopes(this); sel.add("food"); CoachAi.setScopes(this, sel)
+            input.setText("How was my eating today, and what should I change?") }
         render()
         if (intent.getBooleanExtra("fuel", false)) fuelDialog()
     }

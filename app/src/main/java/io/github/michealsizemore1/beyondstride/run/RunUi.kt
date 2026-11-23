@@ -129,6 +129,20 @@ object RunUi {
         val v = act.window.decorView
         v.postOnAnimation { v.post { if (!act.isFinishing && !act.isDestroyed) render() } }
     }
+    /** A compact one-line shortcut row: icon, title, small subtitle, ›. */
+    fun compactRow(ctx: Context, icon: String, title: String, sub: String, bg: Int = CARD, click: () -> Unit): View {
+        val d = { v: Int -> dp(ctx, v) }
+        return LinearLayout(ctx).apply {
+            orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL
+            background = rounded(bg, d(14).toFloat()); setPadding(d(14), d(10), d(14), d(10))
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = d(4); bottomMargin = d(8) }
+            addView(text(ctx, icon, Color.WHITE, 20f).apply { setPadding(0, 0, d(10), 0) })
+            addView(LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL
+                addView(text(ctx, title, Color.WHITE, 15f, true)); addView(text(ctx, sub, MUTED, 11f)) }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+            addView(text(ctx, "›", ACCENT, 22f, true))
+            setOnClickListener { click() }
+        }
+    }
     const val TAB_LIFE = 4   // 📓 the Command Center (Settings → Life tab turns it off)
 
 
