@@ -110,7 +110,7 @@ class NutritionActivity : Activity() {
         col.addView(RunUi.card(this).apply { NutritionUi.today(this@NutritionActivity, this, withMicros = false, big = true, chips = false) { render() } })
         // 🧠 Ask Coach about today's food (Coach AI with Nutrition picked).
         if (NutriDay.isToday()) col.addView(RunUi.compactRow(this, "🧠", "Ask Coach about today's food", "Coach AI with your nutrition picked", 0xFF2A2140.toInt()) {
-            startActivity(Intent(this, CoachActivity::class.java).putExtra("scope", "food")) })
+            startActivity(android.content.Intent(this, CoachActivity::class.java).putExtra("scope", "food")) })
 
         // Macros & Micronutrients: food quality, macro ratio, micronutrient quality and tiles.
         if (t != null && t.count > 0) {
