@@ -633,6 +633,13 @@
       return writeStored(function(d){d[id+'c']=state;});
     }
   };
+  // 📅 Sunday–Saturday weeks in the app (Nov 22 2026): weekly reviews saved under a Monday week also show under the
+  // Sunday week that overlaps it (6 of its 7 days). Copied once; the originals stay.
+  (function(){try{if(!window.BSNative||localStorage.getItem('sunWeeks1'))return;
+    var keys=[];for(var i=0;i<localStorage.length;i++){var k=localStorage.key(i);if(/^(review_|autoWeekRev_)\d{4}-\d{2}-\d{2}$/.test(k))keys.push(k);}
+    keys.forEach(function(k){var m=k.match(/^(.*_)(\d{4})-(\d{2})-(\d{2})$/),d=new Date(+m[2],+m[3]-1,+m[4]);if(d.getDay()!==1)return;
+      d.setDate(d.getDate()-1);var nk=m[1]+dk(d);if(localStorage.getItem(nk)==null)localStorage.setItem(nk,localStorage.getItem(k));});
+    localStorage.setItem('sunWeeks1','1');}catch(e){}})();
   // 🔔 Calendar events go to the phone (for reminders), since the Life tab no longer syncs through the cloud.
   function sendCal(v){try{if(window.BSNative&&BSNative.calendar)BSNative.calendar(v==null?(localStorage.getItem('journal_calendar_events')||'[]'):String(v));}catch(e){}}
   (function(){var si=Storage.prototype.setItem;Storage.prototype.setItem=function(k,v){var r=si.apply(this,arguments);if(k==='journal_calendar_events'&&this===window.localStorage)sendCal(v);return r;};})();

@@ -10,8 +10,11 @@ let today=new Date();const _realToday=new Date(today);// snapshot of actual laun
 const charts={};let scoreVal=0,copiedDayData=null;
 function dk(d){const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,'0'),day=String(d.getDate()).padStart(2,'0');return y+'-'+m+'-'+day;}
 function fmtD(d){return d.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'});}
-function wkStart(off=0){const t=new Date();t.setDate(t.getDate()+off*7);const dow=(t.getDay()+6)%7;const ws=new Date(t);ws.setDate(t.getDate()-dow);ws.setHours(0,0,0,0);return ws;}
-function wkStartOf(d){const dow=(d.getDay()+6)%7;const ws=new Date(d);ws.setDate(d.getDate()-dow);ws.setHours(0,0,0,0);return ws;}
+// Weeks: Monday–Sunday on the website; Sunday–Saturday inside BeyondStride's Life tab (Nov 22 2026), to match the run week.
+const SUNDAY_WEEKS=!!window.BSNative;
+function wkDow(d){return SUNDAY_WEEKS?d.getDay():(d.getDay()+6)%7;}
+function wkStart(off=0){const t=new Date();t.setDate(t.getDate()+off*7);const dow=wkDow(t);const ws=new Date(t);ws.setDate(t.getDate()-dow);ws.setHours(0,0,0,0);return ws;}
+function wkStartOf(d){const dow=wkDow(d);const ws=new Date(d);ws.setDate(d.getDate()-dow);ws.setHours(0,0,0,0);return ws;}
 function parseMins(s){if(!s)return 0;s=s.trim();let m=s.match(/(\d+)\s*hr?s?\s*(\d*)\s*min?s?/i);if(m)return+m[1]*60+(+m[2]||0);m=s.match(/(\d+)\s*min?s?/i);if(m)return+m[1];m=s.match(/^(\d+):(\d{2}):(\d{2})$/);if(m)return+m[1]*60+ +m[2]+ +m[3]/60;m=s.match(/^(\d+):(\d{2})$/);if(m)return+m[1]+ +m[2]/60;const n=parseFloat(s);return isNaN(n)?0:Math.round(n);}
 function parseSleepMins(s){
   if(!s)return 0;
@@ -1939,7 +1942,7 @@ function aiFillEntireReview(btn){
     weeklyAutoDone(btn);btn.disabled=false;btn.innerHTML=original;
   },function(err){var a=btn.__auto;weeklyAutoDone(btn);btn.disabled=false;btn.innerHTML=original;if(a)v26Toast('Automatic Weekly Review: AI error — '+err);else alert('AI error: '+err);});
 }
-// 🗓️ Automatic Weekly Review: on Sunday (the last day of the week), at the same time as the Day Review (5 minutes before
+// 🗓️ Automatic Weekly Review: on the last day of the week (Sunday on the website, Saturday in the app), at the same time as the Day Review (5 minutes before
 // 11:50 PM), fill and save this week's review when it's empty.
 // If the Command Center wasn't open then, last week's empty review is filled the next time it's opened.
 // A review you've written yourself is never replaced; each week is done once.
@@ -1950,7 +1953,7 @@ function autoWeeklyReviewCheck(){
     var btn=document.getElementById('aiFillReviewBtn');if(!btn||btn.disabled||btn.__auto)return;
     var now=new Date(),mins=now.getHours()*60+now.getMinutes();
     var ev=window.bsEvening&&window.bsEvening.date===dk(now)?window.bsEvening:null,at=REVIEW_AT;
-    var offs=[-1];if(now.getDay()===0&&(mins>=at||(ev&&ev.early)))offs.unshift(0);
+    var offs=[-1];if(now.getDay()===(SUNDAY_WEEKS?6:0)&&(mins>=at||(ev&&ev.early)))offs.unshift(0);   // the week's last day
     for(var i=0;i<offs.length;i++){
       var off=offs[i],wk=dk(wkStart(off)),flag='autoWeekRev_'+wk;if(localStorage.getItem(flag))continue;
       var rv={};try{rv=JSON.parse(localStorage.getItem('review_'+wk)||'{}')||{};}catch(e){}
