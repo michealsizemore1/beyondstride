@@ -73,8 +73,20 @@ class LifeMore(private val act: Activity, private val web: WebView, private val 
             fold("search", "🔍 Search your journal", searchCard()),
             fold("ask", "💬 Ask AI about your journal", askCard()),
             fold("files", "📁 Files", filesCard()),
+            fold("msiz", "📈 MSIZ Terminal", msizCard()),
             fold("settings", "⚙️ Settings", settings),
             fold("full", "📓 Full view", fullCard()))).view)
+    }
+
+    // ── 📈 MSIZ Terminal: your portfolio analytics page, opened in Chrome (where its saved portfolio lives). ──
+    private fun msizCard() = RunUi.card(act).apply {
+        title(this, "📈 MSIZ Terminal")
+        addView(note("Your portfolio analytics: holdings, market data and charts. Opens in Chrome, where your saved portfolio is kept."))
+        addView(RunUi.button(act, "Open MSIZ Terminal", 0xFF1E3A5F.toInt(), Color.WHITE) {
+            val url = android.net.Uri.parse("https://michealsizemore1.github.io/ChatGPT-The-Master-App/msiz-terminal.html")
+            try { act.startActivity(Intent(Intent.ACTION_VIEW, url).apply { setPackage("com.android.chrome") }) }
+            catch (e: Exception) { try { act.startActivity(Intent(Intent.ACTION_VIEW, url)) } catch (e2: Exception) { } }
+        }, lp())
     }
 
     // ── 📓 Full view: the whole planner page (inside the app, your Life data). A fallback for anything without its own screen. ──
