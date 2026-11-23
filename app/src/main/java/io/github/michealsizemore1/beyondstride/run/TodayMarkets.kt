@@ -19,6 +19,11 @@ object TodayMarkets {
     private const val URL_DATA = "https://michealsizemore1.github.io/ChatGPT-The-Master-App/data/market-quotes.json"
     const val URL_TERMINAL = "https://michealsizemore1.github.io/ChatGPT-The-Master-App/msiz-terminal.html"
     private val INDEXES = listOf("^GSPC" to "S&P 500", "^DJI" to "Dow 30", "^IXIC" to "Nasdaq", "BTC-USD" to "₿ Bitcoin")
+    private val HOLDINGS = listOf(
+        Triple("IBIT", "iShares Bitcoin Trust", 0xFFFF8A3D.toInt()),
+        Triple("QQQM", "Invesco Nasdaq 100 ETF", 0xFF3D8BFF.toInt()),
+        Triple("SCHD", "Schwab US Dividend ETF", 0xFF2EE66B.toInt()),
+        Triple("SGOV", "iShares 0-3M T-Bond ETF", 0xFFFFD43B.toInt()))
     private val FUTURES = listOf("ES=F" to "S&P", "YM=F" to "Dow", "NQ=F" to "Nasdaq")
 
     private fun p(ctx: Context) = ctx.getSharedPreferences("markets", 0)
@@ -60,6 +65,19 @@ object TodayMarkets {
                 }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
             }
         }) }
+        // 💼 Holdings: your ETFs from MSIZ Terminal (same feed, same colors). TSP funds aren't in the live feed.
+        val hold = HOLDINGS.mapNotNull { (sym, name, col) -> q.optJSONObject(sym)?.let { o -> Triple(Triple(sym, name, col), o.optDouble("price"), o.optDouble("changesPercentage")) } }
+        if (hold.isNotEmpty()) {
+            card.addView(RunUi.text(ctx, "Holdings", RunUi.MUTED, 11f, true).apply { setPadding(0, d(12), 0, d(2)) })
+            hold.forEach { (h, price, pct) -> val (sym, name, col) = h
+                card.addView(LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(0, d(3), 0, d(3))
+                    addView(RunUi.text(ctx, sym, col, 13f, true).apply { typeface = android.graphics.Typeface.create(android.graphics.Typeface.MONOSPACE, android.graphics.Typeface.BOLD) }, LinearLayout.LayoutParams(d(60), LinearLayout.LayoutParams.WRAP_CONTENT))
+                    addView(RunUi.text(ctx, name, RunUi.MUTED, 12f).apply { maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+                    addView(RunUi.text(ctx, "${if (pct > 0) "+" else ""}${String.format("%.2f", pct)}%", color(pct), 12f, true).apply { gravity = Gravity.END }, LinearLayout.LayoutParams(d(66), LinearLayout.LayoutParams.WRAP_CONTENT))
+                    addView(RunUi.text(ctx, "$" + String.format("%.2f", price), Color.WHITE, 12f, true).apply { gravity = Gravity.END }, LinearLayout.LayoutParams(d(72), LinearLayout.LayoutParams.WRAP_CONTENT))
+                })
+            }
+        }
         // Futures, one line.
         val fl = FUTURES.mapNotNull { (sym, name) -> f.optJSONObject(sym)?.let { o -> Triple(name, o.optDouble("price"), o.optDouble("changesPercentage")) } }
         if (fl.isNotEmpty()) {
