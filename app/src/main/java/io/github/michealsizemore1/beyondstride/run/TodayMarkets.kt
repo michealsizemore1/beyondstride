@@ -11,14 +11,14 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 /**
- * 📈 Markets on the Today tab: the stock indexes and futures from MSIZ Terminal (S&P 500, Dow, Nasdaq). Same numbers
+ * 📈 Markets on the Today tab: the stock indexes and futures from MSIZ Terminal (S&P 500, Dow, Nasdaq) and Bitcoin. Same numbers
  * as the Terminal: its market file is refreshed about every 15 minutes during market hours (prices ~15 min delayed).
  * Kept on the phone so the card shows instantly; tap to refresh, "Open MSIZ Terminal ›" for the full page.
  */
 object TodayMarkets {
     private const val URL_DATA = "https://michealsizemore1.github.io/ChatGPT-The-Master-App/data/market-quotes.json"
     const val URL_TERMINAL = "https://michealsizemore1.github.io/ChatGPT-The-Master-App/msiz-terminal.html"
-    private val INDEXES = listOf("^GSPC" to "S&P 500", "^DJI" to "Dow 30", "^IXIC" to "Nasdaq")
+    private val INDEXES = listOf("^GSPC" to "S&P 500", "^DJI" to "Dow 30", "^IXIC" to "Nasdaq", "BTC-USD" to "₿ Bitcoin")
     private val FUTURES = listOf("ES=F" to "S&P", "YM=F" to "Dow", "NQ=F" to "Nasdaq")
 
     private fun p(ctx: Context) = ctx.getSharedPreferences("markets", 0)
@@ -52,9 +52,9 @@ object TodayMarkets {
         val q = j.optJSONObject("quotes") ?: JSONObject(); val f = j.optJSONObject("futures") ?: JSONObject()
         fun color(pct: Double) = if (pct > 0) 0xFF4ADE80.toInt() else if (pct < 0) 0xFFF87171.toInt() else RunUi.MUTED
         fun arrow(pct: Double) = if (pct > 0) "▲" else if (pct < 0) "▼" else ""
-        // The three indexes, side by side.
-        card.addView(LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; setPadding(0, d(8), 0, 0)
-            INDEXES.forEach { (sym, name) ->
+        // The indexes and Bitcoin, two per row.
+        INDEXES.chunked(2).forEach { row -> card.addView(LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; setPadding(0, d(8), 0, 0)
+            row.forEach { (sym, name) ->
                 val o = q.optJSONObject(sym)
                 addView(LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL
                     addView(RunUi.text(ctx, name, RunUi.MUTED, 11f, true))
@@ -64,7 +64,7 @@ object TodayMarkets {
                         addView(RunUi.text(ctx, "${arrow(pct)}${String.format("%.2f", Math.abs(pct))}%  ${if (o.optDouble("change") >= 0) "+" else ""}${fmt(o.optDouble("change"))}", color(pct), 11f, true)) }
                 }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
             }
-        })
+        }) }
         // Futures, one line.
         val fl = FUTURES.mapNotNull { (sym, name) -> f.optJSONObject(sym)?.let { o -> Triple(name, o.optDouble("price"), o.optDouble("changesPercentage")) } }
         if (fl.isNotEmpty()) {
@@ -79,6 +79,6 @@ object TodayMarkets {
             card.addView(RunUi.text(ctx, "", Color.WHITE, 11f).apply { text = sb; setPadding(0, d(8), 0, 0) })
         }
         val at = try { java.time.OffsetDateTime.parse(j.optString("updatedAt")).toInstant().toEpochMilli() } catch (e: Exception) { 0L }
-        card.addView(RunUi.text(ctx, (if (at > 0) "Market data " + android.text.format.DateUtils.getRelativeTimeSpanString(at, System.currentTimeMillis(), 60_000L) + " · " else "") + "about 15 min delayed · tap to refresh", RunUi.DIM, 10f).apply { setPadding(0, d(6), 0, 0) })
+        card.addView(RunUi.text(ctx, (if (at > 0) "Market data " + android.text.format.DateUtils.getRelativeTimeSpanString(at, System.currentTimeMillis(), 60_000L) + " · " else "") + "about 15 min delayed (Bitcoin trades 24/7) · tap to refresh", RunUi.DIM, 10f).apply { setPadding(0, d(6), 0, 0) })
     }
 }
