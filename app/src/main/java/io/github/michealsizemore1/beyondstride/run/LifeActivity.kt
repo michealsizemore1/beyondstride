@@ -203,24 +203,39 @@ class LifeActivity : Activity() {
         // 📱 Shortcuts to your other apps (they open as their own apps, with their own app lock).
         col.addView(RunUi.text(this, "📱 My apps", Color.WHITE, 16f, true).apply { setPadding(0, d(20), 0, 0) })
         col.addView(RunUi.text(this, "Tap one to open it.", RunUi.MUTED, 12f).apply { setPadding(0, d(4), 0, d(6)) })
-        col.addView(LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; setPadding(0, d(4), 0, 0)
-            MY_APPS.forEachIndexed { i, (pkg, name, emoji) ->
-                addView(LinearLayout(this@LifeActivity).apply {
-                    orientation = LinearLayout.VERTICAL; gravity = android.view.Gravity.CENTER_HORIZONTAL
-                    setPadding(d(8), d(14), d(8), d(12)); background = RunUi.rounded(RunUi.CARD, d(16).toFloat())
-                    val icon = try { packageManager.getApplicationIcon(pkg) } catch (e: Exception) { null }
-                    if (icon != null) addView(android.widget.ImageView(this@LifeActivity).apply { setImageDrawable(icon) }, LinearLayout.LayoutParams(d(56), d(56)))
-                    else addView(RunUi.text(this@LifeActivity, emoji, Color.WHITE, 36f))
-                    addView(RunUi.text(this@LifeActivity, name, Color.WHITE, 13f, true).apply { gravity = android.view.Gravity.CENTER; setPadding(0, d(8), 0, 0) })
-                    if (icon == null) addView(RunUi.text(this@LifeActivity, "Not installed", RunUi.DIM, 10f).apply { gravity = android.view.Gravity.CENTER })
-                    setOnClickListener {
-                        val go = packageManager.getLaunchIntentForPackage(pkg)
-                        if (go != null) startActivity(go)
-                        else android.widget.Toast.makeText(this@LifeActivity, "$name isn't installed on this phone", android.widget.Toast.LENGTH_SHORT).show()
-                    }
-                }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { if (i < MY_APPS.size - 1) marginEnd = d(8) })
-            }
-        })
+        // Two per row: your three apps, plus MSIZ Terminal (a web page, opened in Chrome where its portfolio is saved).
+        val tiles = MY_APPS.map { (pkg, name, emoji) -> Triple(pkg, name, emoji) } + Triple("", "MSIZ Terminal", "msiz")
+        tiles.chunked(2).forEach { row ->
+            col.addView(LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; setPadding(0, d(8), 0, 0)
+                row.forEachIndexed { i, (pkg, name, emoji) ->
+                    addView(LinearLayout(this@LifeActivity).apply {
+                        orientation = LinearLayout.VERTICAL; gravity = android.view.Gravity.CENTER_HORIZONTAL
+                        setPadding(d(8), d(14), d(8), d(12)); background = RunUi.rounded(RunUi.CARD, d(16).toFloat())
+                        val icon = if (pkg.isEmpty()) null else try { packageManager.getApplicationIcon(pkg) } catch (e: Exception) { null }
+                        when {
+                            icon != null -> addView(android.widget.ImageView(this@LifeActivity).apply { setImageDrawable(icon) }, LinearLayout.LayoutParams(d(56), d(56)))
+                            emoji == "msiz" -> addView(TextView(this@LifeActivity).apply {   // a terminal-style icon: green MSIZ on black
+                                text = "MSIZ"; setTextColor(0xFF22E07A.toInt()); textSize = 14f; typeface = android.graphics.Typeface.create(android.graphics.Typeface.MONOSPACE, android.graphics.Typeface.BOLD)
+                                gravity = android.view.Gravity.CENTER; background = RunUi.rounded(0xFF05090F.toInt(), d(16).toFloat()).apply { setStroke(d(1), 0xFF1F7A4A.toInt()) }
+                            }, LinearLayout.LayoutParams(d(56), d(56)))
+                            else -> addView(RunUi.text(this@LifeActivity, emoji, Color.WHITE, 36f))
+                        }
+                        addView(RunUi.text(this@LifeActivity, name, Color.WHITE, 13f, true).apply { gravity = android.view.Gravity.CENTER; setPadding(0, d(8), 0, 0) })
+                        if (pkg.isNotEmpty() && icon == null) addView(RunUi.text(this@LifeActivity, "Not installed", RunUi.DIM, 10f).apply { gravity = android.view.Gravity.CENTER })
+                        setOnClickListener {
+                            if (pkg.isEmpty()) {
+                                val url = android.net.Uri.parse("https://michealsizemore1.github.io/ChatGPT-The-Master-App/msiz-terminal.html")
+                                try { startActivity(Intent(Intent.ACTION_VIEW, url).setPackage("com.android.chrome")) } catch (e: Exception) { try { startActivity(Intent(Intent.ACTION_VIEW, url)) } catch (e2: Exception) { } }
+                                return@setOnClickListener }
+                            val go = packageManager.getLaunchIntentForPackage(pkg)
+                            if (go != null) startActivity(go)
+                            else android.widget.Toast.makeText(this@LifeActivity, "$name isn't installed on this phone", android.widget.Toast.LENGTH_SHORT).show()
+                        }
+                    }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { if (i == 0) marginEnd = d(8) })
+                }
+                if (row.size == 1) addView(View(this@LifeActivity), LinearLayout.LayoutParams(0, 1, 1f))
+            })
+        }
         return col
     }
     /** Your other apps (package, name, fallback icon). Listed in the manifest's <queries> so Android lets us open them. */

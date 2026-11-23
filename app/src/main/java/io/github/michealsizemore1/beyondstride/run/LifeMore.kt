@@ -73,7 +73,6 @@ class LifeMore(private val act: Activity, private val web: WebView, private val 
             fold("search", "🔍 Search your journal", searchCard()),
             fold("ask", "💬 Ask AI about your journal", askCard()),
             fold("files", "📁 Files", filesCard()),
-            fold("msiz", "📈 MSIZ Terminal", msizCard()),
             fold("settings", "⚙️ Settings", settings),
             fold("full", "📓 Full view", fullCard()))).view)
     }
