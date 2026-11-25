@@ -17,7 +17,8 @@ import java.time.LocalDate
 /**
  * 💳 Spending on the Today tab, from M&C Money: today, yesterday and this week (Sunday to Saturday) as a bar chart.
  * M&C Money shares only one total per day (all accounts, same rules as its budget: transfers, card payments, income
- * and "excluded from budget" don't count). The numbers are as of the last time M&C Money was open. Tap to open it.
+ * and "excluded from budget" don't count). Spending is only ever entered in M&C Money, which sends new totals on every
+ * save, so these are always current. Tap to open it.
  */
 object TodaySpending {
     const val PKG = "com.sizemore.mcmoney"
@@ -61,9 +62,16 @@ object TodaySpending {
         card.setOnClickListener { act.packageManager.getLaunchIntentForPackage(PKG)?.let { try { act.startActivity(it) } catch (e: Exception) { } } }
         val data = read(ctx)
         if (data == null) { note("Open M&C Money once and your spending will show here."); return }
-        val (days, at) = data
+        val (days, _) = data
         val today = LocalDate.now()
-        fun amt(day: LocalDate): Double? = if (days.has(day.toString())) days.optDouble(day.toString(), 0.0) else null
+        // Spending can only be added inside M&C Money, and it sends new totals the moment you save, so a day after its
+        // last send had nothing added: $0.
+        val lastDay = days.keys().asSequence().maxOrNull() ?: ""
+        fun amt(day: LocalDate): Double? = when {
+            days.has(day.toString()) -> days.optDouble(day.toString(), 0.0)
+            day.toString() > lastDay && !day.isAfter(today) -> 0.0
+            else -> null
+        }
         val sun = today.minusDays((today.dayOfWeek.value % 7).toLong())
         val week = (0..6).map { sun.plusDays(it.toLong()) }
         val weekVals = week.map { if (it.isAfter(today)) null else amt(it) }
@@ -82,8 +90,7 @@ object TodaySpending {
 
         // Sunday → Saturday bars.
         card.addView(Bars(ctx, weekVals, week.indexOf(today)), LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, d(118)).apply { topMargin = d(10) })
-        val when_ = if (at > 0) "updated " + android.text.format.DateUtils.getRelativeTimeSpanString(at, System.currentTimeMillis(), 60_000L) else ""
-        card.addView(RunUi.text(ctx, "From M&C Money · all accounts · $when_ · tap to open M&C Money (opening it refreshes these)", RunUi.DIM, 10f).apply { setPadding(0, d(6), 0, 0) })
+        card.addView(RunUi.text(ctx, "From M&C Money · all accounts · always up to date (M&C Money sends new totals each time you save a transaction) · tap to open M&C Money", RunUi.DIM, 10f).apply { setPadding(0, d(6), 0, 0) })
     }
 
     /** Seven bars, S M T W T F S, amount over each bar, today highlighted. */
