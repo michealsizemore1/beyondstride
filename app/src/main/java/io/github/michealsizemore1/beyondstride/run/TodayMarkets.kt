@@ -11,8 +11,8 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 /**
- * 📈 Markets on the Today tab: the stock indexes and futures from MSIZ Terminal (S&P 500, Dow, Nasdaq) and Bitcoin. Same numbers
- * as the Terminal: its market file is refreshed about every 15 minutes during market hours (prices ~15 min delayed).
+ * 📈 Markets on the Today tab: the stock indexes, holdings and futures from MSIZ Terminal (S&P 500, Dow, Nasdaq) and Bitcoin.
+ * Same sources as the Terminal: live from Yahoo Finance (Bitcoin from CoinGecko), refreshed every minute.
  * Kept on the phone so the card shows instantly; re-checked every minute while on screen (like the Terminal), or tap.
  */
 object TodayMarkets {
@@ -29,15 +29,65 @@ object TodayMarkets {
     private fun p(ctx: Context) = ctx.getSharedPreferences("markets", 0)
     fun stale(ctx: Context) = System.currentTimeMillis() - p(ctx).getLong("at", 0) > 60_000L
 
-    /** Download the latest numbers. True when they changed. */
-    fun fetch(ctx: Context): Boolean = try {
-        val c = (URL("$URL_DATA?t=${System.currentTimeMillis() / 60_000}").openConnection() as HttpURLConnection).apply { connectTimeout = 10_000; readTimeout = 15_000 }
-        val txt = c.inputStream.bufferedReader().use { it.readText() }; c.disconnect()
-        JSONObject(txt)   // make sure it's whole
+    /**
+     * Download the latest numbers. True when they changed. GitHub runs the website's scheduled market update only a few
+     * times a day, so the snapshot file is just the starting point: every quote is then read live from Yahoo Finance
+     * (Bitcoin from CoinGecko), exactly like MSIZ Terminal does every minute, so both show the same numbers.
+     */
+    fun fetch(ctx: Context): Boolean {
+        val base = try { JSONObject(get("$URL_DATA?t=${System.currentTimeMillis() / 60_000}")) } catch (e: Exception) {
+            try { JSONObject(p(ctx).getString("json", "") ?: "") } catch (e2: Exception) { JSONObject() } }
+        val quotes = base.optJSONObject("quotes") ?: JSONObject().also { base.put("quotes", it) }
+        val futures = base.optJSONObject("futures") ?: JSONObject().also { base.put("futures", it) }
+        val syms = listOf("^GSPC", "^DJI", "^IXIC", "IBIT", "QQQM", "SCHD", "SGOV").map { it to quotes } + FUTURES.map { it.first to futures }
+        val pool = java.util.concurrent.Executors.newFixedThreadPool(6)
+        val jobs = syms.map { (sym, into) -> pool.submit(java.util.concurrent.Callable<Long> { yahoo(sym)?.let { (o, t) -> synchronized(base) { into.put(sym, merge(into.optJSONObject(sym), o)) }; t } ?: 0L }) }
+        val btc = pool.submit(java.util.concurrent.Callable<Boolean> { bitcoin()?.let { o -> synchronized(base) { quotes.put("BTC-USD", merge(quotes.optJSONObject("BTC-USD"), o)) }; true } ?: false })
+        val newest = jobs.maxOfOrNull { try { it.get(25, java.util.concurrent.TimeUnit.SECONDS) } catch (e: Exception) { 0L } } ?: 0L
+        try { btc.get(25, java.util.concurrent.TimeUnit.SECONDS) } catch (e: Exception) { }
+        pool.shutdownNow()
+        if (newest > 0) base.put("liveAt", newest * 1000)
+        if (base.length() == 0) return false
+        val txt = base.toString()
         val changed = p(ctx).getString("json", "") != txt
         p(ctx).edit().putString("json", txt).putLong("at", System.currentTimeMillis()).apply()
-        changed
-    } catch (e: Exception) { false }
+        return changed
+    }
+
+    private fun get(url: String): String {
+        val c = (URL(url).openConnection() as HttpURLConnection).apply { connectTimeout = 10_000; readTimeout = 15_000
+            setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android) BeyondStride"); setRequestProperty("Accept", "application/json") }
+        try { if (c.responseCode !in 200..299) throw Exception("HTTP ${c.responseCode}"); return c.inputStream.bufferedReader().use { it.readText() } } finally { c.disconnect() }
+    }
+    private fun merge(old: JSONObject?, new: JSONObject) = JSONObject((old ?: JSONObject()).toString()).also { o -> new.keys().forEach { o.put(it, new.get(it)) } }
+    private fun r4(v: Double) = Math.round(v * 10_000) / 10_000.0
+
+    /** One quote from Yahoo (same request and math as the Terminal and the snapshot script): price, change, % and its time. */
+    private fun yahoo(sym: String): Pair<JSONObject, Long>? {
+        val path = "v8/finance/chart/" + java.net.URLEncoder.encode(sym, "UTF-8") + "?interval=1h&range=1d"
+        for (host in listOf("query1", "query2")) try {
+            val m = JSONObject(get("https://$host.finance.yahoo.com/$path")).getJSONObject("chart").getJSONArray("result").getJSONObject(0).getJSONObject("meta")
+            val price = m.optDouble("regularMarketPrice"); val prev = m.optDouble("previousClose").takeIf { !it.isNaN() && it > 0 } ?: m.optDouble("chartPreviousClose")
+            if (price.isNaN() || prev.isNaN() || prev <= 0) continue
+            val ch = price - prev
+            return JSONObject().put("price", r4(price)).put("prev", r4(prev)).put("change", r4(ch)).put("changesPercentage", r4(ch / prev * 100)) to m.optLong("regularMarketTime")
+        } catch (e: Exception) { }
+        return null
+    }
+
+    /** Bitcoin like the Terminal: CoinGecko's price and 24-hour change, Coinbase if that fails. */
+    private fun bitcoin(): JSONObject? {
+        fun out(price: Double, pct: Double) = (price / (1 + pct / 100)).let { prev -> JSONObject().put("price", price).put("prev", r4(prev)).put("change", r4(price - prev)).put("changesPercentage", r4(pct)) }
+        try {
+            val b = JSONObject(get("https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd&include_24hr_change=true")).getJSONObject("bitcoin")
+            val price = b.optDouble("usd"); if (!price.isNaN() && price > 0) return out(price, b.optDouble("usd_24h_change").takeIf { !it.isNaN() } ?: 0.0)
+        } catch (e: Exception) { }
+        return try {
+            val d = JSONObject(get("https://api.exchange.coinbase.com/products/BTC-USD/stats"))
+            val price = d.optString("last").toDouble(); val open = d.optString("open").toDoubleOrNull() ?: 0.0
+            out(price, if (open > 0) (price - open) / open * 100 else 0.0)
+        } catch (e: Exception) { null }
+    }
 
     private fun fmt(v: Double) = if (v >= 1000) String.format("%,.2f", v) else String.format("%.2f", v)
 
@@ -91,7 +141,9 @@ object TodayMarkets {
             }
             card.addView(RunUi.text(ctx, "", Color.WHITE, 11f).apply { text = sb; setPadding(0, d(8), 0, 0) })
         }
-        val at = try { java.time.OffsetDateTime.parse(j.optString("updatedAt")).toInstant().toEpochMilli() } catch (e: Exception) { 0L }
-        card.addView(RunUi.text(ctx, (if (at > 0) "Market data " + android.text.format.DateUtils.getRelativeTimeSpanString(at, System.currentTimeMillis(), 60_000L) + " · " else "") + "about 15 min delayed (Bitcoin trades 24/7) · tap to refresh", RunUi.DIM, 10f).apply { setPadding(0, d(6), 0, 0) })
+        val live = j.optLong("liveAt", 0L)
+        val at = if (live > 0) live else try { java.time.OffsetDateTime.parse(j.optString("updatedAt")).toInstant().toEpochMilli() } catch (e: Exception) { 0L }
+        val ago = if (at > 0) android.text.format.DateUtils.getRelativeTimeSpanString(at, System.currentTimeMillis(), 60_000L).toString() else ""
+        card.addView(RunUi.text(ctx, (if (live > 0) "Live · last trade $ago" else if (at > 0) "Market data $ago" else "Market data") + " · refreshes every minute, like MSIZ Terminal (Bitcoin trades 24/7) · tap to refresh", RunUi.DIM, 10f).apply { setPadding(0, d(6), 0, 0) })
     }
 }
