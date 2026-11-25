@@ -18,14 +18,14 @@ import java.time.LocalDate
  * 💳 Spending on the Today tab, from M&C Money: today, yesterday and this week (Sunday to Saturday) as a bar chart.
  * M&C Money shares only one total per day (all accounts, same rules as its budget: transfers, card payments, income
  * and "excluded from budget" don't count). Spending is only ever entered in M&C Money, which sends new totals on every
- * save, so these are always current. Tap to open it.
+ * save, so these are always current. "Details ›" opens the bigger view (SpendingActivity).
  */
 object TodaySpending {
     const val PKG = "com.sizemore.mcmoney"
     const val PERM = "com.sizemore.mcmoney.READ_SPENDING"
     const val REQ = 87
     private val URI = Uri.parse("content://com.sizemore.mcmoney.spending/daily")
-    private val GREEN = 0xFF2EE66B.toInt()
+    val GREEN = 0xFF2EE66B.toInt()
 
     fun installed(ctx: Context) = try { ctx.packageManager.getPackageInfo(PKG, 0); true } catch (e: Exception) { false }
     /** The installed M&C Money is new enough to share spending. */
@@ -39,7 +39,7 @@ object TodaySpending {
         }
     } catch (e: Exception) { null }
 
-    private fun money(v: Double) = if (v >= 1000) String.format("$%,.0f", v) else String.format("$%,.2f", v)
+    fun money(v: Double) = if (v >= 1000) String.format("$%,.0f", v) else String.format("$%,.2f", v)
 
     fun fill(act: Activity, card: LinearLayout) {
         val ctx: Context = act
@@ -55,32 +55,21 @@ object TodaySpending {
             return
         }
         if (!allowed(ctx)) {
-            note("Tap to let BeyondStride see M&C Money's daily spending totals (one number per day, nothing else).")
-            card.setOnClickListener { act.requestPermissions(arrayOf(PERM), REQ) }
+            note("Let BeyondStride see M&C Money's daily spending totals (one number per day, nothing else).")
+            card.addView(RunUi.text(ctx, "Allow", Color.BLACK, 13f, true).apply {
+                background = RunUi.rounded(RunUi.ACCENT, d(16).toFloat()); setPadding(d(16), d(7), d(16), d(7))
+                setOnClickListener { act.requestPermissions(arrayOf(PERM), REQ) }
+            }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = d(8) })
             return
         }
-        card.setOnClickListener { act.packageManager.getLaunchIntentForPackage(PKG)?.let { try { act.startActivity(it) } catch (e: Exception) { } } }
-        val data = read(ctx)
+                val data = read(ctx)
         if (data == null) { note("Open M&C Money once and your spending will show here."); return }
-        val (days, _) = data
-        val today = LocalDate.now()
-        // Spending can only be added inside M&C Money, and it sends new totals the moment you save, so a day after its
-        // last send had nothing added: $0.
-        val lastDay = days.keys().asSequence().maxOrNull() ?: ""
-        fun amt(day: LocalDate): Double? = when {
-            days.has(day.toString()) -> days.optDouble(day.toString(), 0.0)
-            day.toString() > lastDay && !day.isAfter(today) -> 0.0
-            else -> null
-        }
-        val sun = today.minusDays((today.dayOfWeek.value % 7).toLong())
-        val week = (0..6).map { sun.plusDays(it.toLong()) }
-        val weekVals = week.map { if (it.isAfter(today)) null else amt(it) }
-        val weekTotal = weekVals.filterNotNull().sum()
-        head.addView(RunUi.text(ctx, "This week ${money(weekTotal)}", GREEN, 13f, true))
+        val m = model(data.first)
+        head.addView(RunUi.text(ctx, "This week ${money(m.weekTotal)}", GREEN, 13f, true))
 
         // Today | Yesterday
         card.addView(LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; setPadding(0, d(8), 0, 0)
-            listOf("Today" to amt(today), "Yesterday" to amt(today.minusDays(1))).forEach { (label, v) ->
+            listOf("Today" to m.amt(m.today), "Yesterday" to m.amt(m.today.minusDays(1))).forEach { (label, v) ->
                 addView(LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL
                     addView(RunUi.text(ctx, label, RunUi.MUTED, 11f, true))
                     addView(RunUi.text(ctx, v?.let { money(it) } ?: "—", Color.WHITE, 17f, true))
@@ -89,19 +78,55 @@ object TodaySpending {
         })
 
         // Sunday → Saturday bars.
-        card.addView(Bars(ctx, weekVals, week.indexOf(today)), LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, d(118)).apply { topMargin = d(10) })
-        card.addView(RunUi.text(ctx, "From M&C Money · all accounts · always up to date (M&C Money sends new totals each time you save a transaction) · tap to open M&C Money", RunUi.DIM, 10f).apply { setPadding(0, d(6), 0, 0) })
+        card.addView(Bars(ctx, m.weekVals, m.week.indexOf(m.today)), LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, d(118)).apply { topMargin = d(10) })
+        // Only this spot opens the bigger view; the rest of the card doesn't react to taps.
+        card.addView(LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(0, d(8), 0, 0)
+            addView(RunUi.text(ctx, "From M&C Money · all accounts · always up to date", RunUi.DIM, 10f), LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+            addView(detailsButton(act))
+        })
     }
 
+    private fun detailsButton(act: Activity) = RunUi.text(act, "Details ›", Color.BLACK, 13f, true).apply {
+        val d = { v: Int -> RunUi.dp(act, v) }
+        background = RunUi.rounded(RunUi.ACCENT, d(16).toFloat()); setPadding(d(14), d(7), d(14), d(7))
+        setOnClickListener { act.startActivity(android.content.Intent(act, SpendingActivity::class.java)) }
+    }
+
+    fun openMc(act: Activity) { act.packageManager.getLaunchIntentForPackage(PKG)?.let { try { act.startActivity(it) } catch (e: Exception) { } } }
+
+    /** M&C Money's daily totals for the bigger view, or null when they can't be read. */
+    fun load(ctx: Context): Model? = if (shares(ctx) && allowed(ctx)) read(ctx)?.let { model(it.first) } else null
+
+    class Model(val days: JSONObject, val today: LocalDate) {
+        // Spending can only be added inside M&C Money, and it sends new totals the moment you save, so a day after its
+        // last send had nothing added: $0.
+        private val lastDay = days.keys().asSequence().maxOrNull() ?: ""
+        fun amt(day: LocalDate): Double? = when {
+            day.isAfter(today) -> null
+            days.has(day.toString()) -> days.optDouble(day.toString(), 0.0)
+            day.toString() > lastDay -> 0.0
+            else -> null
+        }
+        val sun: LocalDate = today.minusDays((today.dayOfWeek.value % 7).toLong())
+        val week = (0..6).map { sun.plusDays(it.toLong()) }
+        val lastWeek = week.map { it.minusDays(7) }
+        val weekVals = week.map { amt(it) }
+        val lastWeekVals = lastWeek.map { amt(it) }
+        val weekTotal = weekVals.filterNotNull().sum()
+        val lastWeekTotal = lastWeekVals.filterNotNull().sum()
+    }
+    private fun model(days: JSONObject) = Model(days, LocalDate.now())
+
     /** Seven bars, S M T W T F S, amount over each bar, today highlighted. */
-    private class Bars(ctx: Context, val vals: List<Double?>, val todayIdx: Int) : View(ctx) {
+    class Bars(ctx: Context, val vals: List<Double?>, val todayIdx: Int, val big: Boolean = false) : View(ctx) {
         private val p = Paint(Paint.ANTI_ALIAS_FLAG)
         private val dp = ctx.resources.displayMetrics.density
         override fun onDraw(c: Canvas) {
             val labels = listOf("S", "M", "T", "W", "T", "F", "S")
             val max = (vals.filterNotNull().maxOrNull() ?: 0.0).coerceAtLeast(1.0)
             val slot = width / 7f; val bw = slot * 0.56f
-            val labelH = 16 * dp; val topH = 16 * dp
+            val k = if (big) 1.3f else 1f
+            val labelH = 16 * dp * k; val topH = 16 * dp * k
             val chartH = height - labelH - topH
             p.textAlign = Paint.Align.CENTER
             for (i in 0..6) {
@@ -115,10 +140,10 @@ object TodaySpending {
                     val h = (chartH * (v / max)).toFloat().coerceAtLeast(3 * dp)
                     p.color = if (isToday) RunUi.ACCENT else GREEN
                     c.drawRoundRect(RectF(cx - bw / 2, topH + chartH - h, cx + bw / 2, topH + chartH), 4 * dp, 4 * dp, p)
-                    p.color = Color.WHITE; p.textSize = 9.5f * dp; p.isFakeBoldText = true
-                    c.drawText(if (v >= 1000) String.format("%.1fk", v / 1000) else String.format("%.0f", v), cx, topH + chartH - h - 3 * dp, p)
+                    p.color = Color.WHITE; p.textSize = 9.5f * dp * k; p.isFakeBoldText = true
+                    c.drawText(if (v >= 1000) String.format("%.1fk", v / 1000) else if (big) String.format("$%.0f", v) else String.format("%.0f", v), cx, topH + chartH - h - 3 * dp, p)
                 }
-                p.color = if (isToday) RunUi.ACCENT else RunUi.MUTED; p.textSize = 11 * dp; p.isFakeBoldText = isToday
+                p.color = if (isToday) RunUi.ACCENT else RunUi.MUTED; p.textSize = 11 * dp * k; p.isFakeBoldText = isToday
                 c.drawText(labels[i], cx, height - 3 * dp, p)
             }
         }
