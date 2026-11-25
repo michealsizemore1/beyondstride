@@ -127,7 +127,6 @@ object Local {
         try { if (SleepData.granted(ctx)) SleepData.refresh(ctx, 7) } catch (e: Exception) { }
         try { DayStress.sync(ctx, force = true) } catch (e: Exception) { }
         try { DayStress.steps(ctx, Readiness.today())?.let { out += String.format(java.util.Locale.US, "👣 %,d steps", it) } } catch (e: Exception) { }
-        try { if (CpUpdate.hrvGranted(ctx)) CpUpdate.refresh(ctx, 7) } catch (e: Exception) { }
         try { TodayWeather.fetch(ctx, force = true) } catch (e: Exception) { }
         try { TodayMarkets.fetch(ctx); out += "📈 markets updated" } catch (e: Exception) { }
         try { CalendarReminders.refresh(ctx) } catch (e: Exception) { }

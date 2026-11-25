@@ -236,7 +236,7 @@ open class RunsActivity : Activity() {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             addView(RunUi.text(ctx, if (this@RunsActivity is AllRunsActivity) "Runs" else "BeyondStride", Color.WHITE, 28f, true), LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
-            // 🔄 Sync everything now (weigh-ins, BP, sleep, HRV, steps, food, weather, markets, spending, watch, Life tab, reminders, Firebase, cloud copy, backup, updates).
+            // 🔄 Sync everything now (weigh-ins, BP, sleep + HRV, steps, food, weather, markets, spending, watch, Life tab, reminders, Firebase, cloud copy, backup, updates).
             if (this@RunsActivity !is AllRunsActivity) addView(RunUi.button(ctx, "🔄", RunUi.CARD, Color.WHITE) {}.also { b ->
                 b.contentDescription = "Sync now"
                 b.setOnClickListener {
