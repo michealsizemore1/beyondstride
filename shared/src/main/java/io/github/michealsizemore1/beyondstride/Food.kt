@@ -165,13 +165,37 @@ object Food {
     // ── Food quality — the Command Center's runnerFoodQuality / inferFoodMacroSources / isNaturalSugarFood ──
     private fun allText(i: Item) = listOf(i.name, i.qtext).filter { it.isNotEmpty() }.joinToString(" ").lowercase()
 
-    /** Whole fruit or plain dairy: its sugar isn't counted as added sugar. */
+    /**
+     * Whole fruit, vegetables or plain dairy: their sugar is natural and doesn't count toward the 36 g added-sugar max.
+     * Judged from the food's name; for a packaged food, an ingredient list with sugar, syrup or honey in it means it
+     * has added sugar after all. Juice, dried fruit with sugar added, fruit in syrup, flavored yogurt and fruit or
+     * vegetables baked into breads, pies, bars or sauces still count.
+     */
+    private val NS_ADDED = Regex("\\b(chocolate|choc|cocoa|vanilla|caramel|cookies?|cakes?|cupcakes?|muffins?|breads?|pies?|cobbler|crisp|crumble|tarts?|pastry|pastries|danish|donuts?|doughnuts?|scones?|pancakes?|waffles?|bars?|granola|cereal|crackers?|chips|fries|candied|candy|candies|glazed|dipped|covered|frosted|flavou?red|sweetened|sweet cream|ice cream|frozen yogurt|sorbet|sherbet|popsicle|milkshake|shake|smoothie|pudding|custard|syrup|honey|jam|jelly|preserves?|marmalade|spread|compote|juice|nectar|lemonade|limeade|ade|punch|cocktail|soda|pop|drink|beverage|latte|mocha|frappuccino|cappuccino|macchiato|creamer|coffee|tea|sauce|ketchup|catsup|dressing|vinaigrette|glaze|relish|bbq|barbecue|teriyaki|sweet and sour|sweet pickles?|bread and butter|sandwich|wrap|burger|pizza|sushi|fruit snacks?|fruit leather|fruit roll|gummy|gummies|craisins?|trail mix|maple|brown sugar|sugar(?!\\s*snap)|condensed|cider|flakes|puffs|loops|crunch|baked beans|refried|dried cranberry|dried cranberries|orange chicken|dr\\.? pepper|candy corn|yogurt covered)\\b")
+    private val NS_FRUIT = Regex("\\b(bananas?|apples?|oranges?|grapes?|berry|berries|strawberry|strawberries|blueberry|blueberries|raspberry|raspberries|blackberry|blackberries|cranberry|cranberries|melons?|watermelon|cantaloupe|honeydew|mangoes|mangos?|pineapples?|kiwis?|kiwifruit|peach|peaches|plums?|cherry|cherries|pears?|grapefruit|apricots?|pomegranates?|pomegranate seeds|nectarines?|tangerines?|clementines?|mandarins?|cuties|lemons?|limes?|papaya|guava|passion fruit|lychee|dragon fruit|star fruit|persimmons?|plantains?|figs?|dates|prunes|raisins?|fruit salad|fruit cup|fresh fruit|mixed fruit|avocados?|olives?)\\b")
+    private val NS_VEG = Regex("\\b(vegetables?|veggies?|veg|broccoli|broccolini|cauliflower|spinach|kale|lettuce|romaine|arugula|greens|collards?|chard|cabbage|brussels sprouts?|carrots?|celery|cucumbers?|tomato|tomatoes|cherry tomatoes|peppers?|bell peppers?|jalapenos?|onions?|scallions?|green onions?|shallots?|garlic|leeks?|zucchini|squash|butternut|pumpkin|eggplant|asparagus|green beans?|string beans|snap peas|snow peas|peas|edamame|corn|sweet corn|corn on the cob|potato|potatoes|sweet potato|sweet potatoes|yams?|beets?|beetroot|radish|radishes|turnips?|parsnips?|mushrooms?|okra|artichokes?|bok choy|sprouts|salad|side salad|garden salad|coleslaw mix|beans|black beans|pinto beans|kidney beans|lentils|chickpeas|hummus|salsa|pico de gallo)\\b")
+    private val NS_DAIRY = Regex("\\b(milk|whole milk|skim milk|2% milk|1% milk|yogurt|yoghurt|greek yogurt|skyr|kefir|cottage cheese|cheese|string cheese)\\b")
+    private val NS_PLANT_MILK = Regex("\\b(almond|oat|soy|rice|coconut|cashew|pea)\\s+milk\\b")
+    private val NS_UNSWEET = Regex("\\b(unsweetened|no sugar added|no added sugars?|without added sugar|zero sugar|plain)\\b")
+    private val NS_ING_SUGAR = Regex("\\b(sugar|sugars|cane sugar|brown sugar|corn syrup|glucose syrup|syrup|honey|dextrose|sucrose|agave|molasses|maltodextrin|fruit juice concentrate|juice concentrate|evaporated cane juice|caramel)\\b")
+
     fun naturalSugar(i: Item): Boolean {
-        val t = allText(i); if (t.isEmpty()) return false
-        if (Regex("\\b(chocolate|vanilla|caramel|cookie|cookies|flavored|flavoured|sweetened|sweet cream|ice cream|milkshake|shake|pudding|syrup|candy|yogurt covered|fruit snack|fruit leather|fruit roll|juice|nectar|smoothie|jam|jelly|preserves?|in syrup|honey)\\b").containsMatchIn(t)) return false
-        return Regex("\\b(banana|bananas|apple|apples|orange|oranges|grape|grapes|berry|berries|strawberry|strawberries|blueberry|blueberries|raspberry|raspberries|blackberry|blackberries|melon|watermelon|cantaloupe|honeydew|mango|mangoes|pineapple|kiwi|peach|peaches|plum|plums|cherry|cherries|pear|pears|grapefruit|apricot|apricots|pomegranate|nectarine|tangerine|clementine|fruit salad)\\b").containsMatchIn(t) ||
-            Regex("\\b(raisin|raisins|unsweetened dried fruit|dried apricot|dried mango|dried fig|figs?)\\b").containsMatchIn(t) ||
-            Regex("\\b(milk|yogurt|kefir|cottage cheese)\\b").containsMatchIn(t)
+        val name = i.name.lowercase().replace('-', ' ').trim(); if (name.isEmpty()) return false
+        val unsweet = NS_UNSWEET.containsMatchIn(name)
+        // Unsweetened applesauce / fruit cups are still just fruit.
+        val nm = if (unsweet) name.replace(Regex("\\b(apple\\s*sauce|applesauce)\\b"), "apple") else name
+        if (NS_ADDED.containsMatchIn(nm)) return false
+        val fruitOrVeg = NS_FRUIT.containsMatchIn(nm) || NS_VEG.containsMatchIn(nm)
+        val dairy = NS_DAIRY.containsMatchIn(nm)
+        if (!fruitOrVeg && !dairy) return false
+        // Plant milks have sugar added unless they say unsweetened.
+        if (NS_PLANT_MILK.containsMatchIn(nm) && !unsweet) return false
+        // Yogurt with fruit or a flavor in its name is a flavored (sweetened) yogurt, unless it says plain / unsweetened.
+        if (Regex("\\b(yogurt|yoghurt|skyr|kefir)\\b").containsMatchIn(nm) && NS_FRUIT.containsMatchIn(nm) && !unsweet) return false
+        // Packaged food: sugar in the ingredients means added sugar (ignore "no sugar added" claims).
+        val ing = i.qtext.lowercase().replace(NS_UNSWEET, " ")
+        if (ing.isNotBlank() && NS_ING_SUGAR.containsMatchIn(ing.replace(Regex("\\b(sugars?\\s*:\\s*0|0\\s*g\\s*sugars?)\\b"), " ").replace(Regex("\\bsugary snacks\\b"), " ")) && !unsweet) return false
+        return true
     }
 
     private val P_SUP = listOf("chicken breast","chicken","turkey","fish","salmon","tuna","tilapia","cod","halibut","mahi mahi","shrimp","lean beef","sirloin","bison","pork tenderloin","egg white","egg","greek yogurt","yogurt","cottage cheese","milk protein","casein","milk","tofu","tempeh","edamame","bean","lentil","chickpea","pea protein","soy protein","protein isolate","protein concentrate","protein powder","protein shake","whey protein","whey","seitan")

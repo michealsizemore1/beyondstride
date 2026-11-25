@@ -220,7 +220,7 @@ object NutritionUi {
             else "From ${rows.size} logged food${if (rows.size == 1) "" else "s"} · ${fmt(tot)}${m.unit} total\n\n" + rows.joinToString("\n") { (f, v) ->
                 "${f.name} (${Nutrition.MEAL_NAMES[f.meal] ?: f.meal}) — ${fmt(v)}${m.unit} · ${if (tot > 0) Math.round(v / tot * 100) else 0}%" +
                     (if (m.field != "sugar") "" else if (f.meal == "sports") " · fueling, not counted" else if (io.github.michealsizemore1.beyondstride.Food.naturalSugar(f)) " · natural, not counted" else " · added") } +
-                (if (m.field == "sugar") addedSugar(nd).let { "\n\nAdded sugar ${Math.round(it.added)}g of a 36g max. Natural sugar in whole fruit and plain dairy (and fueling during runs) doesn't count toward it." } else "")
+                (if (m.field == "sugar") addedSugar(nd).let { "\n\nAdded sugar ${Math.round(it.added)}g of a 36g max. Natural sugar in fruit, vegetables and plain dairy (and fueling during runs) doesn't count toward it." } else "")
         android.app.AlertDialog.Builder(act).setTitle("${m.name} sources").setMessage(msg).setPositiveButton("OK", null).show()
     }
 
@@ -252,7 +252,7 @@ object NutritionUi {
         if (rows.isEmpty()) sb.append("None of the foods logged this day have sugar recorded yet.")
         group("🍬 Added sugar · ${g(a)}", if (a > 36) 0xFFF87171.toInt() else 0xFF5FD38D.toInt(), added,
             "Counts toward the 36g max · ${Math.round(a / 36.0 * 100)}% of max")
-        group("🍌 Natural sugar · ${g(natural.sumOf { it.second })}", 0xFF5FD38D.toInt(), natural, "Whole fruit and plain dairy · not counted")
+        group("🍌 Natural sugar · ${g(natural.sumOf { it.second })}", 0xFF5FD38D.toInt(), natural, "Fruit, vegetables and plain dairy · not counted")
         group("🏃 Run fueling · ${g(fuel.sumOf { it.second })}", 0xFF60A5FA.toInt(), fuel, "Gels and sports drinks · not counted")
         val tv = RunUi.text(act, "", Color.WHITE, 15f).apply { text = sb; setLineSpacing(0f, 1.15f); val p = RunUi.dp(act, 22); setPadding(p, RunUi.dp(act, 8), p, 0) }
         android.app.AlertDialog.Builder(act).setTitle("Sugar sources · ${g(rows.sumOf { it.second })} total")
@@ -282,7 +282,7 @@ object NutritionUi {
         note?.let { col.addView(RunUi.text(ctx, it, RunUi.MUTED, 11f).apply { setPadding(0, dp(3), 0, 0) }) }
     }
 
-    /** Sugar split: added (counts toward the 36 g max), natural (whole fruit / plain dairy) and run fueling (don't count). */
+    /** Sugar split: added (counts toward the 36 g max), natural (fruit, vegetables, plain dairy) and run fueling (don't count). */
     class SugarSplit(val total: Double, val natural: Double, val fuel: Double) { val added get() = (total - natural - fuel).coerceAtLeast(0.0) }
     fun addedSugar(nd: Nutrition.Day): SugarSplit {
         val F = io.github.michealsizemore1.beyondstride.Food
@@ -298,7 +298,7 @@ object NutritionUi {
         val sports = nd.foods.filter { it.meal == "sports" }.sumOf { it.total(it.micros["sugar"]) }
         val natural = nd.foods.filter { F.naturalSugar(it) }.sumOf { it.total(it.micros["sugar"]) }
         val ceiling = nd.micros.firstOrNull { it.field == "sugar" }?.target ?: (36 + sports + natural)
-        val sNote = if (sports > 0 || natural > 0) " (" + listOfNotNull(natural.takeIf { it > 0 }?.let { "${Math.round(it)}g fruit/dairy" }, sports.takeIf { it > 0 }?.let { "${Math.round(it)}g fueling" }).joinToString(" and ") + " not counted)" else ""
+        val sNote = if (sports > 0 || natural > 0) " (" + listOfNotNull(natural.takeIf { it > 0 }?.let { "${Math.round(it)}g fruit/veg/dairy" }, sports.takeIf { it > 0 }?.let { "${Math.round(it)}g fueling" }).joinToString(" and ") + " not counted)" else ""
         val low = nd.micros.minByOrNull { m -> if (m.max > 0 && m.value > m.max) Math.max(0.0, 1 - (m.value - m.max) / m.max) else Math.max(0.0, Math.min(1.0, m.value / m.target)) }
         fun num(v: Double) = if (v >= 1000) String.format(Locale.US, "%,d", Math.round(v)) else if (v % 1.0 == 0.0) Math.round(v).toString() else v.toString()
         fun tg(f: String) = nd.micros.firstOrNull { it.field == f }?.let { "${num(it.target)}${it.unit}" } ?: ""
@@ -356,7 +356,7 @@ object NutritionUi {
                         setPadding(dp(6), dp(4), dp(6), dp(4))
                         val sg = if (m.field == "sugar") addedSugar(nd) else null
                         if (sg != null) {
-                            // 🍬 Added sugar only: natural sugar (whole fruit, plain dairy) and run fueling don't count toward the max.
+                            // 🍬 Added sugar only: natural sugar (fruit, vegetables, plain dairy) and run fueling don't count toward the max.
                             val pct = sg.added / 36.0 * 100; val st = if (sg.added > 36) "High" else if (pct >= 75) "Close" else "Under"
                             addView(RunUi.text(ctx, "Added sugar", RunUi.MUTED, 10f))
                             addView(RunUi.text(ctx, "${Math.round(sg.added)}g", Color.WHITE, 12f, true))
