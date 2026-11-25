@@ -13,7 +13,7 @@ import java.net.URL
 /**
  * 📈 Markets on the Today tab: the stock indexes and futures from MSIZ Terminal (S&P 500, Dow, Nasdaq) and Bitcoin. Same numbers
  * as the Terminal: its market file is refreshed about every 15 minutes during market hours (prices ~15 min delayed).
- * Kept on the phone so the card shows instantly; tap to refresh.
+ * Kept on the phone so the card shows instantly; re-checked every minute while on screen (like the Terminal), or tap.
  */
 object TodayMarkets {
     private const val URL_DATA = "https://michealsizemore1.github.io/ChatGPT-The-Master-App/data/market-quotes.json"
@@ -27,7 +27,7 @@ object TodayMarkets {
     private val FUTURES = listOf("ES=F" to "S&P", "YM=F" to "Dow", "NQ=F" to "Nasdaq")
 
     private fun p(ctx: Context) = ctx.getSharedPreferences("markets", 0)
-    fun stale(ctx: Context) = System.currentTimeMillis() - p(ctx).getLong("at", 0) > 15 * 60_000L
+    fun stale(ctx: Context) = System.currentTimeMillis() - p(ctx).getLong("at", 0) > 60_000L
 
     /** Download the latest numbers. True when they changed. */
     fun fetch(ctx: Context): Boolean = try {

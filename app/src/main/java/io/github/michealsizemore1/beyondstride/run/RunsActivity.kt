@@ -43,7 +43,8 @@ open class RunsActivity : Activity() {
         try { deleteSharedPreferences("strava") } catch (e: Exception) { }
     }
 
-    override fun onPause() { todayLife?.stop(); super.onPause() }
+    private var onScreen = false
+    override fun onPause() { onScreen = false; todayLife?.stop(); super.onPause() }
     override fun onDestroy() { todayLife?.stop(); CcEngine.release(this); super.onDestroy() }
 
     override fun onNewIntent(intent: Intent) {
@@ -54,6 +55,7 @@ open class RunsActivity : Activity() {
     override fun onResume() {
         io.github.michealsizemore1.beyondstride.Theme.load(this, "runsettings")
         super.onResume()
+        onScreen = true
         if (wrongDevice) return
         run { val app = applicationContext; Thread { try { Local.upkeep(app) } catch (e: Exception) { } }.start() }
         // LiveTrack is on (e.g. restored from a backup) but this app may not text yet: ask once per launch.
@@ -142,6 +144,7 @@ open class RunsActivity : Activity() {
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == 86) dayPermsDone()
+        if (requestCode == TodaySpending.REQ) render()
     }
     @Deprecated("") override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         @Suppress("DEPRECATION") super.onActivityResult(requestCode, resultCode, data)
@@ -291,6 +294,18 @@ open class RunsActivity : Activity() {
             fun refresh() = Thread { TodayMarkets.fetch(ctx); runOnUiThread { if (!isFinishing) TodayMarkets.fill(ctx, card) } }.start()
             setOnClickListener { refresh() }
             if (TodayMarkets.stale(ctx)) refresh()
+            // Same file as MSIZ Terminal, checked every minute while the Today tab is on screen, so the numbers match.
+            val tick = object : Runnable { override fun run() { if (!card.isAttachedToWindow) return; if (onScreen) refresh(); card.postDelayed(this, 60_000L) } }
+            addOnAttachStateChangeListener(object : android.view.View.OnAttachStateChangeListener {
+                override fun onViewAttachedToWindow(v: android.view.View) { card.removeCallbacks(tick); card.postDelayed(tick, 60_000L) }
+                override fun onViewDetachedFromWindow(v: android.view.View) { card.removeCallbacks(tick) }
+            })
+        })
+        // 💳 Spending from M&C Money: today, yesterday and this week (Sun–Sat).
+        col.addView(RunUi.card(this).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { bottomMargin = dp(8) }
+            TodaySpending.fill(this@RunsActivity, this)
         })
         // 🌤 Weather.
         col.addView(RunUi.card(this).apply {
