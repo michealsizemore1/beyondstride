@@ -89,19 +89,44 @@ object TodayMarkets {
         } catch (e: Exception) { null }
     }
 
+    // ▾ / ▸ Collapsible Today cards (Markets, Spending): tap the title row. Remembered on the phone.
+    fun collapsed(ctx: Context, key: String) = ctx.getSharedPreferences("todaycards", 0).getBoolean(key, false)
+    fun setCollapsed(ctx: Context, key: String, v: Boolean) = ctx.getSharedPreferences("todaycards", 0).edit().putBoolean(key, v).apply()
+    /** The title row: [title], room for extras (added by the caller), and the ▾/▸ arrow. Tapping it runs [toggle]. */
+    fun header(ctx: Context, title: String, closed: Boolean, toggle: () -> Unit) = LinearLayout(ctx).apply {
+        orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+        addView(RunUi.text(ctx, title, Color.WHITE, 16f, true), LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        addView(RunUi.text(ctx, if (closed) "▸" else "▾", RunUi.MUTED, 18f, true).apply { tag = "chev"; setPadding(RunUi.dp(ctx, 12), 0, RunUi.dp(ctx, 2), 0) })
+        setPadding(0, RunUi.dp(ctx, 2), 0, RunUi.dp(ctx, 2))
+        isClickable = true; setOnClickListener { toggle() }
+        contentDescription = if (closed) "$title, collapsed. Tap to expand." else "$title. Tap to collapse."
+    }
+    /** Adds a view just before the arrow in a [header] row. */
+    fun addToHeader(head: LinearLayout, v: android.view.View) = head.addView(v, head.childCount - 1)
+
     private fun fmt(v: Double) = if (v >= 1000) String.format("%,.2f", v) else String.format("%.2f", v)
 
     fun fill(ctx: Context, card: LinearLayout) {
         card.removeAllViews()
         val d = { v: Int -> RunUi.dp(ctx, v) }
         val j = try { JSONObject(p(ctx).getString("json", "") ?: "") } catch (e: Exception) { null }
-        card.addView(LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
-            addView(RunUi.text(ctx, "📈 Markets", Color.WHITE, 16f, true), LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
-        })
+        val closed = collapsed(ctx, "markets")
+        card.addView(header(ctx, "📈 Markets", closed) { setCollapsed(ctx, "markets", !closed); fill(ctx, card) })
         if (j == null) { card.addView(RunUi.text(ctx, "Loading market numbers…", RunUi.MUTED, 12f).apply { setPadding(0, d(6), 0, 0) }); return }
         val q = j.optJSONObject("quotes") ?: JSONObject(); val f = j.optJSONObject("futures") ?: JSONObject()
         fun color(pct: Double) = if (pct > 0) 0xFF4ADE80.toInt() else if (pct < 0) 0xFFF87171.toInt() else RunUi.MUTED
         fun arrow(pct: Double) = if (pct > 0) "▲" else if (pct < 0) "▼" else ""
+        if (closed) {   // Collapsed: one line, each index's move.
+            val sb = android.text.SpannableStringBuilder()
+            listOf("^GSPC" to "S&P", "^DJI" to "Dow", "^IXIC" to "Nasdaq", "BTC-USD" to "₿").forEach { (sym, name) ->
+                val o = q.optJSONObject(sym) ?: return@forEach; val pct = o.optDouble("changesPercentage")
+                if (sb.isNotEmpty()) sb.append("  ·  ")
+                sb.append("$name "); val st = sb.length; sb.append("${arrow(pct)}${String.format("%.2f", Math.abs(pct))}%")
+                sb.setSpan(android.text.style.ForegroundColorSpan(color(pct)), st, sb.length, 0)
+            }
+            card.addView(RunUi.text(ctx, "", Color.WHITE, 12f, true).apply { text = sb; setPadding(0, d(6), 0, 0) })
+            return
+        }
         // The indexes and Bitcoin, two per row.
         INDEXES.chunked(2).forEach { row -> card.addView(LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; setPadding(0, d(8), 0, 0)
             row.forEach { (sym, name) ->

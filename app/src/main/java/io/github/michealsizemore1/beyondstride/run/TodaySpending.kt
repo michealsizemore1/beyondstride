@@ -45,8 +45,8 @@ object TodaySpending {
         val ctx: Context = act
         card.removeAllViews()
         val d = { v: Int -> RunUi.dp(ctx, v) }
-        val head = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-        head.addView(RunUi.text(ctx, "💳 Spending", Color.WHITE, 16f, true), LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        val closed = TodayMarkets.collapsed(ctx, "spending")
+        val head = TodayMarkets.header(ctx, "💳 Spending", closed) { TodayMarkets.setCollapsed(ctx, "spending", !closed); fill(act, card) }
         card.addView(head)
         fun note(s: String) = card.addView(RunUi.text(ctx, s, RunUi.MUTED, 12f).apply { setPadding(0, d(6), 0, 0) })
         card.setOnClickListener(null)
@@ -65,7 +65,11 @@ object TodaySpending {
                 val data = read(ctx)
         if (data == null) { note("Open M&C Money once and your spending will show here."); return }
         val m = model(data.first)
-        head.addView(RunUi.text(ctx, "This week ${money(m.weekTotal)}", GREEN, 13f, true))
+        TodayMarkets.addToHeader(head, RunUi.text(ctx, "This week ${money(m.weekTotal)}", GREEN, 13f, true))
+        if (closed) {   // Collapsed: today and yesterday on one line.
+            card.addView(RunUi.text(ctx, "Today ${m.amt(m.today)?.let { money(it) } ?: "—"}  ·  Yesterday ${m.amt(m.today.minusDays(1))?.let { money(it) } ?: "—"}", Color.WHITE, 12f, true).apply { setPadding(0, d(6), 0, 0) })
+            return
+        }
 
         // Today | Yesterday
         card.addView(LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; setPadding(0, d(8), 0, 0)
