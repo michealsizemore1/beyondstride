@@ -127,12 +127,23 @@ object Local {
         try { if (SleepData.granted(ctx)) SleepData.refresh(ctx, 7) } catch (e: Exception) { }
         try { DayStress.sync(ctx, force = true) } catch (e: Exception) { }
         try { DayStress.steps(ctx, Readiness.today())?.let { out += String.format(java.util.Locale.US, "👣 %,d steps", it) } } catch (e: Exception) { }
-        try { TodayWeather.fetch(ctx) } catch (e: Exception) { }
+        try { if (CpUpdate.hrvGranted(ctx)) CpUpdate.refresh(ctx, 7) } catch (e: Exception) { }
+        try { TodayWeather.fetch(ctx, force = true) } catch (e: Exception) { }
+        try { TodayMarkets.fetch(ctx); out += "📈 markets updated" } catch (e: Exception) { }
+        try { CalendarReminders.refresh(ctx) } catch (e: Exception) { }
+        try { Reminders.morning(ctx) } catch (e: Exception) { }
+        // ⌚ The watch: today's summary, plan, workouts, morning checks, settings.
         try { ActivityStore.watchSummary(ctx)?.let { NutritionStore.setActs(ctx, it) } } catch (e: Exception) { }
         try { PlanStore.syncWatchIfNeeded(ctx) } catch (e: Exception) { }
+        try { WorkoutStore.pushToWatch(ctx) } catch (e: Exception) { }
+        try { io.github.michealsizemore1.beyondstride.ReadinessSync.pushAll(ctx) } catch (e: Exception) { }
+        try { io.github.michealsizemore1.beyondstride.SettingsSync.push(ctx, "runsettings", "phone") } catch (e: Exception) { }
         try { PhoneStatus.push(ctx) } catch (e: Exception) { }
+        // ☁️ Firebase daily summaries, the cloud copy and the automatic backup file.
         try { DailySummary.publish(ctx, force = true) } catch (e: Exception) { }
         try { CloudCopy.sync(ctx) } catch (e: Exception) { }
+        try { Backup.autoUpdate(ctx) } catch (e: Exception) { }
+        try { io.github.michealsizemore1.beyondstride.Updater.check(ctx, false, minGapMs = 0L) } catch (e: Exception) { }
         val p = ctx.getSharedPreferences("standalone", 0); val now = System.currentTimeMillis()
         p.edit().putLong("hcAt", now).putLong("wtAt", now).putLong("bpAt", now).putLong("cloudTry", now).putLong("syncNowAt", now).apply()
         return out.joinToString("\n")
