@@ -397,7 +397,23 @@ class LifeActivity : Activity() {
             view.addView(bar, LinearLayout.LayoutParams(MATCH_PARENT, d(8)).apply { topMargin = d(8) })
             view.addView(nextLine.apply { setPadding(0, d(8), 0, d(2)) })
             view.addView(body)
-            view.addView(RunUi.text(this@LifeActivity, "Tap the circle: done → not done → not marked. Edit times, add or reorder items in Tools → 📓 Full view.", RunUi.DIM, 10f).apply { setPadding(0, d(8), 0, 0) })
+            view.addView(RunUi.text(this@LifeActivity, "Tap a time to change it (just that day or every day). Tap the circle: done → not done → not marked. Add or reorder items in Tools → 📓 Full view.", RunUi.DIM, 10f).apply { setPadding(0, d(8), 0, 0) })
+        }
+        private fun editTime(o: JSONObject) {
+            val id = o.optString("id"); val label = o.optString("label"); val mins = o.optInt("mins")
+            val other = viewDate?.takeIf { it != java.time.LocalDate.now().toString() }
+            val dayName = other?.let { java.time.LocalDate.parse(it).format(java.time.format.DateTimeFormatter.ofPattern("EEE, MMM d", java.util.Locale.US)) } ?: "today"
+            android.app.TimePickerDialog(this@LifeActivity, { _, h, m ->
+                val nm = h * 60 + m
+                fun go(scope: String) { js("ccNative.setTime(${JSONObject.quote(id)},$nm,'$scope'${dayArg()})"); sig = "" }   // the page reports the change and the card reloads
+                if (!o.optBoolean("everyOk")) { go("day"); return@TimePickerDialog }
+                val opts = mutableListOf("Just $dayName", "Every day from ${if (other == null) "today" else dayName} on")
+                if (o.optBoolean("changed")) opts += "Back to the usual time"
+                android.app.AlertDialog.Builder(this@LifeActivity)
+                    .setTitle("$label at ${String.format("%d:%02d %s", if (h % 12 == 0) 12 else h % 12, m, if (h < 12) "AM" else "PM")}")
+                    .setItems(opts.toTypedArray()) { _, which -> go(when (which) { 0 -> "day"; 1 -> "every"; else -> "reset" }) }
+                    .setNegativeButton("Cancel", null).show()
+            }, mins / 60, mins % 60, false).apply { setTitle("Time for $label") }.show()
         }
         private fun paintDot(b: TextView, st: String, partial: Boolean) {
             val c = when { st == "green" -> 0xFF22C55E; st == "red" -> 0xFFEF4444; partial -> 0xFFA855F7; else -> 0 }.toInt()
@@ -421,7 +437,12 @@ class LifeActivity : Activity() {
                 val row = LinearLayout(this@LifeActivity).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL
                     setPadding(d(8), d(7), d(8), d(7))
                     if (isNext) background = RunUi.rounded(0xFF26302C.toInt(), d(10).toFloat()) }
-                row.addView(RunUi.text(this@LifeActivity, o.optString("time"), if (isNext) RunUi.ACCENT else RunUi.MUTED, 12f, true), LinearLayout.LayoutParams(d(68), ViewGroup.LayoutParams.WRAP_CONTENT))
+                // Tap the time to change it: just this day, or every day from now on.
+                row.addView(RunUi.text(this@LifeActivity, o.optString("time") + if (o.optBoolean("changed")) " ✎" else "", if (isNext) RunUi.ACCENT else RunUi.MUTED, 12f, true).apply {
+                    paintFlags = paintFlags or android.graphics.Paint.UNDERLINE_TEXT_FLAG
+                    setPadding(0, d(6), d(4), d(6))
+                    setOnClickListener { editTime(o) }
+                }, LinearLayout.LayoutParams(d(72), ViewGroup.LayoutParams.WRAP_CONTENT))
                 row.addView(LinearLayout(this@LifeActivity).apply { orientation = LinearLayout.VERTICAL
                     addView(RunUi.text(this@LifeActivity, o.optString("label"), if (fixed) RunUi.MUTED else Color.WHITE, 14f, true))
                     o.optString("detail").takeIf { it.isNotBlank() }?.let { addView(RunUi.text(this@LifeActivity, it, RunUi.DIM, 11f)) }

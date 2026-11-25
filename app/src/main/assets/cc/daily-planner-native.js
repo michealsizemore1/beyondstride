@@ -31,17 +31,41 @@
     return list.filter(function(i){return !/^(?:pt|dg)[0-2]c$/.test(i.key||'');}).map(function(i){
       return {key:i.key||'',id:i.id||'',group:i.group,label:String(i.label||'').replace(/\s*-\s*Actual\s*$/i,''),state:i.status==='blank'?'':i.status};});
   }
+  // ── 🕒 Schedule times set in the app (Nov 25 2026) ──
+  // "Every day" times live in bs_schedule_times ({id:{time,mins,from}}) and are copied onto each day from their start
+  // date as that day's override (marked fromDefault). A time changed for one day only (userTime) always wins.
+  var TRAIN_IDS=['schedule-today-s-training','schedule-rest-day-no-training-scheduled'];
+  function schedDefaults(){try{var v=JSON.parse(localStorage.getItem('bs_schedule_times')||'{}');return v&&typeof v==='object'?v:{};}catch(e){return {};}}
+  function applySchedDefaults(key){
+    if(typeof journalScheduleOverridesKey!=='function')return;
+    var defs=schedDefaults(),ok=journalScheduleOverridesKey(key),ov={};try{ov=JSON.parse(localStorage.getItem(ok)||'{}')||{};}catch(e){}
+    var changed=false;
+    Object.keys(defs).forEach(function(id){var d=defs[id];if(!d||!(key>=String(d.from||'')))return;var o=ov[id];if(o&&o.userTime)return;
+      if(!o||o.mins!==d.mins||o.time!==d.time){ov[id]=Object.assign({},o||{},{time:d.time,mins:d.mins,fromDefault:true});changed=true;}});
+    // An "every day" time that was taken away: drop what it put on this day.
+    Object.keys(ov).forEach(function(id){var o=ov[id];if(o&&o.fromDefault&&!(defs[id]&&key>=String(defs[id].from||''))){delete o.time;delete o.mins;delete o.fromDefault;if(!Object.keys(o).length)delete ov[id];changed=true;}});
+    if(changed)localStorage.setItem(ok,JSON.stringify(ov));
+  }
+  if(typeof window.renderJournalSchedule==='function'&&!window.renderJournalSchedule.__bsTimes){
+    var origRJS=window.renderJournalSchedule;
+    window.renderJournalSchedule=function(){try{applySchedDefaults(dk(today));}catch(e){}return origRJS.apply(this,arguments);};
+    window.renderJournalSchedule.__bsTimes=true;
+  }
   function schedule(date){
     goDay(date);var other=!!date&&date!==realKey();
     try{renderJournalSchedule();}catch(e){}
+    var ovr={};try{ovr=JSON.parse(localStorage.getItem(journalScheduleOverridesKey(dk(today)))||'{}')||{};}catch(e){}
+    var defs=schedDefaults();
     var map=window._journalScheduleItemsById||{},items=Object.keys(map).map(function(id){return map[id];});
     var now=new Date(),cur=now.getHours()*60+now.getMinutes(),next=-1;
     for(var i=0;i<items.length;i++){if(!items[i].fixed&&!items[i].done&&Number(items[i].mins)>=cur){next=i;break;}}
     if(next<0)next=items.findIndex(function(it){return !it.fixed&&!it.done;});
     return items.map(function(it,i){
       var st=it.scheduleStatus||(it.done?'green':'');if(st==='blank')st='';
-      return {id:it.id,time:it.time||'',label:String(it.label||''),detail:String(it.detail||'').replace(/<[^>]*>/g,''),done:!!it.done,
-        partial:!!it.partial,fixed:!!it.fixed,state:st,next:!other&&i===next};});
+      var o=ovr[it.id]||{};
+      return {id:it.id,time:it.time||'',mins:Number(it.mins)||0,label:String(it.label||''),detail:String(it.detail||'').replace(/<[^>]*>/g,''),done:!!it.done,
+        partial:!!it.partial,fixed:!!it.fixed,state:st,next:!other&&i===next,
+        everyOk:!it.manualCreated&&!it._moveId,changed:!!(o.userTime||(defs[it.id]&&dk(today)>=String(defs[it.id].from||''))||it._moveId)};});
   }
   var REV=[['dayRevWins','Wins Today'],['dayRevImprove','What to Improve'],['dayRevFocus','Focus for Tomorrow'],['dayRevLessons','Lessons Learned']];
   function review(){
@@ -577,6 +601,20 @@
       // Another day picked on the Daily calendar: its Focus, checks and schedule (the rest stays today's).
       if(date&&date!==realKey()){var g=JSON.parse(window.ccNative.focus(date));f.items=g.items;f.date=g.date;f.checks=checks(date);f.schedule=schedule(date);f.viewing=date;}
       return JSON.stringify(f);},
+    /** My Schedule: change an item's time. scope 'day' = just this day, 'every' = this day and every day after, 'reset' = back to its usual time. */
+    setTime:function(id,mins,scope,date){goDay(date);try{renderJournalSchedule();}catch(e){}
+      var it=(window._journalScheduleItemsById||{})[id];if(!it)return false;
+      mins=Math.max(0,Math.min(1439,Number(mins)||0));var time=journalMinsToClock(mins),key=dk(today);
+      var ok=journalScheduleOverridesKey(key),ov={};try{ov=JSON.parse(localStorage.getItem(ok)||'{}')||{};}catch(e){}
+      var defs=schedDefaults(),ids=TRAIN_IDS.indexOf(id)>=0?TRAIN_IDS:[id];
+      function clearDay(x){var o=ov[x];if(!o)return;delete o.time;delete o.mins;delete o.userTime;delete o.fromDefault;if(!Object.keys(o).length)delete ov[x];}
+      if(it._moveId){var mv=journalScheduleMoves(),m=mv.find(function(x){return x.id===it._moveId;});if(m&&scope!=='reset'){m.time=time;m.mins=mins;localStorage.setItem('journal_schedule_moves',JSON.stringify(mv));}}
+      else if(scope==='every'){ids.forEach(function(x){defs[x]={time:time,mins:mins,from:key};clearDay(x);});localStorage.setItem('bs_schedule_times',JSON.stringify(defs));}
+      else if(scope==='reset'){ids.forEach(function(x){delete defs[x];clearDay(x);});localStorage.setItem('bs_schedule_times',JSON.stringify(defs));}
+      else{ids.forEach(function(x){ov[x]=Object.assign({},ov[x]||{},{time:time,mins:mins,userTime:true});delete ov[x].fromDefault;});}
+      localStorage.setItem(ok,JSON.stringify(ov));
+      try{localStorage.removeItem(journalScheduleOrderKey(key));}catch(e){}   // put the list back in time order
+      try{renderJournalSchedule();}catch(e){}try{save();}catch(e){}refresh();try{if(window.BSNative&&BSNative.changed)BSNative.changed();}catch(e){}return true;},
     /** My Schedule: tap cycles done → not done → not marked, exactly like the Command Center's own button. */
     scheduleTap:function(id,date){goDay(date);try{renderJournalSchedule();
       // Same as tapping the circle on the page: done / not-done items (Personal Hygiene, your own items) toggle their own flag; the rest cycle green → red → clear.
