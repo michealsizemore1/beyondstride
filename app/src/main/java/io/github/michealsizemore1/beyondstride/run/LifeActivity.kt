@@ -217,7 +217,7 @@ class LifeActivity : Activity() {
         // 📱 Shortcuts to your other apps (they open as their own apps, with their own app lock).
         col.addView(RunUi.text(this, "📱 My apps", Color.WHITE, 16f, true))
         col.addView(RunUi.text(this, "Your other apps. Tap one to open it (each keeps its own app lock).", RunUi.MUTED, 12f).apply { setPadding(0, d(4), 0, d(6)) })
-        // Two per row: your four apps. (MSIZ Terminal is its own app now; if it isn't installed, the web page opens in Chrome.)
+        // Two per row: your apps. (MSIZ Terminal is its own app now; if it isn't installed, the web page opens in Chrome.)
         val tiles = MY_APPS
         tiles.chunked(2).forEach { row ->
             col.addView(LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; setPadding(0, d(8), 0, 0)
@@ -256,7 +256,8 @@ class LifeActivity : Activity() {
         Triple("com.sizemore.mcmoney", "M&C Money", "💵"),
         Triple("com.sizemore.retirement", "Retirement", "📈"),
         Triple("com.sizemore.benefits", "Family Hub", "🏠"),
-        Triple("com.sizemore.msiz", "MSIZ Terminal", "msiz"))
+        Triple("com.sizemore.msiz", "MSIZ Terminal", "msiz"),
+        Triple("com.sizemore.spanish", "Luma Spanish", "🇪🇸"))
     /** A ☰ Tabs section as BeyondStride screens (Uploads still opens the Command Center's own page). */
     private fun openSection(name: String, title: String) {
         val views: List<View> = when (name) {
