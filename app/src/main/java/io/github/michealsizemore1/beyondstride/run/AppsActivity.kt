@@ -24,9 +24,10 @@ class AppsActivity : Activity() {
         // 📱 Shortcuts to your other apps (they open as their own apps, with their own app lock).
         // The total, next to the title (and how many are on this phone, when some aren't).
         val total = MY_APPS.size
-        val onPhone = MY_APPS.count { a -> try { packageManager.getLaunchIntentForPackage(a.first) != null } catch (e: Exception) { false } }
+        val missing = MY_APPS.filterNot { installed(it.first) }
+        val onPhone = total - missing.size
         col.addView(RunUi.text(this, "📱 Apps", Color.WHITE, 26f, true))
-        col.addView(RunUi.text(this, "$total apps" + (if (onPhone < total) " · $onPhone on this phone" else ""), RunUi.ACCENT, 15f, true).apply { setPadding(0, d(2), 0, 0) })
+        col.addView(RunUi.text(this, "$total apps" + (if (onPhone < total) " · $onPhone on this phone (not installed: ${missing.joinToString(", ") { it.second }})" else ""), RunUi.ACCENT, 15f, true).apply { setPadding(0, d(2), 0, 0) })
         col.addView(RunUi.text(this, "Your other apps. Tap one to open it (each keeps its own app lock).", RunUi.MUTED, 12f).apply { setPadding(0, d(4), 0, d(6)) })
         // 🔎 Search: narrows the tiles as you type (by app name or category).
         val listBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
@@ -47,6 +48,8 @@ class AppsActivity : Activity() {
     }
 
     private var query = ""
+    /** On this phone? (One check for both the count and the tiles: the app is installed and can be opened.) */
+    private fun installed(pkg: String) = try { packageManager.getLaunchIntentForPackage(pkg) != null } catch (e: Exception) { false }
 
     /** The tiles, grouped by category, two per row; only the ones matching the search (name or category). */
     private fun fillTiles(box: LinearLayout) {
@@ -77,7 +80,7 @@ class AppsActivity : Activity() {
                             else -> addView(RunUi.text(this@AppsActivity, emoji, Color.WHITE, 36f))
                         }
                         addView(RunUi.text(this@AppsActivity, name, Color.WHITE, 13f, true).apply { gravity = android.view.Gravity.CENTER; setPadding(0, d(8), 0, 0) })
-                        if (emoji != "msiz" && icon == null) addView(RunUi.text(this@AppsActivity, "Not installed", RunUi.DIM, 10f).apply { gravity = android.view.Gravity.CENTER })
+                        if (!installed(pkg)) addView(RunUi.text(this@AppsActivity, if (emoji == "msiz") "Not installed · opens the website" else "Not installed", 0xFFFBBF24.toInt(), 10f).apply { gravity = android.view.Gravity.CENTER })
                         setOnClickListener {
                             if (emoji == "msiz" && packageManager.getLaunchIntentForPackage(pkg) == null) {
                                 val url = android.net.Uri.parse("https://michealsizemore1.github.io/ChatGPT-The-Master-App/msiz-terminal.html")
