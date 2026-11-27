@@ -51,6 +51,7 @@
         <package android:name="com.sizemore.xc" />
         <package android:name="com.sizemore.ncaatf" />
         <package android:name="com.sizemore.books" />
+        <package android:name="com.sizemore.records" />
     </queries>
 
     <application
