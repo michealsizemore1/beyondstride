@@ -47,7 +47,7 @@ class SpendingActivity : Activity() {
                 stat(this, "Total", TodaySpending.money(m.weekTotal), TodaySpending.GREEN)
                 stat(this, "Per day", TodaySpending.money(m.weekTotal / soFar))
                 stat(this, "Today", m.amt(m.today)?.let { TodaySpending.money(it) } ?: "—") })
-            addView(TodaySpending.Bars(ctx, m.weekVals, m.week.indexOf(m.today), big = true), LinearLayout.LayoutParams(MP, dp(200)).apply { topMargin = dp(12) })
+            addView(TodaySpending.Bars(ctx, m.weekVals, m.week.indexOf(m.today), big = true) { i -> TodaySpending.showDay(this@SpendingActivity, m, m.week[i]) }, LinearLayout.LayoutParams(MP, dp(200)).apply { topMargin = dp(12) })
             val diff = m.weekTotal - sameDaysLast
             val days = if (soFar == 1) "Sunday" else "Sunday–${m.today.format(DateTimeFormatter.ofPattern("EEEE", Locale.US))}"
             addView(RunUi.text(ctx, when {
@@ -67,16 +67,18 @@ class SpendingActivity : Activity() {
                 stat(this, "Per day", TodaySpending.money(m.lastWeekTotal / 7))
                 val top = m.lastWeek.zip(m.lastWeekVals).filter { (it.second ?: 0.0) > 0 }.maxByOrNull { it.second ?: 0.0 }
                 stat(this, "Biggest day", top?.let { "${it.first.format(DateTimeFormatter.ofPattern("EEE", Locale.US))} ${TodaySpending.money(it.second!!)}" } ?: "—") })
-            addView(TodaySpending.Bars(ctx, m.lastWeekVals, -1, big = true), LinearLayout.LayoutParams(MP, dp(170)).apply { topMargin = dp(12) })
+            addView(TodaySpending.Bars(ctx, m.lastWeekVals, -1, big = true) { i -> TodaySpending.showDay(this@SpendingActivity, m, m.lastWeek[i]) }, LinearLayout.LayoutParams(MP, dp(170)).apply { topMargin = dp(12) })
         })
 
         // Each day, newest first.
         col.addView(card().apply {
-            addView(RunUi.text(ctx, "Day by day", Color.WHITE, 17f, true).apply { setPadding(0, 0, 0, dp(4)) })
+            addView(RunUi.text(ctx, "Day by day", Color.WHITE, 17f, true))
+            addView(RunUi.text(ctx, "Tap a day (or a bar) to see its transactions.", RunUi.DIM, 11f).apply { setPadding(0, 0, 0, dp(4)) })
             val dayFmt = DateTimeFormatter.ofPattern("EEE, MMM d", Locale.US)
             (m.week.filter { !it.isAfter(m.today) }.reversed() + m.lastWeek.reversed()).forEach { day ->
                 val v = m.amt(day)
                 addView(LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; setPadding(0, dp(6), 0, dp(6))
+                    setOnClickListener { TodaySpending.showDay(this@SpendingActivity, m, day) }
                     val label = when (day) { m.today -> "Today"; m.today.minusDays(1) -> "Yesterday"; else -> day.format(dayFmt) }
                     addView(RunUi.text(ctx, label, if (day == m.today) RunUi.ACCENT else Color.WHITE, 14f, day == m.today), LinearLayout.LayoutParams(0, WC, 1f))
                     addView(RunUi.text(ctx, v?.let { TodaySpending.money(it) } ?: "—", if ((v ?: 0.0) > 0) Color.WHITE else RunUi.MUTED, 14f, true))

@@ -35,7 +35,7 @@ object TodaySpending {
     private fun read(ctx: Context): Pair<JSONObject, Long>? = try {
         ctx.contentResolver.query(URI, null, null, null, null)?.use { c ->
             if (!c.moveToFirst()) null
-            else { val js = c.getString(0) ?: ""; if (js.isEmpty()) null else JSONObject(js).optJSONObject("days")?.let { it to c.getLong(1) } }
+            else { val js = c.getString(0) ?: ""; if (js.isEmpty()) null else JSONObject(js).let { root -> root.optJSONObject("days")?.let { root to c.getLong(1) } } }
         }
     } catch (e: Exception) { null }
 
@@ -82,10 +82,10 @@ object TodaySpending {
         })
 
         // Sunday → Saturday bars.
-        card.addView(Bars(ctx, m.weekVals, m.week.indexOf(m.today)), LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, d(118)).apply { topMargin = d(10) })
+        card.addView(Bars(ctx, m.weekVals, m.week.indexOf(m.today)) { i -> showDay(act, m, m.week[i]) }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, d(118)).apply { topMargin = d(10) })
         // Only this spot opens the bigger view; the rest of the card doesn't react to taps.
         card.addView(LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(0, d(8), 0, 0)
-            addView(RunUi.text(ctx, "From M&C Money · all accounts · always up to date", RunUi.DIM, 10f), LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+            addView(RunUi.text(ctx, "From M&C Money · all accounts · tap a day for its transactions", RunUi.DIM, 10f), LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
             addView(detailsButton(act))
         })
     }
@@ -101,7 +101,10 @@ object TodaySpending {
     /** M&C Money's daily totals for the bigger view, or null when they can't be read. */
     fun load(ctx: Context): Model? = if (shares(ctx) && allowed(ctx)) read(ctx)?.let { model(it.first) } else null
 
-    class Model(val days: JSONObject, val today: LocalDate) {
+    class Model(root: JSONObject, val today: LocalDate) {
+        val days: JSONObject = root.optJSONObject("days") ?: JSONObject()
+        /** Each day's transactions (merchant m, amount a, category c, account acct, person p); null with an older M&C Money. */
+        val tx: JSONObject? = root.optJSONObject("tx")
         // Spending can only be added inside M&C Money, and it sends new totals the moment you save, so a day after its
         // last send had nothing added: $0.
         private val lastDay = days.keys().asSequence().maxOrNull() ?: ""
@@ -119,10 +122,50 @@ object TodaySpending {
         val weekTotal = weekVals.filterNotNull().sum()
         val lastWeekTotal = lastWeekVals.filterNotNull().sum()
     }
-    private fun model(days: JSONObject) = Model(days, LocalDate.now())
+    private fun model(root: JSONObject) = Model(root, LocalDate.now())
+
+    /** 🧾 The transactions behind one day's total, in a popup. */
+    fun showDay(act: Activity, m: Model, day: LocalDate) {
+        val d = { v: Int -> RunUi.dp(act, v) }
+        val col = LinearLayout(act).apply { orientation = LinearLayout.VERTICAL; setPadding(d(20), d(8), d(20), d(4)) }
+        val total = m.amt(day)
+        val arr = m.tx?.optJSONArray(day.toString())
+        when {
+            day.isAfter(m.today) -> col.addView(RunUi.text(act, "This day hasn't happened yet.", RunUi.MUTED, 13f))
+            m.tx == null -> col.addView(RunUi.text(act, "Update M&C Money (Settings → Check for updates) to see each day's transactions here.", RunUi.MUTED, 13f))
+            arr == null -> col.addView(RunUi.text(act, "M&C Money shares the last 14 days; this day is older.", RunUi.MUTED, 13f))
+            arr.length() == 0 -> col.addView(RunUi.text(act, "No spending this day.", RunUi.MUTED, 13f))
+            else -> for (i in 0 until arr.length()) { val t = arr.getJSONObject(i); val a = t.optDouble("a")
+                col.addView(LinearLayout(act).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(0, d(7), 0, d(7))
+                    addView(LinearLayout(act).apply { orientation = LinearLayout.VERTICAL
+                        addView(RunUi.text(act, t.optString("m"), Color.WHITE, 14f, true).apply { maxLines = 2 })
+                        listOf(t.optString("c"), t.optString("acct"), t.optString("p")).filter { it.isNotBlank() }.joinToString(" · ").takeIf { it.isNotBlank() }
+                            ?.let { addView(RunUi.text(act, it, RunUi.MUTED, 11f)) }
+                    }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+                    addView(RunUi.text(act, if (a < 0) "−" + money(-a) + " refund" else money(a), if (a < 0) GREEN else Color.WHITE, 14f, true).apply { setPadding(d(10), 0, 0, 0) })
+                })
+                if (i < arr.length() - 1) col.addView(View(act).apply { setBackgroundColor(0x22FFFFFF) }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1))
+            }
+        }
+        val title = when (day) { m.today -> "Today"; m.today.minusDays(1) -> "Yesterday"
+            else -> day.format(java.time.format.DateTimeFormatter.ofPattern("EEEE, MMM d", java.util.Locale.US)) } + (total?.let { " · ${money(it)}" } ?: "")
+        val b = android.app.AlertDialog.Builder(act, android.R.style.Theme_DeviceDefault_Dialog_Alert).setTitle(title)
+            .setView(android.widget.ScrollView(act).apply { addView(col) })
+            .setPositiveButton("Close", null)
+        if (act !is SpendingActivity) b.setNeutralButton("Details ›") { _, _ -> act.startActivity(android.content.Intent(act, SpendingActivity::class.java)) }
+        b.show()
+    }
 
     /** Seven bars, S M T W T F S, amount over each bar, today highlighted. */
-    class Bars(ctx: Context, val vals: List<Double?>, val todayIdx: Int, val big: Boolean = false) : View(ctx) {
+    class Bars(ctx: Context, val vals: List<Double?>, val todayIdx: Int, val big: Boolean = false, onDay: ((Int) -> Unit)? = null) : View(ctx) {
+        private var downX = 0f
+        init {
+            if (onDay != null) {
+                setOnTouchListener { _, e -> if (e.action == android.view.MotionEvent.ACTION_DOWN) downX = e.x; false }
+                setOnClickListener { if (width > 0) onDay(((downX / width) * 7).toInt().coerceIn(0, 6)) }
+                contentDescription = "Spending by day. Tap a day to see its transactions."
+            }
+        }
         private val p = Paint(Paint.ANTI_ALIAS_FLAG)
         private val dp = ctx.resources.displayMetrics.density
         override fun onDraw(c: Canvas) {
