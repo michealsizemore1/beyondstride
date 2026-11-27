@@ -44,6 +44,7 @@
         <package android:name="com.sizemore.ebay" />
         <package android:name="com.sizemore.cookbook" />
         <package android:name="com.sizemore.top25" />
+        <package android:name="com.sizemore.thew" />
     </queries>
 
     <application
