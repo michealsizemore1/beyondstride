@@ -331,10 +331,10 @@ open class RunsActivity : Activity() {
             setOnClickListener { refresh(true) }
             if (TodayWeather.stale(ctx)) refresh(false)
         })
-        // 🔋 Body Battery data (shown in the "This morning" card below).
+        // 🔋 Body Battery data (its own tile, under "This morning").
         if (System.currentTimeMillis() - DayStress.lastRead(this) > 15 * 60_000L) { val app = applicationContext
             Thread { try { DayStress.sync(app) } catch (e: Exception) { }; try { DailySummary.publish(app) } catch (e: Exception) { }; runOnUiThread { if (!isFinishing && System.currentTimeMillis() - DayStress.lastRead(app) < 60_000L) render() } }.start() }
-        // ☀️ This morning: the morning report (until noon), readiness and Body Battery in one card.
+        // ☀️ This morning: the morning report (until noon), readiness and last night's sleep.
         col.addView(RunUi.card(this).apply {
             layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { bottomMargin = dp(8) }
             addView(RunUi.text(ctx, "☀️ This morning", Color.WHITE, 16f, true).apply { setPadding(0, 0, 0, dp(6)) })
@@ -375,10 +375,9 @@ open class RunsActivity : Activity() {
                         "Half amount: full from 7½ hours asleep, zero at 4 hours.\n\nHalf quality: deep sleep (full at 15%+ of the night), REM (full at 20%+), little time awake (full at 30 min or less, none at 2 hours) and a calm sleeping heart (at or below your 30-night average).\n\n85+ Excellent · 70+ Good · 55+ Fair · below Poor").setPositiveButton("OK", null).show() }
                 })
             }
-            // 🔋 Body Battery (the same card as before, inside this one).
-            try { val bb = bodyBatteryCard(); bb.background = null; bb.setPadding(0, 0, 0, 0)
-                bb.layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT); addView(divider()); addView(bb) } catch (e: Exception) { }
         })
+        // 🔋 Body Battery: its own tile, right under "This morning" (Nov 26 2026).
+        try { col.addView(bodyBatteryCard()) } catch (e: Exception) { }
         // 🧠 Coach AI: one compact row, right after the morning check.
         col.addView(RunUi.compactRow(this, "🧠", "Ask Coach AI", "Runs, recovery, food, the plan… whatever you pick", 0xFF2A2140.toInt()) {
             startActivity(Intent(ctx, CoachActivity::class.java)) })
