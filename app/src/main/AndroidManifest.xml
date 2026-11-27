@@ -134,6 +134,11 @@
             android:label="Fitness"
             android:taskAffinity="io.github.michealsizemore1.beyondstride.running" />
         <activity
+            android:name=".run.AppsActivity"
+            android:exported="false"
+            android:label="Apps"
+            android:taskAffinity="io.github.michealsizemore1.beyondstride.running" />
+        <activity
             android:name=".run.AllRunsActivity"
             android:exported="false"
             android:label="All runs"

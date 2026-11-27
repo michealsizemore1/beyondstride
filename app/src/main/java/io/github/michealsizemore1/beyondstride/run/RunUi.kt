@@ -144,6 +144,38 @@ object RunUi {
         }
     }
     const val TAB_LIFE = 4   // 📓 the Command Center (Settings → Life tab turns it off)
+    const val TAB_APPS = 5   // 📱 your other apps (Nov 27 2026: its own tab; Activities moved inside Fitness)
+
+    /** Fitness and Activities share the Fitness tab: it reopens whichever side you used last. */
+    private fun lastFitnessSide(ctx: Context): Class<*> =
+        if (ctx.getSharedPreferences("tabs", 0).getBoolean("activities", false)) ActivitiesActivity::class.java else FitnessActivity::class.java
+    private fun go(act: android.app.Activity, cls: Class<*>) {
+        act.startActivity(android.content.Intent(act, cls).addFlags(android.content.Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or android.content.Intent.FLAG_ACTIVITY_NO_ANIMATION))
+        @Suppress("DEPRECATION") act.overridePendingTransition(0, 0)
+    }
+    /** The Fitness | Activities switch at the top of both screens. */
+    private fun fitnessSwitch(act: android.app.Activity, activities: Boolean): View {
+        act.getSharedPreferences("tabs", 0).edit().putBoolean("activities", activities).apply()
+        val d = { v: Int -> dp(act, v) }
+        return LinearLayout(act).apply {
+            orientation = LinearLayout.HORIZONTAL; setBackgroundColor(BG); setPadding(d(16), d(10), d(16), d(6))
+            val box = LinearLayout(act).apply { orientation = LinearLayout.HORIZONTAL; background = rounded(CARD, d(20).toFloat()); setPadding(d(4), d(4), d(4), d(4)) }
+            listOf("Fitness" to false, "Activities" to true).forEach { (label, isAct) ->
+                val on = isAct == activities
+                box.addView(text(act, label, if (on) Color.BLACK else MUTED, 14f, true).apply {
+                    gravity = Gravity.CENTER; setPadding(d(14), d(8), d(14), d(8))
+                    if (on) background = rounded(ACCENT, d(16).toFloat())
+                    else setOnClickListener { go(act, if (isAct) ActivitiesActivity::class.java else FitnessActivity::class.java) }
+                }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
+            }
+            addView(box, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
+            // Below the status bar.
+            setOnApplyWindowInsetsListener { v, insets ->
+                @Suppress("DEPRECATION") val t = if (android.os.Build.VERSION.SDK_INT >= 30) insets.getInsets(android.view.WindowInsets.Type.statusBars()).top else insets.systemWindowInsetTop
+                v.setPadding(d(16), d(10) + t, d(16), d(6)); insets
+            }
+        }
+    }
 
 
     /** Page content with the bottom tab bar (Today · Fitness · Plan · Runs). */
@@ -160,22 +192,24 @@ object RunUi {
     }
     fun tabbed(act: android.app.Activity, content: View, selected: Int): View {
         keepScroll(act, content)
-        // Bar order: Today · Life · Fitness · Nutrition · Activities (each keeps its own TAB_ number for "selected").
+        // Bar order: Today · Life · Fitness · Nutrition · Apps (each keeps its own TAB_ number for "selected").
+        // Activities lives inside Fitness (a Fitness | Activities switch at the top of both).
         val showLife = LifeTab.on(act) || selected == TAB_LIFE
-        val ids = listOfNotNull(TAB_TODAY, if (showLife) TAB_LIFE else null, TAB_FITNESS, TAB_NUTRITION, TAB_RUNS)
+        val fitnessSide = selected == TAB_FITNESS || selected == TAB_RUNS
+        val ids = listOfNotNull(TAB_TODAY, if (showLife) TAB_LIFE else null, TAB_FITNESS, TAB_NUTRITION, TAB_APPS)
         val tabs = listOfNotNull<Triple<String, String, Class<*>?>>(
             Triple("Today", "☀", RunsActivity::class.java),
             if (showLife) Triple("Life", "clock", LifeActivity::class.java) else null,
-            Triple("Fitness", "♥", FitnessActivity::class.java),
+            Triple("Fitness", "♥", lastFitnessSide(act)),
             Triple("Nutrition", "🍎", NutritionActivity::class.java),
-            Triple("Activities", "≡", ActivitiesActivity::class.java),
+            Triple("Apps", "▦", AppsActivity::class.java),
         )
         val bar = LinearLayout(act).apply {
             orientation = LinearLayout.HORIZONTAL
             setBackgroundColor(0xFF0E1412.toInt())
             setPadding(dp(act, 6), dp(act, 6), dp(act, 6), dp(act, 6))
             tabs.forEachIndexed { i, (name, glyph, cls) ->
-                val on = ids[i] == selected
+                val on = ids[i] == selected || (ids[i] == TAB_FITNESS && fitnessSide)
                 addView(LinearLayout(act).apply {
                     orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER
                     if (glyph == "clock") addView(android.widget.ImageView(act).apply {
@@ -189,11 +223,7 @@ object RunUi {
                         setPadding(0, dp(act, 3), 0, dp(act, 3))
                     }, LinearLayout.LayoutParams(dp(act, 54), WRAP_CONTENT))
                     addView(text(act, name, if (on) Color.WHITE else MUTED, 11f, on).apply { gravity = Gravity.CENTER; setPadding(0, dp(act, 2), 0, 0) })
-                    if (!on) setOnClickListener {
-                        if (cls == null) return@setOnClickListener
-                        act.startActivity(android.content.Intent(act, cls).addFlags(android.content.Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or android.content.Intent.FLAG_ACTIVITY_NO_ANIMATION))
-                        @Suppress("DEPRECATION") act.overridePendingTransition(0, 0)
-                    }
+                    if (!on) setOnClickListener { if (cls != null) go(act, cls) }
                 }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
             }
             // Stay above the phone's own navigation buttons.
@@ -205,6 +235,11 @@ object RunUi {
         val line = View(act).apply { setBackgroundColor(0x22FFFFFF) }
         return LinearLayout(act).apply {
             orientation = LinearLayout.VERTICAL; setBackgroundColor(BG)
+            if (fitnessSide) {
+                addView(fitnessSwitch(act, selected == TAB_RUNS))
+                // The switch already sits below the status bar, so the page's own top gap can shrink.
+                ((content as? android.widget.ScrollView)?.getChildAt(0))?.let { c -> if (c.paddingTop > dp(act, 24)) c.setPadding(c.paddingLeft, dp(act, 8), c.paddingRight, c.paddingBottom) }
+            }
             addView(content, LinearLayout.LayoutParams(MATCH_PARENT, 0, 1f))
             addView(line, LinearLayout.LayoutParams(MATCH_PARENT, 1))
             addView(bar, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
