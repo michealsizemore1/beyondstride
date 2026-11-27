@@ -242,7 +242,8 @@ class RunSettingsListener : WearableListenerService() {
                     val input = com.google.android.gms.tasks.Tasks.await(Wearable.getDataClient(this).getFdForAsset(asset)).inputStream
                     val json = org.json.JSONObject(java.util.zip.GZIPInputStream(input).use { it.readBytes().toString(Charsets.UTF_8) })
                     val start = json.optLong("start")
-                    if (start > 0 && RunStore.list(this).none { it.nameWithoutExtension == "$start" }) {
+                    // New here, or trimmed (or put back) on the phone: save it.
+                    if (start > 0 && (json.has("trimmed") || json.has("untrimmed") || RunStore.list(this).none { it.nameWithoutExtension == "$start" })) {
                         RunStore.save(this, json)
                         // Already on the phone: don't send it back.
                         getSharedPreferences(RunSync.PREFS, 0).edit().putBoolean("$start", true).apply()

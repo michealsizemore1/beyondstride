@@ -217,6 +217,9 @@ class RunReceiverService : WearableListenerService() {
                 val text = GZIPInputStream(input).use { it.readBytes().toString(Charsets.UTF_8) }
                 val json = JSONObject(text)
                 val isNew = !PhoneRuns.file(this, json.optLong("start")).exists()
+                // ✂️ A run trimmed here isn't replaced by the watch's untrimmed copy.
+                val keepTrim = !isNew && !json.has("trimmed") && PhoneRuns.read(this, json.optLong("start"))?.has("trimmed") == true
+                if (keepTrim) { Tasks.await(Wearable.getDataClient(this).deleteDataItems(item.uri)); return@forEach }
                 PhoneRuns.save(this, json)
                 Tasks.await(Wearable.getDataClient(this).deleteDataItems(item.uri))
                 PhoneStatus.push(this)

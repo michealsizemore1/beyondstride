@@ -327,6 +327,22 @@ class RunDetailActivity : Activity() {
             })
         }
 
+        // ✂️ Trim: for when the watch kept recording after the run.
+        run.optJSONObject("trimmed")?.let { t ->
+            col.addView(RunUi.text(ctx, "✂️ Trimmed at ${RunMath.clock(t.optInt("cut"))} · was ${RunMath.miles(t.optDouble("origDistance"))} mi in ${RunMath.clock(t.optInt("origElapsed"))}", RunUi.MUTED, 12f).apply {
+                gravity = Gravity.CENTER; setPadding(0, dp(24), 0, 0) })
+            if (RunTrim.hasOriginal(ctx, start)) col.addView(RunUi.text(ctx, "Undo trim", RunUi.ACCENT, 14f, true).apply {
+                gravity = Gravity.CENTER; setPadding(0, dp(8), 0, 0)
+                setOnClickListener { AlertDialog.Builder(ctx).setTitle("Put the whole run back?").setMessage("The run goes back to how the watch recorded it.")
+                    .setPositiveButton("Undo trim") { _, _ -> if (RunTrim.undo(ctx, start)) PhoneRuns.read(ctx, start)?.let { render(it) } }
+                    .setNegativeButton("Cancel", null).show() } })
+        }
+        if (run.optJSONArray("samples")?.let { it.length() >= 20 } == true) col.addView(RunUi.text(this, "✂️ Trim run", RunUi.ACCENT, 15f, true).apply {
+            gravity = Gravity.CENTER
+            setPadding(0, dp(if (run.has("trimmed")) 12 else 24), 0, 0)
+            setOnClickListener { trimDialog(run) }
+        })
+
         col.addView(RunUi.text(this, "Delete this run", 0xFFE5484D.toInt(), 14f, true).apply {
             gravity = Gravity.CENTER
             setPadding(0, dp(24), 0, 0)
@@ -343,4 +359,68 @@ class RunDetailActivity : Activity() {
             addView(col, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
         }))
     }
+
+    /** ✂️ Pick where the run really ended: a speed chart with the cut line, a slider and what's left. */
+    private fun trimDialog(run: JSONObject) {
+        val ctx = this; fun dp(v: Int) = RunUi.dp(ctx, v)
+        val samples = run.optJSONArray("samples") ?: return
+        val n = samples.length()
+        val els = IntArray(n) { RunTrim.el(samples.getJSONArray(it)) }
+        val end = els.last().coerceAtLeast(1)
+        val suggest = RunTrim.suggest(run)
+        var cut = suggest ?: end
+        val info = RunUi.text(ctx, "", Color.WHITE, 14f, true)
+        val chart = object : android.view.View(ctx) {
+            val p = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
+            // 15-second average speed, as pace-ish height (faster = higher).
+            val sp = DoubleArray(n).also { a -> var sum = 0.0; for (i in 0 until n) { sum += samples.getJSONArray(i).optInt(3) / 100.0; if (i >= 15) sum -= samples.getJSONArray(i - 15).optInt(3) / 100.0; a[i] = sum / minOf(i + 1, 15) } }
+            val top = (sp.maxOrNull() ?: 1.0).coerceAtLeast(1.0)
+            override fun onDraw(c: android.graphics.Canvas) {
+                val w = width.toFloat(); val h = height.toFloat()
+                p.style = android.graphics.Paint.Style.STROKE; p.strokeWidth = dp(2).toFloat(); p.color = RunUi.ACCENT
+                val path = android.graphics.Path()
+                for (i in 0 until n) { val x = els[i] / end.toFloat() * w; val y = h - (sp[i] / top * (h - dp(6))).toFloat()
+                    if (i == 0) path.moveTo(x, y) else path.lineTo(x, y) }
+                c.drawPath(path, p)
+                val cx = cut / end.toFloat() * w
+                p.style = android.graphics.Paint.Style.FILL; p.color = 0x99000000.toInt(); c.drawRect(cx, 0f, w, h, p)
+                p.color = 0xFFE5484D.toInt(); c.drawRect(cx - dp(1), 0f, cx + dp(1), h, p)
+            }
+        }
+        val bar = android.widget.SeekBar(ctx).apply { max = end; progress = cut }
+        fun show() {
+            val i = els.indexOfLast { it <= cut }.coerceAtLeast(0); val s = samples.getJSONArray(i)
+            val mv = s.optInt(0); val m = s.optInt(1) / 10.0
+            info.text = "End at ${RunMath.clock(cut)}  ·  ${RunMath.miles(m)} mi  ·  ${RunMath.paceFor(mv, m)} /mi\n" +
+                "Cuts off ${RunMath.clock(end - cut)} and ${RunMath.miles((samples.getJSONArray(n - 1).optInt(1) / 10.0 - m).coerceAtLeast(0.0))} mi"
+            chart.invalidate()
+        }
+        bar.setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(sb: android.widget.SeekBar, v: Int, fromUser: Boolean) { cut = v; show() }
+            override fun onStartTrackingTouch(sb: android.widget.SeekBar) {}
+            override fun onStopTrackingTouch(sb: android.widget.SeekBar) {}
+        })
+        // Fine-tune by 5 seconds.
+        val fine = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER
+            listOf("−1 min" to -60, "−5 s" to -5, "+5 s" to 5, "+1 min" to 60).forEach { (l, d) ->
+                addView(RunUi.text(ctx, l, RunUi.ACCENT, 13f, true).apply { setPadding(dp(10), dp(6), dp(10), dp(6))
+                    setOnClickListener { cut = (cut + d).coerceIn(0, end); bar.progress = cut; show() } }) } }
+        val box = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(20), dp(8), dp(20), 0)
+            addView(RunUi.text(ctx, if (suggest != null) "Looks like you stopped running at ${RunMath.clock(suggest)}. Slide the red line to where the run really ended; everything after it is removed." else "Slide the red line to where the run really ended; everything after it is removed.", RunUi.MUTED, 12f))
+            addView(chart, LinearLayout.LayoutParams(MATCH_PARENT, dp(120)).apply { topMargin = dp(10) })
+            addView(bar, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(6) })
+            addView(fine)
+            addView(info.apply { setPadding(0, dp(6), 0, 0) })
+            addView(RunUi.text(ctx, "Distance, time, pace, heart rate, power, zones, laps, splits and the map are worked out again. You can undo it.", RunUi.DIM, 11f).apply { setPadding(0, dp(8), 0, 0) })
+        }
+        show()
+        AlertDialog.Builder(ctx, android.R.style.Theme_DeviceDefault_Dialog_Alert).setTitle("✂️ Trim run").setView(box)
+            .setPositiveButton("Trim") { _, _ ->
+                if (cut >= end) return@setPositiveButton
+                if (RunTrim.apply(ctx, start, cut)) { android.widget.Toast.makeText(ctx, "Run trimmed", android.widget.Toast.LENGTH_SHORT).show(); PhoneRuns.read(ctx, start)?.let { render(it) } }
+                else android.widget.Toast.makeText(ctx, "That would leave too little of the run", android.widget.Toast.LENGTH_SHORT).show()
+            }
+            .setNegativeButton("Cancel", null).show()
+    }
+
 }
