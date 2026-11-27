@@ -1135,7 +1135,7 @@ class LifeActivity : Activity() {
     }
 
     /**
-     * ❤️ Wellness — laid out like the Command Center's Wellness page: BP (💓 pulse, 🫀 morning HR), Meds, Weight, Sleep
+     * ❤️ Wellness — laid out like the Command Center's Wellness page: BP (💓 pulse, 🫀 morning HR, 💤 sleeping HR), Meds, Weight, Sleep
      * (⌛ score + 😴 BeyondStride's night), 🧘 Daily Movement (dog walk, steps), then the 60-day BP & pulse and weight charts.
      */
     private inner class WellnessCard {
@@ -1150,6 +1150,18 @@ class LifeActivity : Activity() {
         private var chartsAt = 0L
         private fun d(v: Int) = RunUi.dp(this@LifeActivity, v)
         private val RED = 0xFFF87171.toInt(); private val GREEN = 0xFF4ADE80.toInt()
+        private val sleepHrText = RunUi.text(this@LifeActivity, "", Color.WHITE, 15f)
+        private fun fillSleepHr() {
+            val day = java.time.LocalDate.now().toString()
+            val low = SleepLowHr.get(this@LifeActivity, day)
+            val avg = try { io.github.michealsizemore1.beyondstride.ReadinessSync.nights(this@LifeActivity).lastOrNull { it.day == day && it.sleepHr > 0 }?.sleepHr ?: 0 } catch (e: Exception) { 0 }
+            sleepHrText.text = when {
+                low > 0 -> "$low bpm lowest" + if (avg > 0) "  ·  $avg avg low" else ""
+                avg > 0 -> "$avg bpm (avg of lowest)"
+                else -> "— (fills in after the watch's sleep syncs)"
+            }
+            sleepHrText.setTextColor(if (low > 0 || avg > 0) Color.WHITE else RunUi.DIM)
+        }
         init {
             card.addView(LinearLayout(this@LifeActivity).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL
                 addView(RunUi.text(this@LifeActivity, "❤️ Wellness", RED, 18f, true), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
@@ -1190,6 +1202,12 @@ class LifeActivity : Activity() {
             row("wBP", "BP:", Color.WHITE, "wBPVal", "120/80")
             row(null, "💓 Pulse:", RunUi.MUTED, "wPulseVal", "bpm", true)
             row(null, "🫀 Morning HR:", RunUi.MUTED, "wRestHRVal", "bpm", true)
+            // 💤 Sleeping HR: last night's lowest reading (filled in from the watch's sleep; tap for the details).
+            card.addView(LinearLayout(this@LifeActivity).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL; setPadding(d(38), d(5), 0, d(5))
+                addView(RunUi.text(this@LifeActivity, "💤 Sleeping HR:", RunUi.MUTED, 14f).apply { setPadding(0, 0, d(8), 0) })
+                addView(sleepHrText.apply { background = RunUi.rounded(0xFF26302C.toInt(), d(8).toFloat()); setPadding(d(10), d(8), d(10), d(8)) },
+                    LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+                setOnClickListener { startActivity(Intent(this@LifeActivity, ReadinessActivity::class.java)) } })
             row("wMeds", "Meds:", Color.WHITE, "wMedsVal", "HCTZ, Vitamins…")
             row("wWght", "Weight:", Color.WHITE, "wWghtVal", "lbs")
             row("wSleep", "Sleep:", Color.WHITE, "wSleepVal", "hrs (7.5 or 6:30)")
@@ -1213,6 +1231,7 @@ class LifeActivity : Activity() {
                 for (i in 0 until f.length()) { val o = f.getJSONObject(i); edits[o.optString("id")]?.let { if (!it.hasFocus() && it.text.toString() != o.optString("value")) it.setText(o.optString("value")) } }
             }
             moveCount.text = "${listOf("exDogWalk", "exStepsCheck").count { states[it] == "green" }}/2"
+            fillSleepHr()
             val sd = j.optString("sleepDetail"); sleepDetail.text = sd; sleepDetail.visibility = if (sd.isBlank()) View.GONE else View.VISIBLE
             if (System.currentTimeMillis() - chartsAt > 60_000) { chartsAt = System.currentTimeMillis(); loadCharts() }
         }

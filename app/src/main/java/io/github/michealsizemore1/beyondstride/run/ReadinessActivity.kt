@@ -109,6 +109,8 @@ object SleepData {
                     val bpm = runBlocking {
                         client.readRecords(ReadRecordsRequest(HeartRateRecord::class, TimeRangeFilter.between(first, last))).records
                     }.flatMap { r -> r.samples.map { it.beatsPerMinute.toInt() } }.filter { it in 30..150 }.sorted()
+                    // 💤 The single lowest reading of the night, for Life → Wellness.
+                    if (bpm.size >= 4) SleepLowHr.save(ctx, day, bpm.first())
                     if (bpm.size >= 4) bpm.take(maxOf(2, bpm.size / 4)).average().toInt() else 0
                 } catch (e: Exception) { 0 } else 0
                 val hrv = hrvRecs.filter { it.time >= first.minus(30, ChronoUnit.MINUTES) && it.time <= last.plus(30, ChronoUnit.MINUTES) }
