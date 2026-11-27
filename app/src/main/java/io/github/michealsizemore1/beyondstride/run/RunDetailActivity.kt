@@ -32,6 +32,8 @@ class RunDetailActivity : Activity() {
         super.onResume()
         val run = PhoneRuns.read(this, start) ?: run { finish(); return }
         render(run)
+        // Opened from Activities → ✂️ Trim run: show the trim picker straight away (once).
+        if (intent.getBooleanExtra("trim", false)) { intent.removeExtra("trim"); window.decorView.post { trimDialog(run) } }
     }
 
     private var weatherTried = false

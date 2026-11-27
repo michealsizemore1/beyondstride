@@ -489,6 +489,9 @@ class ActivitiesActivity : Activity() {
                 layoutParams = LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { marginEnd = dp(6) }; setOnClickListener { go() } })
             b("📝") { quickNote(a) }
             b("✏") { startActivity(Intent(ctx, ActivityEditActivity::class.java).putExtra("id", id)) }
+            // ✂️ Trim a watch run (when the watch kept recording after the run).
+            S.idOf(a).toLongOrNull()?.takeIf { PhoneRuns.file(ctx, it).exists() }?.let { st ->
+                b("✂️") { startActivity(Intent(ctx, RunDetailActivity::class.java).putExtra("start", st).putExtra("trim", true)) } }
             b("✕") { AlertDialog.Builder(ctx).setMessage("Delete this activity?").setPositiveButton("Delete") { _, _ -> S.delete(ctx, a.get("id")); chosen -= id; render() }.setNegativeButton("Cancel", null).show() }
         })
         return outer

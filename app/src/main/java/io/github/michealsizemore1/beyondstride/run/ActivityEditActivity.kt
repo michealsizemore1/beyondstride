@@ -99,6 +99,12 @@ class ActivityEditActivity : Activity() {
             col.addView(RunUi.compactRow(this, "🧠", "Ask Coach about this run", "Coach AI with this run picked", 0xFF2A2140.toInt()) {
                 startActivity(android.content.Intent(this, CoachActivity::class.java).putExtra("runId", CoachAi.id(run))) })
         }
+        // ✂️ Trim run: for a watch run, when the watch kept recording after the run. It opens the run's own page with the
+        // trim picker (this edit screen closes, so its old numbers can't be saved back over the trimmed ones).
+        orig?.let { S.idStr(it.opt("id")).toLongOrNull() }?.takeIf { PhoneRuns.file(this, it).exists() }?.let { start ->
+            col.addView(RunUi.compactRow(this, "✂️", "Trim run", "Cut off the end if the watch kept recording", 0xFF2A3430.toInt()) {
+                startActivity(android.content.Intent(this, RunDetailActivity::class.java).putExtra("start", start).putExtra("trim", true)); finish() })
+        }
         setContentView(ScrollView(this).apply { setBackgroundColor(RunUi.BG); addView(col, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT)) })
     }
 
