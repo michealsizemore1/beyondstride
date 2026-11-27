@@ -120,7 +120,7 @@ class RunDetailActivity : Activity() {
                 )))
                 addView(RunUi.text(ctx, "How much your heart rate drifted up against the same power/pace from the first half " +
                     "to the second (warm-up left out, ${d.minutes} min analyzed). " +
-                    (if (q) "This is a quality run, so the goal is 5–10%: some drift is expected at tempo effort and harder." else "This is an easy run, so the goal is 5% or under: a strong aerobic base keeps heart rate steady.") +
+                    (if (q) "This is a quality run, so the number is for reference only: heart rate is meant to climb at tempo effort and harder, so decoupling doesn't measure your aerobic base here. Judge it by the execution score (did you hold the target pace or power?)." else "This is an easy run, so the goal is 5% or under: a strong aerobic base keeps heart rate steady.") +
                     (if (!d.steady) " This run's effort was uneven (intervals or hills), so the number is less meaningful." else "") +
                     (run.optJSONObject("weather")?.optLong("tempF")?.takeIf { it >= 75 }?.let { " It was ${it}°F — heat raises drift." } ?: ""),
                     RunUi.MUTED, 12f).apply { setPadding(0, dp(8), 0, 0) })

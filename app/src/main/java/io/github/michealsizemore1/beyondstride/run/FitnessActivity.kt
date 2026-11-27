@@ -223,7 +223,7 @@ class FitnessActivity : Activity() {
             }
         }
 
-        // 🎯 Aerobic decoupling vs your goals: easy / long runs ≤ 5%, quality runs (tempo, threshold, intervals…) 5–10%.
+        // 🎯 Aerobic decoupling vs your goal: easy / long runs ≤ 5%. Quality runs aren't included (reference only on their own page).
         run {
             val D = io.github.michealsizemore1.beyondstride.Decoupling
             data class P(val start: Long, val pct: Double, val quality: Boolean)
@@ -231,16 +231,15 @@ class FitnessActivity : Activity() {
                 val d = D.of(r) ?: return@mapNotNull null; val m = d.main ?: return@mapNotNull null
                 if (d.minutes < 20) return@mapNotNull null
                 val q = D.isQuality(r)
-                // Easy runs must be steady to count; a tempo with a warm-up and cool-down can look uneven, so quality runs count either way.
-                if (!q && !d.steady) return@mapNotNull null
+                if (q || !d.steady) return@mapNotNull null   // easy, steady runs only
                 P(r.optLong("start"), m, q)
             }
             if (all.isNotEmpty()) {
                 col.addView(RunUi.section(this, "AEROBIC DECOUPLING"))
                 col.addView(RunUi.card(this).apply {
-                    addView(RunUi.text(ctx, "How much heart rate drifts up against the same power or pace, first half to second. Goals: easy runs 5% or under; quality runs 5–10%.", RunUi.MUTED, 12f))
+                    addView(RunUi.text(ctx, "How much heart rate drifts up against the same power or pace, first half to second, on steady easy and long runs. Goal: 5% or under.", RunUi.MUTED, 12f))
                     val now = System.currentTimeMillis()
-                    listOf(false to "🟢 Easy & long runs", true to "🔥 Quality runs (tempo, threshold, intervals…)").forEach { (q, title) ->
+                    listOf(false to "🟢 Easy & long runs").forEach { (q, title) ->
                         val pts = all.filter { it.quality == q }.take(10)
                         addView(LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL; setPadding(0, dp(14), 0, 0)
                             addView(RunUi.text(ctx, title, Color.WHITE, 14f, true), LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
@@ -278,7 +277,7 @@ class FitnessActivity : Activity() {
                         }
                         addView(chart, LinearLayout.LayoutParams(MATCH_PARENT, dp(110)).apply { topMargin = dp(6) })
                     }
-                    addView(RunUi.text(ctx, "A run counts as quality when its planned workout is a tempo, threshold, interval, hill, progression or race (or it was run at 0.85+ intensity). Easy runs need a steady effort to count.", RunUi.DIM, 11f).apply { setPadding(0, dp(10), 0, 0) })
+                    addView(RunUi.text(ctx, "Quality runs (tempo, threshold, intervals, hills, progression, races, or 0.85+ intensity) are left out: heart rate is meant to climb at those efforts. Judge them by their execution score.", RunUi.DIM, 11f).apply { setPadding(0, dp(10), 0, 0) })
                 })
             }
         }

@@ -90,7 +90,7 @@ object CoachAi {
         val start = S.idOf(a).toLongOrNull() ?: return null
         val run = PhoneRuns.file(ctx, start).takeIf { it.exists() }?.let { PhoneRuns.read(it) } ?: return null
         val out = ArrayList<String>()
-        io.github.michealsizemore1.beyondstride.Decoupling.of(run)?.let { d -> d.main?.let { m -> out += "decoupling ${f1(m)}% (${io.github.michealsizemore1.beyondstride.Decoupling.goal(io.github.michealsizemore1.beyondstride.Decoupling.isQuality(run))})" + (d.pwHr?.let { " (power:HR ${f1(it)}%" } ?: " (") + (d.paHr?.let { " pace:HR ${f1(it)}%" } ?: "") + ", HR ${d.hr1}→${d.hr2}, ${d.minutes} min" + (if (!d.steady) ", uneven effort" else "") + ")" } }
+        io.github.michealsizemore1.beyondstride.Decoupling.of(run)?.let { d -> d.main?.let { m -> out += "decoupling ${f1(m)}% (${if (io.github.michealsizemore1.beyondstride.Decoupling.isQuality(run)) "quality run: reference only, don't grade it" else "easy run: goal 5% or under"})" + (d.pwHr?.let { " (power:HR ${f1(it)}%" } ?: " (") + (d.paHr?.let { " pace:HR ${f1(it)}%" } ?: "") + ", HR ${d.hr1}→${d.hr2}, ${d.minutes} min" + (if (!d.steady) ", uneven effort" else "") + ")" } }
         ExecScores.forRun(ctx, start)?.let { out += "execution score ${it.score}/100 (${it.label})" }
         run.optInt("maxHr").takeIf { it > 0 }?.let { out += "max HR $it" }
         run.optInt("maxPower").takeIf { it > 0 }?.let { out += "max power $it W" }

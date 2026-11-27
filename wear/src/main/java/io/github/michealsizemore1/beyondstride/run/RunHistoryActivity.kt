@@ -238,7 +238,7 @@ object RunViews {
                 d.pwHr?.let { addView(stat("Power : HR", io.github.michealsizemore1.beyondstride.Decoupling.text(it))) }
                 d.paHr?.let { addView(stat("Pace : HR", io.github.michealsizemore1.beyondstride.Decoupling.text(it))) }
                 addView(stat("Heart rate", "${d.hr1} → ${d.hr2}"))
-                addView(label(ctx, "Goal: " + io.github.michealsizemore1.beyondstride.Decoupling.goal(q) + ".", MUTED, 9f))
+                addView(label(ctx, if (q) "Quality run: reference only." else "Goal: 5% or under.", MUTED, 9f))
             })
         }
         json.optDouble("avgStride").takeIf { !it.isNaN() && it > 0 }?.let { st ->

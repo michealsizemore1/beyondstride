@@ -51,7 +51,7 @@ object Summary {
         dec.of(run)?.let { d ->
             d.main?.let { m ->
                 section("AEROBIC DECOUPLING", listOfNotNull(
-                    "${dec.text(m)} · ${dec.rating(m, dec.isQuality(run))} (${dec.goal(dec.isQuality(run))})" + (if (!d.steady) " (uneven effort)" else ""),
+                    if (dec.isQuality(run)) "${dec.text(m)} · ${dec.REF_NOTE}" else "${dec.text(m)} · ${dec.rating(m)} (${dec.goal(false)})" + (if (!d.steady) " (uneven effort)" else ""),
                     listOfNotNull(d.pwHr?.let { "Pw:HR ${dec.text(it)}" }, d.paHr?.let { "Pa:HR ${dec.text(it)}" }).joinToString(" · ").ifBlank { null },
                     "HR ${d.hr1} → ${d.hr2} over ${d.minutes} min",
                 ))

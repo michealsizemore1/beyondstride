@@ -6,7 +6,7 @@ import kotlin.math.sqrt
 
 /**
  * Aerobic decoupling: how much heart rate drifts up against pace (Pa:HR) and against Stryd power
- * (Pw:HR) from the first half of a run to the second. Goals: easy runs 5% or under; quality runs 5–10%.
+ * (Pw:HR) from the first half of a run to the second. Goal: easy runs 5% or under; quality runs aren't graded (reference only).
  * The warm-up is left out; only moving seconds with a heart rate count.
  */
 object Decoupling {
@@ -26,7 +26,8 @@ object Decoupling {
         }
     }
 
-    // 🎯 Goals (Nov 26 2026, your call): easy / long runs ≤ 5%; quality runs (tempo, threshold, intervals, races…) 5–10%.
+    // 🎯 Goal (Nov 26 2026, your call): easy / long runs 5% or under. Quality runs (tempo, threshold, intervals, races…)
+    // aren't graded: heart rate is meant to climb at those efforts, so decoupling there is shown for reference only.
     private val QUALITY = Regex("\\b(tempo|threshold|lt|cruise|interval|intervals|repeats?|reps|fartlek|progression|race|racing|time trial|tt|hills?|hill repeats|vo2|speed|track|marathon pace|mp|half marathon pace|hmp|10k pace|5k pace|steady state|quality)\\b", RegexOption.IGNORE_CASE)
     private val EASY = Regex("\\b(easy|recovery|long run|long|base|aerobic|zone 2|z2|shakeout|jog)\\b", RegexOption.IGNORE_CASE)
     /** A quality run: the planned workout's (or run's) name says so, else an intensity of 0.85+ (tempo effort or harder). */
@@ -36,19 +37,18 @@ object Decoupling {
         if (EASY.containsMatchIn(name)) return false
         val inten = run.optDouble("intensity"); return !inten.isNaN() && inten >= 0.85
     }
-    fun goal(quality: Boolean) = if (quality) "goal 5–10% (quality run)" else "goal 5% or under (easy run)"
-    fun goalShort(quality: Boolean) = if (quality) "5–10%" else "≤5%"
-    fun onTarget(pct: Double, quality: Boolean) = if (quality) pct <= 10 else pct <= 5
+    const val REF_NOTE = "for reference only — not meaningful for quality workouts"
+    fun goal(quality: Boolean) = if (quality) "not graded on quality runs" else "goal 5% or under"
+    fun goalShort(quality: Boolean) = if (quality) "—" else "≤5%"
+    fun onTarget(pct: Double, quality: Boolean = false) = !quality && pct <= 5
     fun rating(pct: Double, quality: Boolean = false) = when {
+        quality -> "Reference only"
         pct < 0 -> "No drift"
-        !quality && pct <= 5 -> "On target"
-        !quality && pct <= 10 -> "Some drift"
-        quality && pct < 5 -> "Under target"
-        quality && pct <= 10 -> "On target"
-        quality && pct <= 15 -> "Above target"
+        pct <= 5 -> "On target"
+        pct <= 10 -> "Some drift"
         else -> "High drift"
     }
-    fun color(pct: Double, quality: Boolean = false) = if (quality) when { pct <= 10 -> 0xFF22C55E.toInt(); pct <= 15 -> 0xFFEAB308.toInt(); else -> 0xFFEF4444.toInt() }
+    fun color(pct: Double, quality: Boolean = false) = if (quality) 0xFF94A3B8.toInt()
         else when { pct <= 5 -> 0xFF22C55E.toInt(); pct <= 10 -> 0xFFEAB308.toInt(); else -> 0xFFEF4444.toInt() }
     fun text(pct: Double) = String.format(Locale.US, "%.1f%%", pct)
 
