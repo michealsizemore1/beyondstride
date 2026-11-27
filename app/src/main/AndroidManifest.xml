@@ -34,6 +34,8 @@
     <!-- 🏖️ Today → Retirement: the Retirement Planner's headline numbers (asked for on the Retirement card) -->
     <uses-permission android:name="com.sizemore.retirement.READ_SUMMARY" />
     <uses-permission android:name="com.sizemore.health.READ_SUMMARY" />
+    <uses-permission android:name="com.sizemore.dates.READ_SUMMARY" />
+    <uses-permission android:name="com.sizemore.upkeep.READ_SUMMARY" />
 
     <!-- 📱 Life → More → My apps: open the owner's other apps -->
     <queries>
@@ -54,6 +56,8 @@
         <package android:name="com.sizemore.books" />
         <package android:name="com.sizemore.records" />
         <package android:name="com.sizemore.health" />
+        <package android:name="com.sizemore.dates" />
+        <package android:name="com.sizemore.upkeep" />
     </queries>
 
     <application

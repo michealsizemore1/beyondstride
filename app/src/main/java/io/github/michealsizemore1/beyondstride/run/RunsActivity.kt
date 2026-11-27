@@ -144,7 +144,7 @@ open class RunsActivity : Activity() {
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == 86) dayPermsDone()
-        if (requestCode == TodaySpending.REQ || requestCode == TodayRetirement.REQ || requestCode == TodayHealth.REQ) render()
+        if (requestCode == TodaySpending.REQ || requestCode == TodayRetirement.REQ || requestCode == TodayHealth.REQ || requestCode == TodayComingUp.REQ) render()
     }
     @Deprecated("") override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         @Suppress("DEPRECATION") super.onActivityResult(requestCode, resultCode, data)
@@ -326,6 +326,12 @@ open class RunsActivity : Activity() {
             orientation = LinearLayout.VERTICAL
             layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { bottomMargin = dp(8) }
             TodayHealth.fill(this@RunsActivity, this)
+        })
+        // 📅 Coming up from Dates & Docs and Vehicle Upkeep (only when one is installed).
+        if (TodayComingUp.anyInstalled(this) && TodayComingUp.shown(this)) col.addView(RunUi.card(this).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { bottomMargin = dp(8) }
+            TodayComingUp.fill(this@RunsActivity, this)
         })
         // 🌤 Weather.
         col.addView(RunUi.card(this).apply {

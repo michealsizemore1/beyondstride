@@ -69,6 +69,8 @@ object SysHealth {
         if (try { ctx.packageManager.getPackageInfo(TodayRetirement.PKG, 0); true } catch (e: Exception) { false })
             list += Check("🏖️", "Retirement Planner", TodayRetirement.read(ctx)?.second ?: 0L, 24.0 * 30, false, fix = "Open Retirement Planner once.")
         if (TodayHealth.installed(ctx)) list += Check("❤️", "Health Records", TodayHealth.read(ctx)?.second ?: 0L, 24.0 * 30, false, fix = "Open Health Records once.")
+        TodayComingUp.SOURCES.filter { TodayComingUp.installed(ctx, it) }.forEach { s ->
+            list += Check(s.icon, s.name, TodayComingUp.read(ctx, s)?.second ?: 0L, 24.0 * 30, false, fix = "Open ${s.name} once (and tap Allow on Today's Coming up card).") }
         val start = p(ctx).getLong("start", 0L).let { if (it == 0L) System.currentTimeMillis().also { n -> p(ctx).edit().putLong("start", n).apply() } else it }
         list.forEach { it.start = start }
         return list
@@ -207,6 +209,7 @@ class SystemHealthActivity : Activity() {
         })
         sw("Warn me when something stops", "A red line on Today and at most one notification a day (phone only)", SysHealth.warnOn(this)) { SysHealth.setWarn(this, it) }
         sw("Track which screens I use", "Stays on this phone; only used for the list above", SysHealth.trackOn(this)) { SysHealth.setTrack(this, it) }
+        if (TodayComingUp.anyInstalled(this)) sw("Coming up card on Today", "From Dates & Docs and Vehicle Upkeep", TodayComingUp.shown(this)) { TodayComingUp.setShown(this, it) }
         if (TodayHealth.installed(this)) sw("Health card on Today", "From the Health Records app", TodayHealth.shown(this)) { TodayHealth.setShown(this, it) }
 
         setContentView(ScrollView(this).apply { setBackgroundColor(RunUi.BG); addView(col) })
