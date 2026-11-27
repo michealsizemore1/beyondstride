@@ -48,6 +48,7 @@
         <package android:name="com.sizemore.nfl" />
         <package android:name="com.sizemore.nhl" />
         <package android:name="com.sizemore.trackfield" />
+        <package android:name="com.sizemore.xc" />
     </queries>
 
     <application
