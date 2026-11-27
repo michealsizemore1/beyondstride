@@ -45,6 +45,7 @@
         <package android:name="com.sizemore.cookbook" />
         <package android:name="com.sizemore.top25" />
         <package android:name="com.sizemore.thew" />
+        <package android:name="com.sizemore.nfl" />
     </queries>
 
     <application
