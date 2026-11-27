@@ -186,7 +186,7 @@ class LifeActivity : Activity() {
             Triple("🧘", "Meditate", "meditate") to "Guided timer, scripture, session log",
             Triple("❤️", "Wellness", "wellness") to "BP + report, meds, weight, sleep, movement",
             Triple("🧠", "Brain Games", "brain") to "Memory, focus and quick math, a daily workout",
-            Triple("🧰", "Tools", "tools") to "Journal search, Ask AI, your files and the full view")
+            Triple("🧰", "Tools", "tools") to "Search everything, Ask AI about everything, files, full view")
         items.chunked(2).forEach { row ->
             col.addView(LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; setPadding(0, d(8), 0, 0)
                 row.forEachIndexed { i, (t, desc) ->

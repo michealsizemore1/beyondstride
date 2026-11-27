@@ -35,7 +35,7 @@ import java.util.Locale
 
 /**
  * 🗂️ The Life tab's "More" page — the rest of the Command Center as BeyondStride screens:
- * 🔍 journal search · 💬 Ask AI + saved answers · 🩺 BP report · 📁 files · ⚙️ settings (the 🧘 meditation timer is built here but shown in ☰ Tabs → Meditate).
+ * 🔍 search everything · 💬 Ask AI about everything + saved answers · 🩺 BP report · 📁 files · ⚙️ settings (the 🧘 meditation timer is built here but shown in ☰ Tabs → Meditate).
  * Everything reads and changes the Command Center's own data through window.ccNative.
  */
 class LifeMore(private val act: Activity, private val web: WebView, private val needKey: () -> Unit, private val openFull: () -> Unit = {}) {
@@ -70,8 +70,8 @@ class LifeMore(private val act: Activity, private val web: WebView, private val 
             if (card.parent == null) { card.getChildAt(0)?.visibility = View.GONE; card.background = null; card.setPadding(0, 0, 0, 0)
                 card.layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT); b.addView(card) } }
         col.addView(LifeUi.FoldGroup(act, listOf(
-            fold("search", "🔍 Search your journal", searchCard()),
-            fold("ask", "💬 Ask AI about your journal", askCard()),
+            fold("search", "🔍 Search everything", searchCard()),
+            fold("ask", "💬 Ask AI about everything", askCard()),
             fold("files", "📁 Files", filesCard()),
             fold("settings", "⚙️ Settings", settings),
             fold("full", "📓 Full view", fullCard()))).view)
@@ -95,22 +95,33 @@ class LifeMore(private val act: Activity, private val web: WebView, private val 
         addView(RunUi.button(act, "Open full view", 0xFF374151.toInt(), Color.WHITE) { openFull() }, lp())
     }
 
-    // ── 🔍 Search ──
+    // ── 🔍 Search everything (Nov 27 2026): the Life journal (the page's search) plus the rest of BeyondStride (AppSearch). ──
     private val results = LinearLayout(act).apply { orientation = LinearLayout.VERTICAL }
+    private fun journalHits(text: String, cb: (List<AppSearch.Hit>) -> Unit) =
+        js("ccNative.search(${JSONObject.quote(text)})") { r ->
+            val arr = try { JSONArray(str(r)) } catch (e: Exception) { JSONArray() }
+            cb((0 until arr.length()).map { arr.getJSONObject(it) }.map { AppSearch.Hit(it.optString("date"), "Journal · " + it.optString("where"), it.optString("text")) })
+        }
     private fun searchCard() = RunUi.card(act).apply {
-        title(this, "🔍 Search your journal")
-        val q = input("Search days, reviews, Bible notes, runs…").apply { imeOptions = EditorInfo.IME_ACTION_SEARCH }
+        title(this, "🔍 Search everything")
+        val q = input("Search journal, reviews, Bible notes, activities, food, notes, workouts, Coach AI…").apply { imeOptions = EditorInfo.IME_ACTION_SEARCH }
         fun run() {
             val text = q.text.toString(); if (text.trim().length < 2) return
-            js("ccNative.search(${JSONObject.quote(text)})") { r ->
-                val arr = try { JSONArray(str(r)) } catch (e: Exception) { JSONArray() }
-                results.removeAllViews()
-                results.addView(RunUi.text(act, if (arr.length() == 0) "Nothing found for \"$text\"." else "${arr.length()} result${if (arr.length() == 1) "" else "s"}", RunUi.MUTED, 12f).apply { setPadding(0, d(8), 0, d(2)) })
-                for (i in 0 until arr.length()) { val o = arr.getJSONObject(i)
-                    results.addView(LinearLayout(act).apply { orientation = LinearLayout.VERTICAL; setPadding(d(10), d(8), d(10), d(8)); background = RunUi.rounded(0xFF26302C.toInt(), d(10).toFloat())
-                        addView(RunUi.text(act, o.optString("date") + " · " + o.optString("where"), RunUi.ACCENT, 12f, true))
-                        addView(RunUi.text(act, o.optString("text"), Color.WHITE, 13f)) }, lp(6))
-                }
+            results.removeAllViews(); results.addView(RunUi.text(act, "Searching…", RunUi.MUTED, 12f).apply { setPadding(0, d(8), 0, d(2)) })
+            journalHits(text) { jh ->
+                val app = act.applicationContext
+                Thread {
+                    val all = (jh + try { AppSearch.search(app, text) } catch (e: Exception) { emptyList() }).sortedByDescending { it.date }
+                    act.runOnUiThread {
+                        results.removeAllViews()
+                        results.addView(RunUi.text(act, if (all.isEmpty()) "Nothing found for \"$text\"." else "${all.size} result${if (all.size == 1) "" else "s"} · journal ${jh.size}, rest of the app ${all.size - jh.size}", RunUi.MUTED, 12f).apply { setPadding(0, d(8), 0, d(2)) })
+                        all.take(150).forEach { h ->
+                            results.addView(LinearLayout(act).apply { orientation = LinearLayout.VERTICAL; setPadding(d(10), d(8), d(10), d(8)); background = RunUi.rounded(0xFF26302C.toInt(), d(10).toFloat())
+                                addView(RunUi.text(act, listOf(h.date, h.where).filter { it.isNotBlank() }.joinToString(" · "), RunUi.ACCENT, 12f, true))
+                                addView(RunUi.text(act, h.text, Color.WHITE, 13f)) }, lp(6))
+                        }
+                    }
+                }.start()
             }
         }
         q.setOnEditorActionListener { _, _, _ -> run(); true }
@@ -119,25 +130,41 @@ class LifeMore(private val act: Activity, private val web: WebView, private val 
         addView(results)
     }
 
-    // ── 💬 Ask AI + saved answers ──
+    // ── 💬 Ask AI about everything + saved answers ──
     private val answer = RunUi.text(act, "", Color.WHITE, 14f).apply { setLineSpacing(0f, 1.25f) }
-    private val saveBtn = RunUi.button(act, "📁 Save answer", 0xFF374151.toInt(), Color.WHITE) { js("ccNative.askSave()") { loadArchive(); saveBtnDone() } }
+    private var lastQ = ""; private var lastA = ""
+    private val saveBtn = RunUi.button(act, "📁 Save answer", 0xFF374151.toInt(), Color.WHITE) {
+        val pr = act.getSharedPreferences("appask", 0)
+        val arr = try { JSONArray(pr.getString("saved", "[]")) } catch (e: Exception) { JSONArray() }
+        val n = JSONArray().put(JSONObject().put("ts", java.time.LocalDate.now().toString()).put("label", lastQ.take(80)).put("text", lastA))
+        for (i in 0 until minOf(arr.length(), 99)) n.put(arr.get(i))
+        pr.edit().putString("saved", n.toString()).apply(); loadArchive(); saveBtnDone() }
     private val archive = LinearLayout(act).apply { orientation = LinearLayout.VERTICAL }
     private fun saveBtnDone() { saveBtn.text = "✓ Saved"; saveBtn.isEnabled = false }
     private fun askCard() = RunUi.card(act).apply {
-        title(this, "💬 Ask AI about your journal")
-        val q = input("e.g. When did my knee start bothering me?", 2)
+        title(this, "💬 Ask AI about everything")
+        val q = input("e.g. When did my knee start bothering me, and what was I running then?", 2)
         addView(q, lp())
         addView(RunUi.button(act, "✨ Ask", 0xFF7C3AED.toInt(), Color.WHITE) {
             val text = q.text.toString().trim(); if (text.isEmpty()) return@button
-            js("ccNative.ask(${JSONObject.quote(text)})") { r ->
-                if (r.contains("nokey")) { needKey(); return@js }
-                answer.text = "✨ Reading your journal…"; saveBtn.visibility = View.GONE; ui.postDelayed(askPoll, 2500)
+            val app = act.applicationContext
+            if (!AiFood.hasKey(app)) { AlertDialog.Builder(act).setMessage("Ask AI about everything uses BeyondStride's own AI key. Add it in Settings → AI key.").setPositiveButton("OK", null).show(); return@button }
+            answer.text = "✨ Reading your journal and the rest of the app…"; saveBtn.visibility = View.GONE
+            // Journal matches for each important word in the question, then everything else (off the main thread).
+            val words = AppSearch.keywords(text)
+            val journal = java.util.Collections.synchronizedList(ArrayList<AppSearch.Hit>())
+            fun next(i: Int) {
+                if (i < words.size) { journalHits(words[i]) { journal.addAll(it); next(i + 1) }; return }
+                Thread {
+                    val a = try { AppSearch.ask(app, text, journal.distinct().sortedByDescending { it.date }) } catch (e: Exception) { "Couldn't get an answer: ${e.message}" }
+                    act.runOnUiThread { lastQ = text; lastA = a; answer.text = a; saveBtn.text = "📁 Save answer"; saveBtn.isEnabled = true; saveBtn.visibility = View.VISIBLE }
+                }.start()
             }
+            next(0)
         }, lp())
         addView(answer.apply { setPadding(0, d(10), 0, 0) })
         addView(saveBtn.apply { visibility = View.GONE }, lp())
-        addView(note("Uses the Command Center's Ask AI: all your days, reviews and runs."))
+        addView(note("Looks through your Life journal (days, reviews, Bible notes) and the rest of BeyondStride (activities, runs, plan, sleep, food, weight, notes, workouts, Coach AI). Uses BeyondStride's AI key."))
         addView(RunUi.text(act, "📁 Saved AI answers", RunUi.ACCENT, 13f, true).apply { setPadding(0, d(14), 0, d(2)) })
         addView(archive)
     }
@@ -156,7 +183,19 @@ class LifeMore(private val act: Activity, private val web: WebView, private val 
         js("ccNative.archive()") { r ->
             val arr = try { JSONArray(str(r)) } catch (e: Exception) { JSONArray() }
             archive.removeAllViews()
-            if (arr.length() == 0) archive.addView(RunUi.text(act, "None saved yet.", RunUi.MUTED, 12f))
+            // Answers saved from Ask AI about everything (kept on the phone), then the journal's earlier saved answers.
+            val pr = act.getSharedPreferences("appask", 0)
+            val mine = try { JSONArray(pr.getString("saved", "[]")) } catch (e: Exception) { JSONArray() }
+            for (i in 0 until mine.length()) { val o = mine.getJSONObject(i)
+                archive.addView(RunUi.text(act, "${o.optString("ts")} · ${o.optString("label")}\n${o.optString("text").take(110).replace('\n', ' ')}…", Color.WHITE, 13f).apply {
+                    setPadding(d(10), d(8), d(10), d(8)); background = RunUi.rounded(0xFF26302C.toInt(), d(10).toFloat())
+                    setOnClickListener { AlertDialog.Builder(act).setTitle(o.optString("label") + " · " + o.optString("ts")).setMessage(o.optString("text"))
+                        .setPositiveButton("Close", null).setNeutralButton("Delete") { _, _ ->
+                            val keep = JSONArray(); for (k in 0 until mine.length()) if (k != i) keep.put(mine.get(k))
+                            pr.edit().putString("saved", keep.toString()).apply(); loadArchive() }.show() }
+                }, lp(6))
+            }
+            if (arr.length() == 0 && mine.length() == 0) archive.addView(RunUi.text(act, "None saved yet.", RunUi.MUTED, 12f))
             for (i in 0 until minOf(arr.length(), 40)) { val o = arr.getJSONObject(i)
                 archive.addView(RunUi.text(act, "${o.optString("ts")} · ${o.optString("label")}\n${o.optString("text").take(110).replace('\n', ' ')}…", Color.WHITE, 13f).apply {
                     setPadding(d(10), d(8), d(10), d(8)); background = RunUi.rounded(0xFF26302C.toInt(), d(10).toFloat())
