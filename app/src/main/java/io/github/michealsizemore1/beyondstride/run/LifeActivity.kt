@@ -217,8 +217,10 @@ class LifeActivity : Activity() {
         // 📱 Shortcuts to your other apps (they open as their own apps, with their own app lock).
         col.addView(RunUi.text(this, "📱 My apps", Color.WHITE, 16f, true))
         col.addView(RunUi.text(this, "Your other apps. Tap one to open it (each keeps its own app lock).", RunUi.MUTED, 12f).apply { setPadding(0, d(4), 0, d(6)) })
-        // Two per row: your apps. (MSIZ Terminal is its own app now; if it isn't installed, the web page opens in Chrome.)
-        val tiles = MY_APPS
+        // Grouped by category, two per row. (MSIZ Terminal: if the app isn't installed, the web page opens in Chrome.)
+        APP_GROUPS.forEach { (heading, pkgs) ->
+        col.addView(RunUi.text(this, heading, RunUi.ACCENT, 13f, true).apply { setPadding(d(2), d(16), 0, 0) })
+        val tiles = pkgs.mapNotNull { p -> MY_APPS.firstOrNull { it.first == p } }
         tiles.chunked(2).forEach { row ->
             col.addView(LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; setPadding(0, d(8), 0, 0)
                 row.forEachIndexed { i, (pkg, name, emoji) ->
@@ -250,7 +252,14 @@ class LifeActivity : Activity() {
                 if (row.size == 1) addView(View(this@LifeActivity), LinearLayout.LayoutParams(0, 1, 1f))
             })
         }
+        }
     }
+    /** 🗂 The Apps tab's categories (Nov 27 2026), in order. Every app in MY_APPS belongs to one. */
+    private val APP_GROUPS = listOf(
+        "💰 Money & Business" to listOf("com.sizemore.mcmoney", "com.sizemore.retirement", "com.sizemore.msiz", "com.sizemore.ebay"),
+        "🏠 Home & Hobbies" to listOf("com.sizemore.benefits", "com.sizemore.cookbook", "com.sizemore.books", "com.sizemore.records", "com.sizemore.spanish"),
+        "🏟️ Sports" to listOf("com.sizemore.top25", "com.sizemore.nfl", "com.sizemore.nhl", "com.sizemore.thew"),
+        "🏃 Running & Athletics" to listOf("com.sizemore.trackfield", "com.sizemore.ncaatf", "com.sizemore.xc"))
     /** Your other apps (package, name, fallback icon). Listed in the manifest's <queries> so Android lets us open them. */
     private val MY_APPS = listOf(
         Triple("com.sizemore.mcmoney", "M&C Money", "💵"),
