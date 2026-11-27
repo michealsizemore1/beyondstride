@@ -258,8 +258,8 @@ class LifeActivity : Activity() {
     private val APP_GROUPS = listOf(
         "💰 Money & Business" to listOf("com.sizemore.mcmoney", "com.sizemore.retirement", "com.sizemore.msiz", "com.sizemore.ebay"),
         "🏠 Home & Hobbies" to listOf("com.sizemore.benefits", "com.sizemore.cookbook", "com.sizemore.books", "com.sizemore.records", "com.sizemore.spanish"),
-        "🏟️ Sports" to listOf("com.sizemore.top25", "com.sizemore.nfl", "com.sizemore.nhl", "com.sizemore.thew",
-            "com.sizemore.trackfield", "com.sizemore.ncaatf", "com.sizemore.xc"))
+        "🏟️ Sports" to listOf("com.sizemore.top25", "com.sizemore.nfl", "com.sizemore.nhl", "com.sizemore.thew"),
+        "🏃 Running & Athletics" to listOf("com.sizemore.trackfield", "com.sizemore.ncaatf", "com.sizemore.xc"))
     /** Your other apps (package, name, fallback icon). Listed in the manifest's <queries> so Android lets us open them. */
     private val MY_APPS = listOf(
         Triple("com.sizemore.mcmoney", "M&C Money", "💵"),
