@@ -10,7 +10,7 @@ import org.json.JSONObject
 
 /**
  * 📅 Coming up on the Today tab (Nov 27 2026): renewals, birthdays and document expirations from Dates & Docs, and
- * vehicle services and other upkeep from Vehicle Upkeep, in one short list. Each app shares only "what's coming up",
+ * vehicle services and other upkeep from Vehicle Upkeep, and cleaning due / low ammo / memberships from Range Log, in one short list. Each app shares only "what's coming up",
  * and only with your permission. Shown when either app is installed; Settings → System health can hide it.
  */
 object TodayComingUp {
@@ -18,7 +18,8 @@ object TodayComingUp {
     class Src(val pkg: String, val perm: String, val uri: Uri, val name: String, val icon: String)
     val SOURCES = listOf(
         Src("com.sizemore.dates", "com.sizemore.dates.READ_SUMMARY", Uri.parse("content://com.sizemore.dates.summary/plan"), "Dates & Docs", "📅"),
-        Src("com.sizemore.upkeep", "com.sizemore.upkeep.READ_SUMMARY", Uri.parse("content://com.sizemore.upkeep.summary/plan"), "Vehicle Upkeep", "🔧"))
+        Src("com.sizemore.upkeep", "com.sizemore.upkeep.READ_SUMMARY", Uri.parse("content://com.sizemore.upkeep.summary/plan"), "Vehicle Upkeep", "🔧"),
+        Src("com.sizemore.range", "com.sizemore.range.READ_SUMMARY", Uri.parse("content://com.sizemore.range.summary/plan"), "Range Log", "🎯"))
 
     fun installed(ctx: Context, s: Src) = try { ctx.packageManager.getPackageInfo(s.pkg, 0); true } catch (e: Exception) { false }
     private fun shares(ctx: Context, s: Src) = try { ctx.packageManager.getPermissionInfo(s.perm, 0); true } catch (e: Exception) { false }
@@ -60,7 +61,7 @@ object TodayComingUp {
                 setOnClickListener { act.requestPermissions(needAllow.map { it.perm }.toTypedArray(), REQ) } },
                 LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = d(8) })
         }
-        if (items.isEmpty() && needAllow.isEmpty()) card.addView(RunUi.text(ctx, "✅ Nothing coming up: no renewals, dates or services due soon.", RunUi.MUTED, 12f).apply { setPadding(0, d(6), 0, 0) })
+        if (items.isEmpty() && needAllow.isEmpty()) card.addView(RunUi.text(ctx, "✅ Nothing coming up right now.", RunUi.MUTED, 12f).apply { setPadding(0, d(6), 0, 0) })
         items.sortedBy { it.first }.take(6).forEach { (_, t, c) -> card.addView(RunUi.text(ctx, t, c, 13.5f).apply { setPadding(0, d(6), 0, 0) }) }
         inst.filter { !shares(ctx, it) }.forEach { s -> card.addView(RunUi.text(ctx, "Update ${s.name} to see it here.", RunUi.MUTED, 12f).apply { setPadding(0, d(6), 0, 0) }) }
     }

@@ -36,6 +36,7 @@
     <uses-permission android:name="com.sizemore.health.READ_SUMMARY" />
     <uses-permission android:name="com.sizemore.dates.READ_SUMMARY" />
     <uses-permission android:name="com.sizemore.upkeep.READ_SUMMARY" />
+    <uses-permission android:name="com.sizemore.range.READ_SUMMARY" />
 
     <!-- 📱 Life → More → My apps: open the owner's other apps -->
     <queries>
@@ -58,6 +59,7 @@
         <package android:name="com.sizemore.health" />
         <package android:name="com.sizemore.dates" />
         <package android:name="com.sizemore.upkeep" />
+        <package android:name="com.sizemore.range" />
     </queries>
 
     <application
