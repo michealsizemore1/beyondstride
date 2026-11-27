@@ -258,7 +258,8 @@ class LifeActivity : Activity() {
         Triple("com.sizemore.benefits", "Family Hub", "🏠"),
         Triple("com.sizemore.msiz", "MSIZ Terminal", "msiz"),
         Triple("com.sizemore.spanish", "Luma Spanish", "🇪🇸"),
-        Triple("com.sizemore.ebay", "MCS Treasures", "🏷️"))
+        Triple("com.sizemore.ebay", "MCS Treasures", "🏷️"),
+        Triple("com.sizemore.cookbook", "Cindy's Cookbook", "📖"))
     /** A ☰ Tabs section as BeyondStride screens (Uploads still opens the Command Center's own page). */
     private fun openSection(name: String, title: String) {
         val views: List<View> = when (name) {
