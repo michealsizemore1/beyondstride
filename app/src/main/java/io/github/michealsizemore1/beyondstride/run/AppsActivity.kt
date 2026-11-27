@@ -24,10 +24,39 @@ class AppsActivity : Activity() {
         // 📱 Shortcuts to your other apps (they open as their own apps, with their own app lock).
         col.addView(RunUi.text(this, "📱 Apps", Color.WHITE, 26f, true))
         col.addView(RunUi.text(this, "Your other apps. Tap one to open it (each keeps its own app lock).", RunUi.MUTED, 12f).apply { setPadding(0, d(4), 0, d(6)) })
+        // 🔎 Search: narrows the tiles as you type (by app name or category).
+        val listBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val search = android.widget.EditText(this).apply {
+            hint = "🔎 Search apps"; setText(query); setTextColor(Color.WHITE); setHintTextColor(RunUi.DIM); textSize = 15f; isSingleLine = true
+            imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH
+            background = RunUi.rounded(RunUi.CARD, d(12).toFloat()); setPadding(d(14), d(10), d(14), d(10))
+            addTextChangedListener(object : android.text.TextWatcher {
+                override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+                override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+                override fun afterTextChanged(e: android.text.Editable?) { query = e?.toString().orEmpty(); fillTiles(listBox) }
+            })
+        }
+        col.addView(search, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = d(6) })
+        col.addView(listBox)
+        fillTiles(listBox)
+        setContentView(RunUi.tabbed(this, ScrollView(this).apply { setBackgroundColor(RunUi.BG); addView(col) }, RunUi.TAB_APPS))
+    }
+
+    private var query = ""
+
+    /** The tiles, grouped by category, two per row; only the ones matching the search (name or category). */
+    private fun fillTiles(box: LinearLayout) {
+        val d = { v: Int -> RunUi.dp(this, v) }
+        val col = box; col.removeAllViews()
+        val q = query.trim().lowercase()
+        var shown = 0
         // Grouped by category, two per row. (MSIZ Terminal: if the app isn't installed, the web page opens in Chrome.)
         APP_GROUPS.forEach { (heading, pkgs) ->
-        col.addView(RunUi.text(this, heading, RunUi.ACCENT, 13f, true).apply { setPadding(d(2), d(16), 0, 0) })
         val tiles = pkgs.mapNotNull { p -> MY_APPS.firstOrNull { it.first == p } }
+            .filter { q.isEmpty() || it.second.lowercase().contains(q) || heading.lowercase().contains(q) }
+        if (tiles.isEmpty()) return@forEach
+        shown += tiles.size
+        col.addView(RunUi.text(this, heading, RunUi.ACCENT, 13f, true).apply { setPadding(d(2), d(16), 0, 0) })
         tiles.chunked(2).forEach { row ->
             col.addView(LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; setPadding(0, d(8), 0, 0)
                 row.forEachIndexed { i, (pkg, name, emoji) ->
@@ -60,7 +89,7 @@ class AppsActivity : Activity() {
             })
         }
         }
-        setContentView(RunUi.tabbed(this, ScrollView(this).apply { setBackgroundColor(RunUi.BG); addView(col) }, RunUi.TAB_APPS))
+        if (shown == 0) col.addView(RunUi.text(this, "No apps match \"${query.trim()}\".", RunUi.MUTED, 13f).apply { setPadding(d(2), d(16), 0, 0) })
     }
     /** 🗂 The Apps tab's categories (Nov 27 2026), in order. Every app in MY_APPS belongs to one. */
     private val APP_GROUPS = listOf(
