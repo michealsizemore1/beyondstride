@@ -120,6 +120,12 @@ class LifeActivity : Activity() {
             addView(nativeScroll, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
             addView(reviewsScroll, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
             more = LifeMore(this@LifeActivity, web, { needKey() }, { showPage(2) })
+            // 🧰 Tools page: a "‹ Tools" header (it opens from Settings, so Life's top row is hidden there).
+            more.col.addView(LinearLayout(this@LifeActivity).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL
+                setPadding(0, RunUi.dp(this@LifeActivity, 6), 0, RunUi.dp(this@LifeActivity, 4))
+                addView(RunUi.text(this@LifeActivity, "‹", RunUi.ACCENT, 26f, true).apply { setPadding(RunUi.dp(this@LifeActivity, 2), 0, RunUi.dp(this@LifeActivity, 12), 0) })
+                addView(RunUi.text(this@LifeActivity, "🧰 Tools", Color.WHITE, 20f, true))
+                @Suppress("DEPRECATION") setOnClickListener { onBackPressed() } }, 0)
             moreScroll = ScrollView(this@LifeActivity).apply { setBackgroundColor(RunUi.BG); isFillViewport = true; addView(more.col) }
             addView(moreScroll, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
             tabsScroll = ScrollView(this@LifeActivity).apply { setBackgroundColor(RunUi.BG); isFillViewport = true; addView(tabsPage()) }
@@ -254,7 +260,7 @@ class LifeActivity : Activity() {
         if (was == 3 && p != 3) study.hide()
         nativeScroll.visibility = if (p == 0) View.VISIBLE else View.GONE   // the website stays loaded underneath either way
         study.view.visibility = if (p == 3) View.VISIBLE else View.GONE
-        bar.visibility = if (p == 3) View.GONE else View.VISIBLE
+        bar.visibility = if (p == 3 || p == 4) View.GONE else View.VISIBLE   // Tools (from Settings) has its own ‹ header
         reviewsScroll.visibility = if (p == 1 || p in 7..9) View.VISIBLE else View.GONE
         if (p == 1 || p in 7..9) showReviews(p)
         moreScroll.visibility = if (p == 4) View.VISIBLE else View.GONE
