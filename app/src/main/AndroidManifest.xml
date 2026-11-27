@@ -43,6 +43,7 @@
         <package android:name="com.sizemore.spanish" />
         <package android:name="com.sizemore.ebay" />
         <package android:name="com.sizemore.cookbook" />
+        <package android:name="com.sizemore.top25" />
     </queries>
 
     <application
