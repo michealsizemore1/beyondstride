@@ -22,7 +22,11 @@ class AppsActivity : Activity() {
         val d = { v: Int -> RunUi.dp(this, v) }
         val col = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(d(14), d(40), d(14), d(28)) }
         // 📱 Shortcuts to your other apps (they open as their own apps, with their own app lock).
+        // The total, next to the title (and how many are on this phone, when some aren't).
+        val total = MY_APPS.size
+        val onPhone = MY_APPS.count { a -> try { packageManager.getLaunchIntentForPackage(a.first) != null } catch (e: Exception) { false } }
         col.addView(RunUi.text(this, "📱 Apps", Color.WHITE, 26f, true))
+        col.addView(RunUi.text(this, "$total apps" + (if (onPhone < total) " · $onPhone on this phone" else ""), RunUi.ACCENT, 15f, true).apply { setPadding(0, d(2), 0, 0) })
         col.addView(RunUi.text(this, "Your other apps. Tap one to open it (each keeps its own app lock).", RunUi.MUTED, 12f).apply { setPadding(0, d(4), 0, d(6)) })
         // 🔎 Search: narrows the tiles as you type (by app name or category).
         val listBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
