@@ -49,6 +49,8 @@
         <package android:name="com.sizemore.nhl" />
         <package android:name="com.sizemore.trackfield" />
         <package android:name="com.sizemore.xc" />
+        <package android:name="com.sizemore.ncaatf" />
+        <package android:name="com.sizemore.books" />
     </queries>
 
     <application
