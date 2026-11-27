@@ -143,6 +143,7 @@ object Local {
         try { CloudCopy.sync(ctx) } catch (e: Exception) { }
         try { Backup.autoUpdate(ctx) } catch (e: Exception) { }
         try { io.github.michealsizemore1.beyondstride.Updater.check(ctx, false, minGapMs = 0L) } catch (e: Exception) { }
+        try { SysHealth.watchCheck(ctx) } catch (e: Exception) { }
         val p = ctx.getSharedPreferences("standalone", 0); val now = System.currentTimeMillis()
         p.edit().putLong("hcAt", now).putLong("wtAt", now).putLong("bpAt", now).putLong("cloudTry", now).putLong("syncNowAt", now).apply()
         return out.joinToString("\n")

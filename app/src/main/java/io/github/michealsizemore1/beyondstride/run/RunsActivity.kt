@@ -144,7 +144,7 @@ open class RunsActivity : Activity() {
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == 86) dayPermsDone()
-        if (requestCode == TodaySpending.REQ || requestCode == TodayRetirement.REQ) render()
+        if (requestCode == TodaySpending.REQ || requestCode == TodayRetirement.REQ || requestCode == TodayHealth.REQ) render()
     }
     @Deprecated("") override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         @Suppress("DEPRECATION") super.onActivityResult(requestCode, resultCode, data)
@@ -275,6 +275,8 @@ open class RunsActivity : Activity() {
 
         // (📝 My notes is at the bottom of Today; 🧠 Coach AI sits under "This morning".)
 
+        // 🩺 Something important stopped working (Settings → System health; can be turned off there).
+        try { SysHealth.todayBanner(this)?.let { col.addView(it) } } catch (e: Exception) { }
         // 0. Update available.
         io.github.michealsizemore1.beyondstride.Updater.available(this)?.let { up ->
             col.addView(RunUi.card(this).apply {
@@ -318,6 +320,12 @@ open class RunsActivity : Activity() {
             orientation = LinearLayout.VERTICAL
             layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { bottomMargin = dp(8) }
             TodayRetirement.fill(this@RunsActivity, this)
+        })
+        // ❤️ Health from the Health Records app: next appointment, refills due, labs to watch (only when installed).
+        if (TodayHealth.installed(this) && TodayHealth.shown(this)) col.addView(RunUi.card(this).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { bottomMargin = dp(8) }
+            TodayHealth.fill(this@RunsActivity, this)
         })
         // 🌤 Weather.
         col.addView(RunUi.card(this).apply {

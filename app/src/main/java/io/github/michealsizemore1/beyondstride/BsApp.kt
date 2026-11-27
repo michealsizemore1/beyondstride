@@ -6,6 +6,7 @@ import android.app.Application
 class BsApp : Application() {
     override fun onCreate() {
         super.onCreate(); AppLock.install(this)
+        try { io.github.michealsizemore1.beyondstride.run.SysHealth.install(this) } catch (e: Exception) { }   // 🩺 screen use (Settings → System health)
         // One time: decaf Caramel Brulée lattes logged before they counted toward liquids.
         Thread { try { io.github.michealsizemore1.beyondstride.run.DecafCatchUp.run(this) } catch (e: Exception) { }
             // One time: natural sugar (fruit, vegetables, plain dairy) rechecked on every food already logged.

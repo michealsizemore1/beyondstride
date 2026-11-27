@@ -117,7 +117,7 @@ object DailySummary {
                 val c = (URL("$base$d.json").openConnection() as HttpURLConnection).apply {
                     requestMethod = "PUT"; doOutput = true; connectTimeout = 15_000; readTimeout = 20_000; setRequestProperty("Content-Type", "application/json") }
                 c.outputStream.use { it.write(o.toString().toByteArray()) }
-                if (c.responseCode in 200..299) pr.edit().putInt("sig_$d", sig).apply()
+                if (c.responseCode in 200..299) { pr.edit().putInt("sig_$d", sig).apply(); SysHealth.mark(ctx, "daily") }
             } catch (e: Exception) { }
         }
         if (days) pr.edit().putBoolean("backSleep2", true).apply()

@@ -98,6 +98,7 @@ class AppsActivity : Activity() {
     /** 🗂 The Apps tab's categories (Nov 27 2026), in order. Every app in MY_APPS belongs to one. */
     private val APP_GROUPS = listOf(
         "💰 Money & Business" to listOf("com.sizemore.mcmoney", "com.sizemore.retirement", "com.sizemore.msiz", "com.sizemore.ebay"),
+        "❤️ Health" to listOf("com.sizemore.health"),
         "🏠 Home & Hobbies" to listOf("com.sizemore.benefits", "com.sizemore.cookbook", "com.sizemore.books", "com.sizemore.records", "com.sizemore.spanish"),
         "🏟️ Sports" to listOf("com.sizemore.top25", "com.sizemore.nfl", "com.sizemore.nhl", "com.sizemore.thew"),
         "🏃 Running & Athletics" to listOf("com.sizemore.trackfield", "com.sizemore.ncaatf", "com.sizemore.xc"))
@@ -118,5 +119,6 @@ class AppsActivity : Activity() {
         Triple("com.sizemore.xc", "Cross Country", "🌲"),
         Triple("com.sizemore.ncaatf", "NCAA Track & Field", "🏅"),
         Triple("com.sizemore.books", "Cindy's Books", "📚"),
-        Triple("com.sizemore.records", "Cindy's Records", "💿"))
+        Triple("com.sizemore.records", "Cindy's Records", "💿"),
+        Triple("com.sizemore.health", "Health Records", "❤️"))
 }

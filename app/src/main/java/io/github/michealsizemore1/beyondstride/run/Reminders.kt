@@ -129,6 +129,7 @@ object Reminders {
         try { Local.upkeep(ctx, hourly = true) } catch (e: Exception) { }
         try { Backup.daily(ctx); Backup.scheduleDaily(ctx) } catch (e: Exception) { }
         try { DayReviewAi.maybeRun(ctx); DayReviewAi.schedule(ctx) } catch (e: Exception) { }
+        try { SysHealth.hourly(ctx) } catch (e: Exception) { }   // 🩺 System health heartbeat + warning
         try { WeeklyRunWrap.maybeAuto(ctx) } catch (e: Exception) { }   // 📝 Weekly Run Notes on Sunday night   // 🌙 backup Day Review for the Command Center   // 🌙 nightly backup (catches up if a night was missed)
         morning(ctx)
         try { schedulePre(ctx) } catch (e: Exception) { }

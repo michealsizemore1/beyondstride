@@ -106,6 +106,6 @@ object DayReviewAi {
         val c = (URL(Live.db(ctx) + "/nutrition/" + NutritionSync.key(ctx) + "/beyondstride/review/$date.json").openConnection() as HttpURLConnection).apply {
             requestMethod = "PUT"; doOutput = true; connectTimeout = 15_000; readTimeout = 20_000; setRequestProperty("Content-Type", "application/json") }
         c.outputStream.use { it.write(out.toString().toByteArray()) }
-        if (c.responseCode in 200..299) p(ctx).edit().putString("done", date).apply()
+        if (c.responseCode in 200..299) { p(ctx).edit().putString("done", date).apply(); SysHealth.mark(ctx, "dayreview") }
     }
 }

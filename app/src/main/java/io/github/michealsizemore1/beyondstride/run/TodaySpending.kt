@@ -32,7 +32,7 @@ object TodaySpending {
     private fun shares(ctx: Context) = try { ctx.packageManager.getPermissionInfo(PERM, 0); true } catch (e: Exception) { false }
     private fun allowed(ctx: Context) = ctx.checkSelfPermission(PERM) == PackageManager.PERMISSION_GRANTED
 
-    private fun read(ctx: Context): Pair<JSONObject, Long>? = try {
+    fun read(ctx: Context): Pair<JSONObject, Long>? = try {
         ctx.contentResolver.query(URI, null, null, null, null)?.use { c ->
             if (!c.moveToFirst()) null
             else { val js = c.getString(0) ?: ""; if (js.isEmpty()) null else JSONObject(js).let { root -> root.optJSONObject("days")?.let { root to c.getLong(1) } } }

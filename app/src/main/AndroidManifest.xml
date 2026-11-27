@@ -33,6 +33,7 @@
     <uses-permission android:name="com.sizemore.mcmoney.READ_SPENDING" />
     <!-- 🏖️ Today → Retirement: the Retirement Planner's headline numbers (asked for on the Retirement card) -->
     <uses-permission android:name="com.sizemore.retirement.READ_SUMMARY" />
+    <uses-permission android:name="com.sizemore.health.READ_SUMMARY" />
 
     <!-- 📱 Life → More → My apps: open the owner's other apps -->
     <queries>
@@ -52,6 +53,7 @@
         <package android:name="com.sizemore.ncaatf" />
         <package android:name="com.sizemore.books" />
         <package android:name="com.sizemore.records" />
+        <package android:name="com.sizemore.health" />
     </queries>
 
     <application
@@ -137,6 +139,11 @@
             android:name=".run.AppsActivity"
             android:exported="false"
             android:label="Apps"
+            android:taskAffinity="io.github.michealsizemore1.beyondstride.running" />
+        <activity
+            android:name=".run.SystemHealthActivity"
+            android:exported="false"
+            android:label="System health"
             android:taskAffinity="io.github.michealsizemore1.beyondstride.running" />
         <activity
             android:name=".run.AllRunsActivity"
