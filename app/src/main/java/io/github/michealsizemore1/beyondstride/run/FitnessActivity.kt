@@ -223,40 +223,62 @@ class FitnessActivity : Activity() {
             }
         }
 
-        // Aerobic decoupling trend: steady runs of 40+ minutes.
+        // 🎯 Aerobic decoupling vs your goals: easy / long runs ≤ 5%, quality runs (tempo, threshold, intervals…) 5–10%.
         run {
-            val pts = PhoneRuns.list(this).take(120).mapNotNull { f -> PhoneRuns.read(f) }
-                .mapNotNull { r -> io.github.michealsizemore1.beyondstride.Decoupling.of(r)?.takeIf { it.steady && it.minutes >= 30 && it.main != null }?.let { r.optLong("start") to it.main!! } }
-                .take(10)
-            if (pts.size >= 2) {
-                col.addView(RunUi.section(this, "AEROBIC DECOUPLING · STEADY RUNS"))
+            val D = io.github.michealsizemore1.beyondstride.Decoupling
+            data class P(val start: Long, val pct: Double, val quality: Boolean)
+            val all = PhoneRuns.list(this).take(150).mapNotNull { f -> PhoneRuns.read(f) }.mapNotNull { r ->
+                val d = D.of(r) ?: return@mapNotNull null; val m = d.main ?: return@mapNotNull null
+                if (d.minutes < 20) return@mapNotNull null
+                val q = D.isQuality(r)
+                // Easy runs must be steady to count; a tempo with a warm-up and cool-down can look uneven, so quality runs count either way.
+                if (!q && !d.steady) return@mapNotNull null
+                P(r.optLong("start"), m, q)
+            }
+            if (all.isNotEmpty()) {
+                col.addView(RunUi.section(this, "AEROBIC DECOUPLING"))
                 col.addView(RunUi.card(this).apply {
+                    addView(RunUi.text(ctx, "How much heart rate drifts up against the same power or pace, first half to second. Goals: easy runs 5% or under; quality runs 5–10%.", RunUi.MUTED, 12f))
                     val now = System.currentTimeMillis()
-                    val recent = pts.filter { now - it.first < 28 * 86_400_000L }.map { it.second }
-                    val older = pts.filter { now - it.first >= 28 * 86_400_000L }.map { it.second }
-                    if (recent.isNotEmpty()) {
-                        val avg = recent.average()
-                        addView(RunUi.text(ctx, io.github.michealsizemore1.beyondstride.Decoupling.text(avg) + " average, last 4 weeks", io.github.michealsizemore1.beyondstride.Decoupling.color(avg), 18f, true))
-                        if (older.isNotEmpty()) {
-                            val diff = avg - older.average()
-                            addView(RunUi.text(ctx, (if (diff <= 0) "Improving: " else "Up: ") + String.format(java.util.Locale.US, "%+.1f", diff) +
-                                " pts vs earlier runs" + (if (diff <= 0) " — aerobic base is building" else " — check heat, fatigue or pace"), RunUi.MUTED, 12f))
+                    listOf(false to "🟢 Easy & long runs", true to "🔥 Quality runs (tempo, threshold, intervals…)").forEach { (q, title) ->
+                        val pts = all.filter { it.quality == q }.take(10)
+                        addView(LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL; setPadding(0, dp(14), 0, 0)
+                            addView(RunUi.text(ctx, title, Color.WHITE, 14f, true), LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
+                            addView(RunUi.text(ctx, "goal " + D.goalShort(q), RunUi.ACCENT, 12f, true)) })
+                        if (pts.isEmpty()) { addView(RunUi.text(ctx, if (q) "No quality runs with decoupling yet (20+ min after warm-up)." else "No steady easy runs with decoupling yet (20+ min after warm-up).", RunUi.DIM, 12f).apply { setPadding(0, dp(4), 0, 0) }); return@forEach }
+                        val recent = pts.filter { now - it.start < 28 * 86_400_000L }.map { it.pct }
+                        val use = recent.ifEmpty { pts.map { it.pct } }
+                        val avg = use.average()
+                        val hit = pts.count { D.onTarget(it.pct, q) }
+                        addView(RunUi.text(ctx, D.text(avg) + " average" + (if (recent.isNotEmpty()) ", last 4 weeks" else ", recent runs") + " · " + D.rating(avg, q).lowercase(), D.color(avg, q), 17f, true).apply { setPadding(0, dp(4), 0, 0) })
+                        addView(RunUi.text(ctx, "$hit of ${pts.size} recent runs on target", RunUi.MUTED, 12f))
+                        // One bar per run, oldest → newest, colored against this kind of run's goal; dashed goal line.
+                        val maxV = 20.0
+                        val chart = object : android.view.View(ctx) {
+                            val p = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
+                            val list = pts.reversed()
+                            override fun onDraw(c: android.graphics.Canvas) {
+                                val w = width.toFloat(); val labelH = dp(14).toFloat(); val topH = dp(14).toFloat(); val h = height - labelH - topH
+                                val slot = w / maxOf(list.size, 1); val bw = (slot * 0.55f).coerceAtMost(dp(22).toFloat())
+                                fun y(v: Double) = topH + h - (v.coerceIn(0.0, maxV) / maxV * h).toFloat()
+                                p.textAlign = android.graphics.Paint.Align.CENTER
+                                list.forEachIndexed { i, pt ->
+                                    val cx = slot * i + slot / 2
+                                    p.color = D.color(pt.pct, q); p.style = android.graphics.Paint.Style.FILL
+                                    c.drawRoundRect(android.graphics.RectF(cx - bw / 2, y(pt.pct).coerceAtMost(topH + h - dp(3)), cx + bw / 2, topH + h), dp(3).toFloat(), dp(3).toFloat(), p)
+                                    p.color = RunUi.MUTED; p.textSize = dp(9).toFloat(); c.drawText(String.format(java.util.Locale.US, "%.0f", pt.pct), cx, y(pt.pct).coerceAtMost(topH + h - dp(3)) - dp(3), p)
+                                    p.color = RunUi.DIM; c.drawText(java.text.SimpleDateFormat("M/d", java.util.Locale.US).format(java.util.Date(pt.start)), cx, height - dp(2).toFloat(), p)
+                                }
+                                // Goal lines: 5% for easy; 5% and 10% for quality (the band between is the target).
+                                p.style = android.graphics.Paint.Style.STROKE; p.strokeWidth = dp(1).toFloat(); p.color = RunUi.ACCENT
+                                p.pathEffect = android.graphics.DashPathEffect(floatArrayOf(dp(4).toFloat(), dp(4).toFloat()), 0f)
+                                (if (q) listOf(5.0, 10.0) else listOf(5.0)).forEach { g -> c.drawLine(0f, y(g), w, y(g), p) }
+                                p.pathEffect = null
+                            }
                         }
+                        addView(chart, LinearLayout.LayoutParams(MATCH_PARENT, dp(110)).apply { topMargin = dp(6) })
                     }
-                    // One bar per run, oldest → newest.
-                    addView(LinearLayout(ctx).apply {
-                        orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.BOTTOM
-                        setPadding(0, RunUi.dp(ctx, 10), 0, 0)
-                        pts.reversed().forEach { (st, v) ->
-                            addView(LinearLayout(ctx).apply {
-                                orientation = LinearLayout.VERTICAL; gravity = android.view.Gravity.CENTER_HORIZONTAL or android.view.Gravity.BOTTOM
-                                addView(RunUi.text(ctx, String.format(java.util.Locale.US, "%.0f", v), RunUi.MUTED, 10f).apply { gravity = android.view.Gravity.CENTER })
-                                addView(android.view.View(ctx).apply { background = RunUi.rounded(io.github.michealsizemore1.beyondstride.Decoupling.color(v), RunUi.dp(ctx, 3).toFloat()) },
-                                    LinearLayout.LayoutParams(RunUi.dp(ctx, 14), RunUi.dp(ctx, (6 + v.coerceIn(0.0, 15.0) * 4).toInt())))
-                                addView(RunUi.text(ctx, java.text.SimpleDateFormat("M/d", java.util.Locale.US).format(java.util.Date(st)), RunUi.DIM, 9f).apply { gravity = android.view.Gravity.CENTER })
-                            }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
-                        }
-                    })
+                    addView(RunUi.text(ctx, "A run counts as quality when its planned workout is a tempo, threshold, interval, hill, progression or race (or it was run at 0.85+ intensity). Easy runs need a steady effort to count.", RunUi.DIM, 11f).apply { setPadding(0, dp(10), 0, 0) })
                 })
             }
         }

@@ -109,16 +109,18 @@ class RunDetailActivity : Activity() {
         // Aerobic decoupling.
         io.github.michealsizemore1.beyondstride.Decoupling.of(run)?.let { d ->
             val m = d.main ?: return@let
+            val q = io.github.michealsizemore1.beyondstride.Decoupling.isQuality(run)
             col.addView(RunUi.section(this, "AEROBIC DECOUPLING"))
             col.addView(RunUi.card(this).apply {
                 addView(RunUi.statGrid(ctx, listOfNotNull(
-                    Triple(io.github.michealsizemore1.beyondstride.Decoupling.text(m), io.github.michealsizemore1.beyondstride.Decoupling.rating(m).lowercase(), io.github.michealsizemore1.beyondstride.Decoupling.color(m)),
+                    Triple(io.github.michealsizemore1.beyondstride.Decoupling.text(m), io.github.michealsizemore1.beyondstride.Decoupling.rating(m, q).lowercase(), io.github.michealsizemore1.beyondstride.Decoupling.color(m, q)),
                     d.pwHr?.let { Triple(io.github.michealsizemore1.beyondstride.Decoupling.text(it), "power : HR", Color.WHITE) },
                     d.paHr?.let { Triple(io.github.michealsizemore1.beyondstride.Decoupling.text(it), "pace : HR", Color.WHITE) },
                     Triple("${d.hr1}→${d.hr2}", "HR 1st → 2nd half", Color.WHITE),
                 )))
                 addView(RunUi.text(ctx, "How much your heart rate drifted up against the same power/pace from the first half " +
-                    "to the second (warm-up left out, ${d.minutes} min analyzed). Under 5% means a strong aerobic base for this effort." +
+                    "to the second (warm-up left out, ${d.minutes} min analyzed). " +
+                    (if (q) "This is a quality run, so the goal is 5–10%: some drift is expected at tempo effort and harder." else "This is an easy run, so the goal is 5% or under: a strong aerobic base keeps heart rate steady.") +
                     (if (!d.steady) " This run's effort was uneven (intervals or hills), so the number is less meaningful." else "") +
                     (run.optJSONObject("weather")?.optLong("tempF")?.takeIf { it >= 75 }?.let { " It was ${it}°F — heat raises drift." } ?: ""),
                     RunUi.MUTED, 12f).apply { setPadding(0, dp(8), 0, 0) })

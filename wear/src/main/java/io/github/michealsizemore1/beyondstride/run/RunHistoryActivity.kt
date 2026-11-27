@@ -230,14 +230,15 @@ object RunViews {
         }
         io.github.michealsizemore1.beyondstride.Decoupling.of(json)?.let { d ->
             val m = d.main ?: return@let
+            val q = io.github.michealsizemore1.beyondstride.Decoupling.isQuality(json)
             col.addView(label(ctx, "AEROBIC DECOUPLING", MUTED, 12f, true).apply { setPadding(0, dp(ctx, 10), 0, 0) })
             col.addView(card(ctx).apply {
-                addView(label(ctx, io.github.michealsizemore1.beyondstride.Decoupling.text(m), io.github.michealsizemore1.beyondstride.Decoupling.color(m), 26f, true))
-                addView(label(ctx, io.github.michealsizemore1.beyondstride.Decoupling.rating(m) + if (!d.steady) " · uneven effort" else "", Color.WHITE, 12f, true))
+                addView(label(ctx, io.github.michealsizemore1.beyondstride.Decoupling.text(m), io.github.michealsizemore1.beyondstride.Decoupling.color(m, q), 26f, true))
+                addView(label(ctx, io.github.michealsizemore1.beyondstride.Decoupling.rating(m, q) + if (!d.steady) " · uneven effort" else "", Color.WHITE, 12f, true))
                 d.pwHr?.let { addView(stat("Power : HR", io.github.michealsizemore1.beyondstride.Decoupling.text(it))) }
                 d.paHr?.let { addView(stat("Pace : HR", io.github.michealsizemore1.beyondstride.Decoupling.text(it))) }
                 addView(stat("Heart rate", "${d.hr1} → ${d.hr2}"))
-                addView(label(ctx, "Under 5% = strong aerobic base. Best judged on steady easy/long runs.", MUTED, 9f))
+                addView(label(ctx, "Goal: " + io.github.michealsizemore1.beyondstride.Decoupling.goal(q) + ".", MUTED, 9f))
             })
         }
         json.optDouble("avgStride").takeIf { !it.isNaN() && it > 0 }?.let { st ->

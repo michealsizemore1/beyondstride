@@ -6,7 +6,7 @@ import kotlin.math.sqrt
 
 /**
  * Aerobic decoupling: how much heart rate drifts up against pace (Pa:HR) and against Stryd power
- * (Pw:HR) from the first half of a run to the second. Under 5% = a solid aerobic base for that effort.
+ * (Pw:HR) from the first half of a run to the second. Goals: easy runs 5% or under; quality runs 5–10%.
  * The warm-up is left out; only moving seconds with a heart rate count.
  */
 object Decoupling {
@@ -26,13 +26,30 @@ object Decoupling {
         }
     }
 
-    fun rating(pct: Double) = when {
+    // 🎯 Goals (Nov 26 2026, your call): easy / long runs ≤ 5%; quality runs (tempo, threshold, intervals, races…) 5–10%.
+    private val QUALITY = Regex("\\b(tempo|threshold|lt|cruise|interval|intervals|repeats?|reps|fartlek|progression|race|racing|time trial|tt|hills?|hill repeats|vo2|speed|track|marathon pace|mp|half marathon pace|hmp|10k pace|5k pace|steady state|quality)\\b", RegexOption.IGNORE_CASE)
+    private val EASY = Regex("\\b(easy|recovery|long run|long|base|aerobic|zone 2|z2|shakeout|jog)\\b", RegexOption.IGNORE_CASE)
+    /** A quality run: the planned workout's (or run's) name says so, else an intensity of 0.85+ (tempo effort or harder). */
+    fun isQuality(run: JSONObject): Boolean {
+        val name = listOfNotNull(run.optJSONObject("workout")?.optString("name"), run.optString("name"), run.optString("title")).joinToString(" ")
+        if (QUALITY.containsMatchIn(name)) return true
+        if (EASY.containsMatchIn(name)) return false
+        val inten = run.optDouble("intensity"); return !inten.isNaN() && inten >= 0.85
+    }
+    fun goal(quality: Boolean) = if (quality) "goal 5–10% (quality run)" else "goal 5% or under (easy run)"
+    fun goalShort(quality: Boolean) = if (quality) "5–10%" else "≤5%"
+    fun onTarget(pct: Double, quality: Boolean) = if (quality) pct <= 10 else pct <= 5
+    fun rating(pct: Double, quality: Boolean = false) = when {
         pct < 0 -> "No drift"
-        pct < 5 -> "Excellent"
-        pct < 10 -> "Some drift"
+        !quality && pct <= 5 -> "On target"
+        !quality && pct <= 10 -> "Some drift"
+        quality && pct < 5 -> "Under target"
+        quality && pct <= 10 -> "On target"
+        quality && pct <= 15 -> "Above target"
         else -> "High drift"
     }
-    fun color(pct: Double) = when { pct < 5 -> 0xFF22C55E.toInt(); pct < 10 -> 0xFFEAB308.toInt(); else -> 0xFFEF4444.toInt() }
+    fun color(pct: Double, quality: Boolean = false) = if (quality) when { pct <= 10 -> 0xFF22C55E.toInt(); pct <= 15 -> 0xFFEAB308.toInt(); else -> 0xFFEF4444.toInt() }
+        else when { pct <= 5 -> 0xFF22C55E.toInt(); pct <= 10 -> 0xFFEAB308.toInt(); else -> 0xFFEF4444.toInt() }
     fun text(pct: Double) = String.format(Locale.US, "%.1f%%", pct)
 
     fun fromJson(o: JSONObject?): Result? = o?.let {
@@ -79,9 +96,9 @@ object Decoupling {
     }
 
     /** One line for notes, e.g. "Aerobic decoupling 3.2% (Excellent) · Pw:HR 3.2% · Pa:HR 4.0% · HR 142→147". */
-    fun line(r: Result): String {
+    fun line(r: Result, quality: Boolean = false): String {
         val m = r.main ?: return ""
-        val parts = mutableListOf("Aerobic decoupling ${text(m)} (${rating(m)}${if (!r.steady) ", uneven effort" else ""})")
+        val parts = mutableListOf("Aerobic decoupling ${text(m)} (${rating(m, quality)}, ${goal(quality)}${if (!r.steady) ", uneven effort" else ""})")
         r.pwHr?.let { parts += "Pw:HR ${text(it)}" }
         r.paHr?.let { parts += "Pa:HR ${text(it)}" }
         parts += "HR ${r.hr1}→${r.hr2} over ${r.minutes} min"
