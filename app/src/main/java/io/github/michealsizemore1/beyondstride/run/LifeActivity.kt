@@ -136,7 +136,7 @@ class LifeActivity : Activity() {
             setPadding(RunUi.dp(this@LifeActivity, 10), RunUi.dp(this@LifeActivity, 12), RunUi.dp(this@LifeActivity, 10), RunUi.dp(this@LifeActivity, 12))
             setOnClickListener { onClick() }
         }
-        tabTabs = tab("☰ More") { showPage(5) }; tabToday = tab("Daily") { showPage(0) }; tabReviews = tab("Weekly") { showPage(1) }
+        tabTabs = tab("☰ Areas") { showPage(5) }; tabToday = tab("Daily") { showPage(0) }; tabReviews = tab("Weekly") { showPage(1) }
         tabMonth = tab("Monthly") { showPage(7) }; tabYear = tab("Yearly") { showPage(8) }; tabReview = tab("Review") { showPage(9) }
         tabMore = tab("Tools") { showPage(4) }; tabFull = tab("📓 Full") { showPage(2) }   // Full is reached from ☰ More
         bar = LinearLayout(this).apply {
@@ -183,8 +183,8 @@ class LifeActivity : Activity() {
     private fun tabsPage(): LinearLayout {
         val d = { v: Int -> RunUi.dp(this, v) }
         val col = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(d(14), d(8), d(14), d(24)) }
-        col.addView(RunUi.text(this, "☰ More", Color.WHITE, 16f, true))
-        col.addView(RunUi.text(this, "More Life pages. Tap one to open it.", RunUi.MUTED, 12f).apply { setPadding(0, d(4), 0, d(6)) })
+        col.addView(RunUi.text(this, "☰ Areas", Color.WHITE, 16f, true))
+        col.addView(RunUi.text(this, "Your life areas. Tap one to open it.", RunUi.MUTED, 12f).apply { setPadding(0, d(4), 0, d(6)) })
         val items = listOf(
             Triple("📖", "Bible", "bible") to "Bible reading archive, sermon & study notes",
             Triple("🌱", "Habits", "habits2") to "All habits, add / edit, history",
@@ -305,7 +305,7 @@ class LifeActivity : Activity() {
         // Weekly · Monthly · Yearly · Review each get their own page (showReviews puts the right card on it).
         weekTab = WeekTabCard(); weekCard = WeeklyCard(); monthCard = PeriodCard("monthly"); yearCard = PeriodCard("yearly")
         dashCard = LifeDashboard(this, web)   // no longer shown: its charts moved under Wellness
-        nativeCol.addView(RunUi.text(this, "Bible, Habits, Library, Meditate, Wellness (with the BP report) and the full Command Center are in ☰ More; search, Ask AI, files and settings are in Tools. Your journal and the day's and week's reviews are in 📝 Review.", RunUi.DIM, 11f).apply { setPadding(0, RunUi.dp(this@LifeActivity, 12), 0, 0) })
+        nativeCol.addView(RunUi.text(this, "Bible, Habits, Library, Meditate, Wellness (with the BP report) and Brain Games are in ☰ Areas; search, Ask AI, files and the full view are in Settings → Tools. Your journal and the day's and week's reviews are in 📝 Review.", RunUi.DIM, 11f).apply { setPadding(0, RunUi.dp(this@LifeActivity, 12), 0, 0) })
     }
 
     /** 📅 The day the Daily screen shows (picked on its calendar); null = today. Other pages always show today. */
@@ -857,7 +857,7 @@ class LifeActivity : Activity() {
             j.optString("digest").takeIf { it.isNotBlank() }?.let { body.addView(RunUi.text(this@LifeActivity, it, RunUi.MUTED, 12f).apply { setPadding(0, d(10), 0, 0) }) }
             val secs = j.optJSONArray("sections") ?: return
             // The weekly / monthly / yearly tables now live in their own areas.
-            body.addView(RunUi.text(this@LifeActivity, "Weekly, monthly and yearly tables: ☰ More → Wellness and Bible · Activities → Mileage · Nutrition.", RunUi.DIM, 11f).apply { setPadding(0, d(10), 0, 0) })
+            body.addView(RunUi.text(this@LifeActivity, "Weekly, monthly and yearly tables: ☰ Areas → Wellness and Bible · Activities → Mileage · Nutrition.", RunUi.DIM, 11f).apply { setPadding(0, d(10), 0, 0) })
             if (secs.length() >= 0) return
             for (i in 0 until secs.length()) { val sec = secs.getJSONObject(i)
                 // Running numbers live in Activities and food in Nutrition now (each number in one place).
