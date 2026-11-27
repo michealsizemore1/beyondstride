@@ -74,11 +74,14 @@ class LifeActivity : Activity() {
     private var meditCard: MeditCard? = null
     private lateinit var sectionCol: LinearLayout
     private lateinit var sectionScroll: ScrollView
+    private lateinit var appsCol: LinearLayout
+    private lateinit var appsScroll: ScrollView
     private var section = ""
     private var dashCard: LifeDashboard? = null
     private lateinit var more: LifeMore
     private lateinit var moreScroll: ScrollView
     private lateinit var tabMore: TextView
+    private lateinit var tabApps: TextView
     private lateinit var tabTabs: TextView
     private lateinit var tabMonth: TextView
     private lateinit var tabYear: TextView
@@ -124,6 +127,9 @@ class LifeActivity : Activity() {
             addView(moreScroll, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
             tabsScroll = ScrollView(this@LifeActivity).apply { setBackgroundColor(RunUi.BG); isFillViewport = true; addView(tabsPage()) }
             addView(tabsScroll, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
+            appsCol = LinearLayout(this@LifeActivity).apply { orientation = LinearLayout.VERTICAL; setPadding(RunUi.dp(this@LifeActivity, 14), RunUi.dp(this@LifeActivity, 8), RunUi.dp(this@LifeActivity, 14), RunUi.dp(this@LifeActivity, 24)) }
+            appsScroll = ScrollView(this@LifeActivity).apply { setBackgroundColor(RunUi.BG); isFillViewport = true; addView(appsCol); visibility = View.GONE }
+            addView(appsScroll, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
             sectionCol = LinearLayout(this@LifeActivity).apply { orientation = LinearLayout.VERTICAL; setPadding(RunUi.dp(this@LifeActivity, 14), 0, RunUi.dp(this@LifeActivity, 14), RunUi.dp(this@LifeActivity, 24)) }
             sectionScroll = ScrollView(this@LifeActivity).apply { setBackgroundColor(RunUi.BG); isFillViewport = true; addView(sectionCol) }
             addView(sectionScroll, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
@@ -138,6 +144,7 @@ class LifeActivity : Activity() {
         }
         tabTabs = tab("☰ More") { showPage(5) }; tabToday = tab("Daily") { showPage(0) }; tabReviews = tab("Weekly") { showPage(1) }
         tabMonth = tab("Monthly") { showPage(7) }; tabYear = tab("Yearly") { showPage(8) }; tabReview = tab("Review") { showPage(9) }
+        tabApps = tab("Apps") { showPage(10) }
         tabMore = tab("Tools") { showPage(4) }; tabFull = tab("📓 Full") { showPage(2) }   // Full is reached from ☰ More
         bar = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL; background = RunUi.rounded(RunUi.CARD, 0f)
@@ -146,7 +153,7 @@ class LifeActivity : Activity() {
             addView(android.widget.HorizontalScrollView(this@LifeActivity).apply { isHorizontalScrollBarEnabled = false
                 addView(LinearLayout(this@LifeActivity).apply { orientation = LinearLayout.HORIZONTAL
                     // Weekly / Monthly / Yearly now live in each area's section.
-                    listOf(tabToday, tabReview, tabMore).forEach { addView(it) } }) },
+                    listOf(tabToday, tabReview, tabMore, tabApps).forEach { addView(it) } }) },
                 LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         }
         val box = LinearLayout(this).apply {
@@ -200,9 +207,16 @@ class LifeActivity : Activity() {
                 if (row.size == 1) addView(View(this@LifeActivity), LinearLayout.LayoutParams(0, 1, 1f))
             })
         }
+        return col
+    }
+    /** 📱 Apps tab — shortcuts to your other apps (Nov 26 2026: moved here from the bottom of ☰ More). Rebuilt each time
+     *  it's shown so a newly installed app gets its real icon. */
+    private fun appsPage() {
+        val d = { v: Int -> RunUi.dp(this, v) }
+        val col = appsCol; col.removeAllViews()
         // 📱 Shortcuts to your other apps (they open as their own apps, with their own app lock).
-        col.addView(RunUi.text(this, "📱 My apps", Color.WHITE, 16f, true).apply { setPadding(0, d(20), 0, 0) })
-        col.addView(RunUi.text(this, "Tap one to open it.", RunUi.MUTED, 12f).apply { setPadding(0, d(4), 0, d(6)) })
+        col.addView(RunUi.text(this, "📱 My apps", Color.WHITE, 16f, true))
+        col.addView(RunUi.text(this, "Your other apps. Tap one to open it (each keeps its own app lock).", RunUi.MUTED, 12f).apply { setPadding(0, d(4), 0, d(6)) })
         // Two per row: your four apps. (MSIZ Terminal is its own app now; if it isn't installed, the web page opens in Chrome.)
         val tiles = MY_APPS
         tiles.chunked(2).forEach { row ->
@@ -236,7 +250,6 @@ class LifeActivity : Activity() {
                 if (row.size == 1) addView(View(this@LifeActivity), LinearLayout.LayoutParams(0, 1, 1f))
             })
         }
-        return col
     }
     /** Your other apps (package, name, fallback icon). Listed in the manifest's <queries> so Android lets us open them. */
     private val MY_APPS = listOf(
@@ -296,6 +309,8 @@ class LifeActivity : Activity() {
         moreScroll.visibility = if (p == 4) View.VISIBLE else View.GONE
         tabsScroll.visibility = if (p == 5) View.VISIBLE else View.GONE
         sectionScroll.visibility = if (p == 6) View.VISIBLE else View.GONE
+        appsScroll.visibility = if (p == 10) View.VISIBLE else View.GONE
+        if (p == 10) { appsPage(); appsScroll.scrollTo(0, 0) }
         if (p == 4) more.load()
         // Active tab: white with an accent underline (like the Command Center's); ☰ More gets a lighter block.
         fun style(t: TextView, on: Boolean) {
@@ -303,7 +318,7 @@ class LifeActivity : Activity() {
             t.background = if (on) android.graphics.drawable.LayerDrawable(arrayOf(android.graphics.drawable.ColorDrawable(0), android.graphics.drawable.ColorDrawable(RunUi.ACCENT))).apply {
                 setLayerInset(1, 0, 0, 0, 0); setLayerGravity(1, android.view.Gravity.BOTTOM); setLayerHeight(1, RunUi.dp(this@LifeActivity, 3)) } else null
         }
-        style(tabToday, p == 0); style(tabReviews, p == 1); style(tabMonth, p == 7); style(tabYear, p == 8); style(tabReview, p == 9); style(tabMore, p == 4)
+        style(tabToday, p == 0); style(tabReviews, p == 1); style(tabMonth, p == 7); style(tabYear, p == 8); style(tabReview, p == 9); style(tabMore, p == 4); style(tabApps, p == 10)
         val moreOn = p == 2 || p == 5 || p == 6
         tabTabs.setTextColor(if (moreOn) Color.WHITE else RunUi.MUTED); tabTabs.setBackgroundColor(if (moreOn) 0xFF2A3430.toInt() else 0xFF222B28.toInt())
         if (p == 0 || p == 1 || p == 6 || p in 7..9) reload.run()
@@ -1397,7 +1412,7 @@ class LifeActivity : Activity() {
     override fun onBackPressed() {
         if (full && web.canGoBack()) web.goBack()
         else if (page == 6) showPage(5)
-        else if (full || page in listOf(1, 3, 4, 5, 7, 8, 9)) show(false)
+        else if (full || page in listOf(1, 3, 4, 5, 7, 8, 9, 10)) show(false)
         else @Suppress("DEPRECATION") super.onBackPressed()
     }
 
