@@ -20,7 +20,27 @@
     return true;
   }
   // The native Today screen always shows the real today; bring the page there if it's on another date.
-  function goRealDay(){if(!onRealDay()){try{today=new Date();load();if(typeof syncPeriodsToDay==='function')syncPeriodsToDay();}catch(e){}}}
+  // 🌙 Today's Daily AI Review is written at night. One already there in the morning or afternoon that came from
+  // somewhere else — yesterday's review carried over past midnight, or an automatic one written too early — and that
+  // you haven't changed since, is cleared (Nov 27 2026).
+  function clearEarlyReview(){
+    try{
+      var now=new Date();if(now.getHours()>=18)return;
+      var k=realKey(),y=new Date(now);y.setDate(y.getDate()-1);var yk=dk(y);
+      var v=JSON.parse(localStorage.getItem('dayreview_'+k)||'null');if(!v)return;
+      var ids=['dayRevWins','dayRevImprove','dayRevFocus','dayRevLessons'],txt=ids.map(function(i){return String(v[i]||'').trim();}).join('\u241E');
+      if(!txt.replace(/\u241E/g,''))return;
+      var yv={};try{yv=JSON.parse(localStorage.getItem('dayreview_'+yk)||'{}')||{};}catch(e){}
+      var ytxt=ids.map(function(i){return String(yv[i]||'').trim();}).join('\u241E');
+      var fv=localStorage.getItem('autoDayRev_'+k)||'';
+      var auto=(fv==='auto'&&localStorage.getItem('autoRevText_'+k)===txt)||(fv==='phone'&&localStorage.getItem('bsPhoneRevText_'+k)===txt);
+      if(txt!==ytxt&&!auto)return;
+      localStorage.removeItem('dayreview_'+k);['autoDayRev_','autoRevText_','bsPhoneRev_','bsPhoneRevText_'].forEach(function(p){localStorage.removeItem(p+k);});
+      if(dk(today)===k&&typeof renderDayReview==='function')renderDayReview();
+    }catch(e){}
+  }
+  setTimeout(clearEarlyReview,2000);
+  function goRealDay(){if(!onRealDay()){try{clearEarlyReview();today=new Date();load();if(typeof syncPeriodsToDay==='function')syncPeriodsToDay();}catch(e){}}}
   // 📅 The Life tab's Daily screen can show another day (picked on its calendar): bring the page to that date.
   // No date (or today's) = the real today, as before.
   function goDay(date){date=String(date||'');if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||date===realKey()){goRealDay();return;}

@@ -30,21 +30,51 @@ object DayReviewAi {
         var at = now.toLocalDate().atTime(m / 60, m % 60)
         if (!at.isAfter(now)) at = at.plusDays(1)
         try { androidx.work.WorkManager.getInstance(ctx).enqueueUniqueWork("dayReviewAi", androidx.work.ExistingWorkPolicy.KEEP,
-            androidx.work.OneTimeWorkRequestBuilder<Work>().setInitialDelay(java.time.Duration.between(now, at).toMillis(), java.util.concurrent.TimeUnit.MILLISECONDS)
+            androidx.work.OneTimeWorkRequestBuilder<Work>().setInputData(androidx.work.workDataOf("date" to at.toLocalDate().toString())).setInitialDelay(java.time.Duration.between(now, at).toMillis(), java.util.concurrent.TimeUnit.MILLISECONDS)
                 .setConstraints(androidx.work.Constraints.Builder().setRequiredNetworkType(androidx.work.NetworkType.CONNECTED).build()).build()) } catch (e: Exception) { }
     }
     class Work(c: Context, w: androidx.work.WorkerParameters) : androidx.work.Worker(c, w) {
-        override fun doWork(): Result { try { maybeRun(applicationContext, force = true) } catch (e: Exception) { }
+        override fun doWork(): Result {
+            // The evening this job was booked for. Android can hold it past midnight (Doze, no network): it still writes
+            // THAT evening's review, never the new day's (Nov 27 2026: a late 11:50 PM job filled the next day at 1:46 AM).
+            val now = java.time.LocalDateTime.now()
+            val booked = inputData.getString("date") ?: (if (now.hour < 12) now.toLocalDate().minusDays(1) else now.toLocalDate()).toString()
+            try { if (booked <= Readiness.today()) runFor(applicationContext, booked) } catch (e: Exception) { }
             try { WeeklyRunWrap.maybeAuto(applicationContext, force = true) } catch (e: Exception) { }; return Result.success() }
     }
 
     /** Writes today's review when it's due and not done yet (from report time − 5 min until midnight). Call off the main thread. */
     fun maybeRun(ctx: Context, force: Boolean = false) {
-        if (!AiFood.hasKey(ctx) || !NutritionSync.ready(ctx)) return
-        val today = Readiness.today(); if (doneFor(ctx) == today) return
+        try { clearEarly(ctx) } catch (e: Exception) { }
+        val today = Readiness.today()
         val t = java.time.LocalTime.now(); val mins = t.hour * 60 + t.minute
         if (!force && mins < REVIEW_AT) return
-        run(ctx, today)
+        runFor(ctx, today)
+    }
+
+    /** Writes [date]'s review unless it's done. Today's waits until 9 PM; a day still to come never gets one. */
+    private fun runFor(ctx: Context, date: String) {
+        if (!AiFood.hasKey(ctx) || !NutritionSync.ready(ctx) || doneFor(ctx) == date) return
+        val today = Readiness.today(); if (date > today) return
+        if (date == today && java.time.LocalTime.now().hour < 21) return
+        run(ctx, date)
+    }
+
+    /** Once a day: today's review in the cloud that was written before 9 PM today (too early, e.g. by a job that ran
+     *  late after midnight) is removed, so the Command Center doesn't show it and tonight's review is written as usual. */
+    private fun clearEarly(ctx: Context) {
+        val today = Readiness.today(); if (p(ctx).getString("earlyChecked", "") == today || !NutritionSync.ready(ctx)) return
+        val url = Live.db(ctx) + "/nutrition/" + NutritionSync.key(ctx) + "/beyondstride/review/$today.json"
+        val c = (URL(url).openConnection() as HttpURLConnection).apply { connectTimeout = 15_000; readTimeout = 20_000 }
+        val body = try { if (c.responseCode in 200..299) c.inputStream.bufferedReader().readText() else return } finally { c.disconnect() }
+        p(ctx).edit().putString("earlyChecked", today).apply()
+        val j = try { JSONObject(body) } catch (e: Exception) { return }
+        val at = j.optLong("at", 0L); if (at <= 0L) return
+        val nine = java.time.LocalDate.now().atTime(21, 0).atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
+        if (at >= nine) return
+        val d = (URL(url).openConnection() as HttpURLConnection).apply { requestMethod = "DELETE"; connectTimeout = 15_000; readTimeout = 20_000 }
+        try { d.responseCode } finally { d.disconnect() }
+        if (doneFor(ctx) == today) p(ctx).edit().remove("done").apply()
     }
 
     /** Tonight's to-dos belong to the Evening Report, not the review. */
@@ -57,7 +87,7 @@ object DayReviewAi {
 
     private fun run(ctx: Context, date: String) {
         val day = try { DailySummary.build(ctx, date).optString("text").lines().filterNot { TONIGHT.containsMatchIn(it) }.joinToString("\n") } catch (e: Exception) { "" }
-        val evening = try { EveningReport.build(ctx).let { r -> r.headline + "\n" + r.sections.joinToString("\n") { s -> "${s.title}: ${s.main}" + (if (s.lines.isNotEmpty()) " — " + s.lines.joinToString("; ") else "") } + "\nAdvice: " + r.advice } } catch (e: Exception) { "" }
+        val evening = if (date != Readiness.today()) "" else try { EveningReport.build(ctx).let { r -> r.headline + "\n" + r.sections.joinToString("\n") { s -> "${s.title}: ${s.main}" + (if (s.lines.isNotEmpty()) " — " + s.lines.joinToString("; ") else "") } + "\nAdvice: " + r.advice } } catch (e: Exception) { "" }
         if (day.isBlank() && evening.isBlank()) return
         val prompt = "You are completing a personal daily review for $date. Use only the training / nutrition / recovery data below from the BeyondStride app. " +
             "Return ONLY one valid JSON object with exactly these four string keys:\n{\"wins\":\"\",\"improve\":\"\",\"focus\":\"\",\"lessons\":\"\"}\n\n" +

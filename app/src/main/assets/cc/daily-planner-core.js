@@ -2042,6 +2042,7 @@ function renderDayReview(){
   var key='dayreview_'+dk(today),raw=null;try{raw=localStorage.getItem(key);}catch(e){}
   var rv={};try{rv=raw?JSON.parse(raw):{};}catch(e2){}
   DAY_REV_IDS.forEach(function(id){const e=document.getElementById(id);if(e){e.value=rv[id]||'';autoGrowReviewField(e);}});
+  window.__revShownFor=dk(today);   // the day the boxes now hold
   // A review saved while device storage was full lives in the larger on-device store.
   if(!raw&&typeof journalLargeStoreGet==='function')journalLargeStoreGet(key).then(function(v){
     if(!v||key!=='dayreview_'+dk(today))return;
@@ -2098,6 +2099,9 @@ function clearDayReview(){
   saveDayReview();
 }
 function saveDayReview(quiet){
+  // The boxes still hold another day's review (the page moved to a new day — e.g. past midnight — without redrawing
+  // them): never save that text onto this day. Show this day's own review instead (Nov 27 2026).
+  if(window.__revShownFor&&window.__revShownFor!==dk(today)){try{renderDayReview();}catch(eR){}return;}
   const d={};DAY_REV_IDS.forEach(function(id){const e=document.getElementById(id);if(e)d[id]=e.value;});
   const key='dayreview_'+dk(today);
   const btn=document.querySelector('[onclick="saveDayReview()"]');
