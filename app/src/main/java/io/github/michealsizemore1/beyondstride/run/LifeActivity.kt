@@ -165,7 +165,13 @@ class LifeActivity : Activity() {
         setContentView(RunUi.tabbed(this, box, RunUi.TAB_LIFE))
     }
 
-    override fun onResume() { super.onResume(); CcEngine.get(this); web.onResume(); CcEngine.pushWellness(this); Thread { try { CalendarReminders.refresh(applicationContext) } catch (e: Exception) { } }.start(); web.evaluateJavascript("window.ccSync&&ccSync.now()", null); if (!full) { ui.removeCallbacks(reload); ui.postDelayed(reload, 300) } }
+    // 🧰 Tools open from Settings (Nov 27 2026): Settings → Tools starts this screen on the Tools page; Back returns to Settings.
+    private var toolsFromSettings = false
+    override fun onNewIntent(intent: Intent) { super.onNewIntent(intent); setIntent(intent) }
+    private fun openToolsIfAsked() {
+        if (intent?.getBooleanExtra("tools", false) == true) { intent.removeExtra("tools"); toolsFromSettings = true; showPage(4); moreScroll.scrollTo(0, 0) }
+    }
+    override fun onResume() { super.onResume(); openToolsIfAsked(); CcEngine.get(this); web.onResume(); CcEngine.pushWellness(this); Thread { try { CalendarReminders.refresh(applicationContext) } catch (e: Exception) { } }.start(); web.evaluateJavascript("window.ccSync&&ccSync.now()", null); if (!full) { ui.removeCallbacks(reload); ui.postDelayed(reload, 300) } }
     // Upload anything not yet sent before the app goes to the background.
     override fun onPause() { study.stopReading(); more.pause(); CcEngine.exportLife(this); web.evaluateJavascript("window.ccSync&&ccSync.now()", null); web.onPause(); super.onPause() }
     override fun onSaveInstanceState(out: Bundle) { super.onSaveInstanceState(out); out.putInt("page", page) }
@@ -185,8 +191,7 @@ class LifeActivity : Activity() {
             Triple("📚", "Library", "library") to "Books, audiobooks, finish plan",
             Triple("🧘", "Meditate", "meditate") to "Guided timer, scripture, session log",
             Triple("❤️", "Wellness", "wellness") to "BP + report, meds, weight, sleep, movement",
-            Triple("🧠", "Brain Games", "brain") to "Memory, focus and quick math, a daily workout",
-            Triple("🧰", "Tools", "tools") to "Search everything, Ask AI about everything, files, full view")
+            Triple("🧠", "Brain Games", "brain") to "Memory, focus and quick math, a daily workout")
         items.chunked(2).forEach { row ->
             col.addView(LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; setPadding(0, d(8), 0, 0)
                 row.forEachIndexed { i, (t, desc) ->
@@ -263,7 +268,7 @@ class LifeActivity : Activity() {
                 setLayerInset(1, 0, 0, 0, 0); setLayerGravity(1, android.view.Gravity.BOTTOM); setLayerHeight(1, RunUi.dp(this@LifeActivity, 3)) } else null
         }
         style(tabToday, p == 0); style(tabReviews, p == 1); style(tabMonth, p == 7); style(tabYear, p == 8); style(tabReview, p == 9); style(tabMore, p == 4)
-        val moreOn = p == 2 || p == 4 || p == 5 || p == 6   // Tools (4) opens from ☰ More
+        val moreOn = p == 2 || p == 5 || p == 6
         tabTabs.setTextColor(if (moreOn) Color.WHITE else RunUi.MUTED); tabTabs.setBackgroundColor(if (moreOn) 0xFF2A3430.toInt() else 0xFF222B28.toInt())
         if (p == 0 || p == 1 || p == 6 || p in 7..9) reload.run()
         // 📊 This Week (goals) card removed from Review at your request (Nov 21 2026).
@@ -1413,6 +1418,8 @@ class LifeActivity : Activity() {
     @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
         if (full && web.canGoBack()) web.goBack()
+        else if (page == 4 && toolsFromSettings) { toolsFromSettings = false; showPage(0)
+            startActivity(Intent(this, RunSettingsActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_NO_ANIMATION)) }
         else if (page == 6 || page == 4) showPage(5)
         else if (full || page in listOf(1, 3, 5, 7, 8, 9)) show(false)
         else @Suppress("DEPRECATION") super.onBackPressed()

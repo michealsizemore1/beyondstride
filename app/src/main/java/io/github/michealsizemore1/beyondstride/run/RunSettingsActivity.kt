@@ -412,6 +412,8 @@ class RunSettingsActivity : Activity() {
         row("✨", "AI food search", if (AiFood.hasKey(ctx)) "Key saved · AI search and label photos on" else "Add your Anthropic key") { page = "ai"; render() }
         row("⇪", "Backup", Backup.lastAt(ctx).takeIf { it > 0 }?.let { "Last: " + java.text.SimpleDateFormat("MMM d, h:mm a", java.util.Locale.getDefault()).format(java.util.Date(it)) +
             (if (Backup.auto(ctx) && Backup.uri(ctx) != null) " · auto" else "") } ?: "Not set up") { page = "backup"; render() }
+        row("🧰", "Tools", "Search everything · Ask AI about everything · files · full view") {
+            startActivity(Intent(ctx, LifeActivity::class.java).putExtra("tools", true).addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)) }
         row("📓", "Life tab", if (LifeTab.on(ctx)) "Command Center settings, AI key, sync, storage" else "Hidden · tap to show it again") { page = "life"; render() }
         run { val L = io.github.michealsizemore1.beyondstride.AppLock
             row("🔒", "App lock", if (!L.available(ctx)) "Needs a screen lock on the phone (Settings → Lock screen)" else if (L.enabled(ctx)) "On · asks when you open the app after closing it, or after 5 minutes away · tap to turn off" + L.last(ctx).let { if (it.isEmpty()) "" else "\nLast: $it" } else "Off · tap to require fingerprint or screen lock") {
