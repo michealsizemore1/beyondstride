@@ -412,7 +412,30 @@ class LifeActivity : Activity() {
             view.addView(bar, LinearLayout.LayoutParams(MATCH_PARENT, d(8)).apply { topMargin = d(8) })
             view.addView(nextLine.apply { setPadding(0, d(8), 0, d(2)) })
             view.addView(body)
-            view.addView(RunUi.text(this@LifeActivity, "Tap a time to change it (just that day or every day). Tap the circle: done → not done → not marked. Add or reorder items in Tools → 📓 Full view.", RunUi.DIM, 10f).apply { setPadding(0, d(8), 0, 0) })
+            view.addView(RunUi.text(this@LifeActivity, "Tap a time to change it, or an item to change its time or delete it. Tap the circle: done → not done → not marked. Add or reorder items in Tools → 📓 Full view.", RunUi.DIM, 10f).apply { setPadding(0, d(8), 0, 0) })
+        }
+        private fun dayName(): Pair<String?, String> {
+            val other = viewDate?.takeIf { it != java.time.LocalDate.now().toString() }
+            return other to (other?.let { java.time.LocalDate.parse(it).format(java.time.format.DateTimeFormatter.ofPattern("EEE, MMM d", java.util.Locale.US)) } ?: "today")
+        }
+        /** 🗑 / 🕒 An item's menu: change its time, or delete it (just this day, or every day from now on). */
+        private fun itemMenu(o: JSONObject) {
+            val id = o.optString("id"); val label = o.optString("label"); val (other, dn) = dayName()
+            val every = o.optBoolean("everyOk")
+            val opts = mutableListOf("🕒 Change time", if (every) "🗑 Delete just $dn" else "🗑 Delete")
+            if (every) opts += "🗑 Delete every day from ${if (other == null) "today" else dn} on"
+            android.app.AlertDialog.Builder(this@LifeActivity).setTitle(label)
+                .setItems(opts.toTypedArray()) { _, w ->
+                    when (w) {
+                        0 -> editTime(o)
+                        else -> { val scope = if (w == 2) "every" else "day"
+                            android.app.AlertDialog.Builder(this@LifeActivity)
+                                .setMessage(if (scope == "every") "Delete \"$label\" from My Schedule every day from ${if (other == null) "today" else dn} on? You can bring it back from \"Deleted items\" under the schedule."
+                                    else "Delete \"$label\" from My Schedule for $dn?")
+                                .setPositiveButton("Delete") { _, _ -> js("ccNative.removeItem(${JSONObject.quote(id)},'$scope'${dayArg()})"); sig = "" }
+                                .setNegativeButton("Cancel", null).show() }
+                    }
+                }.setNegativeButton("Cancel", null).show()
         }
         private fun editTime(o: JSONObject) {
             val id = o.optString("id"); val label = o.optString("label"); val mins = o.optInt("mins")
@@ -459,6 +482,8 @@ class LifeActivity : Activity() {
                     setOnClickListener { editTime(o) }
                 }, LinearLayout.LayoutParams(d(72), ViewGroup.LayoutParams.WRAP_CONTENT))
                 row.addView(LinearLayout(this@LifeActivity).apply { orientation = LinearLayout.VERTICAL
+                    // Tap the item for its menu: change time or delete (long-press works too).
+                    setOnClickListener { itemMenu(o) }; setOnLongClickListener { itemMenu(o); true }
                     addView(RunUi.text(this@LifeActivity, o.optString("label"), if (fixed) RunUi.MUTED else Color.WHITE, 14f, true))
                     o.optString("detail").takeIf { it.isNotBlank() }?.let { addView(RunUi.text(this@LifeActivity, it, RunUi.DIM, 11f)) }
                     alpha = if (o.optBoolean("done") && !fixed) 0.65f else 1f
@@ -474,6 +499,20 @@ class LifeActivity : Activity() {
                     row.addView(dot, LinearLayout.LayoutParams(d(30), d(30)).apply { marginStart = d(8) })
                 }
                 body.addView(row)
+            }
+            // 🗑 Deleted items for this day: tap to bring one back.
+            val hid = j.optJSONArray("scheduleHidden")
+            if (hid != null && hid.length() > 0) {
+                val list = (0 until hid.length()).map { hid.getJSONObject(it) }
+                body.addView(RunUi.text(this@LifeActivity, "🗑 Deleted items (${list.size}) · tap to bring one back", RunUi.DIM, 11f).apply {
+                    setPadding(d(8), d(8), 0, d(2))
+                    setOnClickListener {
+                        android.app.AlertDialog.Builder(this@LifeActivity).setTitle("Bring back")
+                            .setItems(list.map { it.optString("label") + if (it.optBoolean("every")) "  (every day)" else "  (this day)" }.toTypedArray()) { _, w ->
+                                js("ccNative.restoreItem(${JSONObject.quote(list[w].optString("id"))}${dayArg()})"); sig = "" }
+                            .setNegativeButton("Cancel", null).show()
+                    }
+                })
             }
         }
     }

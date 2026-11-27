@@ -45,7 +45,14 @@
     // An "every day" time that was taken away: drop what it put on this day.
     Object.keys(ov).forEach(function(id){var o=ov[id];if(o&&o.fromDefault&&!(defs[id]&&key>=String(defs[id].from||''))){delete o.time;delete o.mins;delete o.fromDefault;if(!Object.keys(o).length)delete ov[id];changed=true;}});
     if(changed)localStorage.setItem(ok,JSON.stringify(ov));
+    // 🗑 Items deleted "every day from …": hidden on each day from that date.
+    var hides=schedHides(),hk=journalScheduleHiddenKey(key),hid=[];try{hid=JSON.parse(localStorage.getItem(hk)||'[]');}catch(e){}if(!Array.isArray(hid))hid=[];
+    var before=hid.join('|');
+    Object.keys(hides).forEach(function(id){var on=key>=String(hides[id].from||'');var i=hid.indexOf(id);if(on&&i<0)hid.push(id);});
+    if(hid.join('|')!==before)localStorage.setItem(hk,JSON.stringify(hid));
   }
+  function schedHides(){try{var v=JSON.parse(localStorage.getItem('bs_schedule_hides')||'{}');return v&&typeof v==='object'?v:{};}catch(e){return {};}}
+  function schedLabels(){try{return JSON.parse(localStorage.getItem('bs_schedule_hidden_labels')||'{}')||{};}catch(e){return {};}}
   if(typeof window.renderJournalSchedule==='function'&&!window.renderJournalSchedule.__bsTimes){
     var origRJS=window.renderJournalSchedule;
     window.renderJournalSchedule=function(){try{applySchedDefaults(dk(today));}catch(e){}return origRJS.apply(this,arguments);};
@@ -56,6 +63,9 @@
     try{renderJournalSchedule();}catch(e){}
     var ovr={};try{ovr=JSON.parse(localStorage.getItem(journalScheduleOverridesKey(dk(today)))||'{}')||{};}catch(e){}
     var defs=schedDefaults();
+    var hiddenNow=[];try{hiddenNow=JSON.parse(localStorage.getItem(journalScheduleHiddenKey(dk(today)))||'[]')||[];}catch(e){}
+    var labels=schedLabels(),hides=schedHides();
+    window.__bsHidden=hiddenNow.map(function(id){return {id:id,label:labels[id]||id.replace(/^schedule-/,'').replace(/-/g,' '),every:!!hides[id]};});
     var map=window._journalScheduleItemsById||{},items=Object.keys(map).map(function(id){return map[id];});
     var now=new Date(),cur=now.getHours()*60+now.getMinutes(),next=-1;
     for(var i=0;i<items.length;i++){if(!items[i].fixed&&!items[i].done&&Number(items[i].mins)>=cur){next=i;break;}}
@@ -600,7 +610,29 @@
     all:function(date){goRealDay();var f=JSON.parse(window.ccNative.focus());f.checks=checks();f.schedule=schedule();f.review=review();f.wellness=wellness();try{var sd=document.getElementById('bsSleepDetail');f.sleepDetail=sd&&sd.style.display!=='none'?sd.textContent:'';}catch(e){f.sleepDetail='';}f.bible=bible();f.meditation=meditation();f.weekly=weekly();f.journal=journalText();f.library=library();
       // Another day picked on the Daily calendar: its Focus, checks and schedule (the rest stays today's).
       if(date&&date!==realKey()){var g=JSON.parse(window.ccNative.focus(date));f.items=g.items;f.date=g.date;f.checks=checks(date);f.schedule=schedule(date);f.viewing=date;}
+      f.scheduleHidden=window.__bsHidden||[];
       return JSON.stringify(f);},
+    /** My Schedule: delete an item. scope 'day' = just this day, 'every' = this day and every day after. Items you added for one day are removed. */
+    removeItem:function(id,scope,date){goDay(date);try{renderJournalSchedule();}catch(e){}
+      var it=(window._journalScheduleItemsById||{})[id];if(!it)return false;var key=dk(today);
+      if(it.manualCreated){var items=journalManualScheduleItems().filter(function(x){return x.id!==it.manualItemId;});localStorage.setItem('journal_manual_schedule_items',JSON.stringify(items));}
+      if(it._moveId){var mv=journalScheduleMoves().filter(function(x){return x.id!==it._moveId;});localStorage.setItem('journal_schedule_moves',JSON.stringify(mv));}
+      if(!it.manualCreated&&!it._moveId){
+        var labels=schedLabels();labels[id]=String(it.label||id);localStorage.setItem('bs_schedule_hidden_labels',JSON.stringify(labels));
+        var ids=TRAIN_IDS.indexOf(id)>=0?TRAIN_IDS:[id];
+        if(scope==='every'){var h=schedHides();ids.forEach(function(x){h[x]={from:key};});localStorage.setItem('bs_schedule_hides',JSON.stringify(h));}
+        var hk=journalScheduleHiddenKey(key),hid=[];try{hid=JSON.parse(localStorage.getItem(hk)||'[]');}catch(e){}if(!Array.isArray(hid))hid=[];
+        ids.forEach(function(x){if(hid.indexOf(x)<0)hid.push(x);});localStorage.setItem(hk,JSON.stringify(hid));
+      }
+      try{renderJournalSchedule();}catch(e){}try{save();}catch(e){}refresh();try{if(window.BSNative&&BSNative.changed)BSNative.changed();}catch(e){}return true;},
+    /** My Schedule: bring a deleted item back (this day, and every day if it was deleted for every day). */
+    restoreItem:function(id,date){goDay(date);var key=dk(today);var ids=TRAIN_IDS.indexOf(id)>=0?TRAIN_IDS:[id];
+      var h=schedHides();ids.forEach(function(x){delete h[x];});localStorage.setItem('bs_schedule_hides',JSON.stringify(h));
+      var hk=journalScheduleHiddenKey(key),hid=[];try{hid=JSON.parse(localStorage.getItem(hk)||'[]');}catch(e){}if(!Array.isArray(hid))hid=[];
+      hid=hid.filter(function(x){return ids.indexOf(x)<0;});localStorage.setItem(hk,JSON.stringify(hid));
+      // Later days that were already hidden by the every-day delete come back too.
+      Object.keys(localStorage).forEach(function(k){if(k.indexOf('journal_schedule_hidden_')===0&&k.slice(24)>key){try{var a=JSON.parse(localStorage.getItem(k)||'[]');if(Array.isArray(a)){var b=a.filter(function(x){return ids.indexOf(x)<0;});if(b.length!==a.length)localStorage.setItem(k,JSON.stringify(b));}}catch(e){}}});
+      try{renderJournalSchedule();}catch(e){}try{save();}catch(e){}refresh();try{if(window.BSNative&&BSNative.changed)BSNative.changed();}catch(e){}return true;},
     /** My Schedule: change an item's time. scope 'day' = just this day, 'every' = this day and every day after, 'reset' = back to its usual time. */
     setTime:function(id,mins,scope,date){goDay(date);try{renderJournalSchedule();}catch(e){}
       var it=(window._journalScheduleItemsById||{})[id];if(!it)return false;
