@@ -70,6 +70,48 @@ class SpendingActivity : Activity() {
             addView(TodaySpending.Bars(ctx, m.lastWeekVals, -1, big = true) { i -> TodaySpending.showDay(this@SpendingActivity, m, m.lastWeek[i]) }, LinearLayout.LayoutParams(MP, dp(170)).apply { topMargin = dp(12) })
         })
 
+        // 📊 Monthly spending vs the retirement plan's household budget (Retirement Planner).
+        run {
+            val plan = TodayRetirement.plannedMonthly(this)
+            val months = m.months
+            col.addView(card().apply {
+                addView(LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+                    addView(RunUi.text(ctx, "Monthly vs your plan", Color.WHITE, 17f, true), LinearLayout.LayoutParams(0, WC, 1f))
+                    if (plan > 0) addView(RunUi.text(ctx, "plan ${TodaySpending.money(plan.toDouble())}/mo", RunUi.MUTED, 12f)) })
+                when {
+                    months == null -> addView(RunUi.text(ctx, "Update M&C Money (Settings → Check for updates) to see monthly totals here.", RunUi.MUTED, 13f).apply { setPadding(0, dp(6), 0, 0) })
+                    plan <= 0 -> addView(RunUi.text(ctx, "Update or open Retirement Planner (and allow it on the Today screen's Retirement card) to compare with your plan's household budget.", RunUi.MUTED, 13f).apply { setPadding(0, dp(6), 0, 0) })
+                }
+                if (months != null) {
+                    val today = m.today; val key = today.toString().substring(0, 7)
+                    val soFar = months.optDouble(key, 0.0)
+                    val dim = today.lengthOfMonth(); val pace = soFar / today.dayOfMonth * dim
+                    addView(LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; setPadding(0, dp(8), 0, 0)
+                        stat(this, "${today.format(DateTimeFormatter.ofPattern("MMMM", Locale.US))} so far", TodaySpending.money(soFar), TodaySpending.GREEN)
+                        stat(this, "On pace for", TodaySpending.money(pace), if (plan > 0 && pace > plan) 0xFFF87171.toInt() else Color.WHITE)
+                        if (plan > 0) stat(this, "Plan", TodaySpending.money(plan.toDouble())) })
+                    if (plan > 0) {
+                        val diff = pace - plan
+                        addView(RunUi.text(ctx, if (diff > 0) "On pace to spend ${TodaySpending.money(diff)} more than your plan assumes this month." else "On pace to spend ${TodaySpending.money(-diff)} less than your plan assumes this month.",
+                            if (diff > 0) 0xFFF87171.toInt() else TodaySpending.GREEN, 12f, true).apply { setPadding(0, dp(6), 0, 0) })
+                    }
+                    // Past months, newest first.
+                    val mf = DateTimeFormatter.ofPattern("MMM yyyy", Locale.US)
+                    months.keys().asSequence().filter { it < key }.sortedDescending().forEach { k ->
+                        val v = months.optDouble(k, 0.0)
+                        addView(LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; setPadding(0, dp(6), 0, dp(2))
+                            addView(RunUi.text(ctx, try { java.time.YearMonth.parse(k).format(mf) } catch (e: Exception) { k }, Color.WHITE, 14f), LinearLayout.LayoutParams(0, WC, 1f))
+                            addView(RunUi.text(ctx, TodaySpending.money(v), Color.WHITE, 14f, true))
+                            if (plan > 0) { val dd = v - plan
+                                addView(RunUi.text(ctx, (if (dd > 0) "+" else "−") + TodaySpending.money(Math.abs(dd)), if (dd > 0) 0xFFF87171.toInt() else TodaySpending.GREEN, 12f, true).apply { gravity = Gravity.END },
+                                    LinearLayout.LayoutParams(dp(84), WC)) }
+                        })
+                    }
+                    if (plan > 0) addView(RunUi.text(ctx, "Plan = your retirement plan's household expenses plus rent, per month, in today's dollars. Spending uses M&C Money's budget rules (no transfers, card payments or income).", RunUi.DIM, 11f).apply { setPadding(0, dp(8), 0, 0) })
+                }
+            })
+        }
+
         // Each day, newest first.
         col.addView(card().apply {
             addView(RunUi.text(ctx, "Day by day", Color.WHITE, 17f, true))

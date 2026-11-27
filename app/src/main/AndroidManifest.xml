@@ -31,6 +31,8 @@
 
     <!-- 💳 Today → Spending: M&C Money's daily totals (asked for on the Spending card) -->
     <uses-permission android:name="com.sizemore.mcmoney.READ_SPENDING" />
+    <!-- 🏖️ Today → Retirement: the Retirement Planner's headline numbers (asked for on the Retirement card) -->
+    <uses-permission android:name="com.sizemore.retirement.READ_SUMMARY" />
 
     <!-- 📱 Life → More → My apps: open the owner's other apps -->
     <queries>

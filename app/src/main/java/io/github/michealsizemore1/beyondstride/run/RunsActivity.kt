@@ -144,7 +144,7 @@ open class RunsActivity : Activity() {
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == 86) dayPermsDone()
-        if (requestCode == TodaySpending.REQ) render()
+        if (requestCode == TodaySpending.REQ || requestCode == TodayRetirement.REQ) render()
     }
     @Deprecated("") override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         @Suppress("DEPRECATION") super.onActivityResult(requestCode, resultCode, data)
@@ -312,6 +312,12 @@ open class RunsActivity : Activity() {
             orientation = LinearLayout.VERTICAL
             layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { bottomMargin = dp(8) }
             TodaySpending.fill(this@RunsActivity, this)
+        })
+        // 🏖️ Retirement from the Retirement Planner: countdown, plan confidence, assets, net worth.
+        col.addView(RunUi.card(this).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { bottomMargin = dp(8) }
+            TodayRetirement.fill(this@RunsActivity, this)
         })
         // 🌤 Weather.
         col.addView(RunUi.card(this).apply {

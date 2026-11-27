@@ -105,6 +105,8 @@ object TodaySpending {
         val days: JSONObject = root.optJSONObject("days") ?: JSONObject()
         /** Each day's transactions (merchant m, amount a, category c, account acct, person p); null with an older M&C Money. */
         val tx: JSONObject? = root.optJSONObject("tx")
+        /** Monthly totals ("2026-11" → $), last 6 months with this month so far; null with an older M&C Money. */
+        val months: JSONObject? = root.optJSONObject("months")
         // Spending can only be added inside M&C Money, and it sends new totals the moment you save, so a day after its
         // last send had nothing added: $0.
         private val lastDay = days.keys().asSequence().maxOrNull() ?: ""
