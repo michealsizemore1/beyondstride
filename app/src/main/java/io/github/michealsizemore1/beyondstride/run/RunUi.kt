@@ -21,10 +21,9 @@ import io.github.michealsizemore1.beyondstride.RunMath
 /** Look and building blocks for the phone's Running screens. */
 object RunUi {
     val BG: Int get() = io.github.michealsizemore1.beyondstride.Theme.bg
-    // Usual colors, or the Christmas theme's (Theme.xmas): evergreen tiles and a gold accent.
+    // Usual colors, or the seasonal theme's (Theme.season).
     val CARD: Int get() = io.github.michealsizemore1.beyondstride.Theme.card
     val ACCENT: Int get() = io.github.michealsizemore1.beyondstride.Theme.accent
-    val XRED: Int get() = io.github.michealsizemore1.beyondstride.Theme.XMAS_RED
     // Secondary text is brighter on the lighter background so it doesn't blend in.
     val MUTED: Int get() = if (io.github.michealsizemore1.beyondstride.Theme.light) 0xFFD3DAD7.toInt() else 0xFF9AA3A0.toInt()
     val DIM: Int get() = if (io.github.michealsizemore1.beyondstride.Theme.light) 0xFFBCC5C1.toInt() else 0xFF5E6663.toInt()
@@ -42,12 +41,9 @@ object RunUi {
 
     fun rounded(color: Int, r: Float) = GradientDrawable().apply {
         setColor(color); cornerRadius = r
-        // 🎄 Christmas theme: tiles get a thin cranberry-red edge.
-        if (io.github.michealsizemore1.beyondstride.Theme.xmas && color == CARD) setStroke(Math.max(2, (r / 9f).toInt()), XMAS_EDGE)
+        // 🎨 Seasonal theme: tiles get a thin colored edge (cranberry for Christmas, orange for Halloween…).
+        io.github.michealsizemore1.beyondstride.Theme.season?.let { t -> if (color == CARD) setStroke(Math.max(2, (r / 9f).toInt()), t.edge) }
     }
-    /** Christmas theme reds: the tiles' edge and the bottom bar. */
-    const val XMAS_EDGE = 0xB3B3262E.toInt()
-    const val XMAS_BAR = 0xFF3B0F15.toInt()
 
     fun card(ctx: Context) = LinearLayout(ctx).apply {
         orientation = LinearLayout.VERTICAL
@@ -215,7 +211,7 @@ object RunUi {
         )
         val bar = LinearLayout(act).apply {
             orientation = LinearLayout.HORIZONTAL
-            setBackgroundColor(if (io.github.michealsizemore1.beyondstride.Theme.xmas) XMAS_BAR else 0xFF0E1412.toInt())   // cranberry bar with the Christmas theme
+            setBackgroundColor(io.github.michealsizemore1.beyondstride.Theme.season?.bar ?: 0xFF0E1412.toInt())   // the seasonal theme's bar color
             setPadding(dp(act, 6), dp(act, 6), dp(act, 6), dp(act, 6))
             tabs.forEachIndexed { i, (name, glyph, cls) ->
                 val on = ids[i] == selected || (ids[i] == TAB_FITNESS && fitnessSide)
@@ -241,7 +237,7 @@ object RunUi {
                 v.setPadding(dp(act, 6), dp(act, 6), dp(act, 6), dp(act, 6) + b); insets
             }
         }
-        val line = View(act).apply { setBackgroundColor(if (io.github.michealsizemore1.beyondstride.Theme.xmas) 0xFFB3262E.toInt() else 0x22FFFFFF) }
+        val line = View(act).apply { setBackgroundColor(io.github.michealsizemore1.beyondstride.Theme.season?.line ?: 0x22FFFFFF) }
         return LinearLayout(act).apply {
             orientation = LinearLayout.VERTICAL; setBackgroundColor(BG)
             if (fitnessSide) {

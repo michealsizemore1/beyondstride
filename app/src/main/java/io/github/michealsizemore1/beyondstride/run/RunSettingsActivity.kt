@@ -362,6 +362,17 @@ class RunSettingsActivity : Activity() {
         show(col)
     }
 
+    /** 🎨 Seasonal theme picker (the old Command Center's themes, without "Original"). */
+    private fun pickTheme() {
+        val T = io.github.michealsizemore1.beyondstride.Theme
+        val ids = listOf("") + T.PALETTES.map { it.id }
+        val names = listOf("Off (usual colors)") + T.PALETTES.map { it.emoji + "  " + it.label }
+        val cur = ids.indexOf(T.season?.id ?: "").coerceAtLeast(0)
+        android.app.AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert).setTitle("Theme")
+            .setSingleChoiceItems(names.toTypedArray(), cur) { d, w -> d.dismiss(); Seasons.set(this, ids[w]); recreate() }
+            .setNegativeButton("Cancel", null).show()
+    }
+
     private fun toggleBg() {
         val T = io.github.michealsizemore1.beyondstride.Theme
         getSharedPreferences("runsettings", 0).edit().putString("bgStyle", if (T.light) "dark" else "light").putLong("settingsAt", System.currentTimeMillis()).apply()
@@ -422,10 +433,9 @@ class RunSettingsActivity : Activity() {
                 L.setEnabled(ctx, !L.enabled(ctx)); render() } }
         row("ⓘ", "About", "Phone app " + packageManager.getPackageInfo(packageName, 0).versionName) { page = "about"; render() }
         row("☰", "Menu style", "Cards · tap to switch back to classic (phone and watch)") { setMenuStyle("classic") }
-        run { val T = io.github.michealsizemore1.beyondstride.Theme
-            row("🎄", "Christmas theme", if (T.xmas) "On · evergreen, gold and snow on phone and watch · tap to turn off" else "Off · tap for evergreen, gold and falling snow (phone and watch)") {
-                Christmas.setOn(ctx, !T.xmas); recreate() }
-            if (T.xmas) row("❄️", "Falling snow", if (T.snow) "On · tap to turn off (phone only)" else "Off · tap to turn on") { Christmas.setSnow(ctx, !T.snow); Christmas.apply(this@RunSettingsActivity); render() } }
+        run { val T = io.github.michealsizemore1.beyondstride.Theme; val S = T.season
+            row(S?.emoji ?: "🎨", "Theme", if (S == null) "Off · tap for Halloween, Thanksgiving, Christmas, New Year's, Winter, Spring or 4th of July" else "${S.label} · on phone and watch · tap to change or turn off") { pickTheme() }
+            if (S != null) row("✨", Seasons.effectName(S.id), if (T.effects) "On · tap to turn off (phone only)" else "Off · tap to turn on") { Seasons.setEffects(ctx, !T.effects); Seasons.apply(this@RunSettingsActivity); render() } }
         row("◐", "Background", if (io.github.michealsizemore1.beyondstride.Theme.light) "Lighter · tap for dark" else "Dark · tap for lighter") { toggleBg() }
         show(col)
     }

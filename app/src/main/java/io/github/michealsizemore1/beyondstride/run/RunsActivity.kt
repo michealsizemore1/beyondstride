@@ -275,10 +275,10 @@ open class RunsActivity : Activity() {
 
         // (📝 My notes is at the bottom of Today; 🧠 Coach AI sits under "This morning".)
 
-        // 🎄 Christmas theme: a countdown under the title, in red and gold.
-        if (io.github.michealsizemore1.beyondstride.Theme.xmas && this !is AllRunsActivity) Christmas.countdown()?.let { t ->
+        // 🎨 Seasonal theme: a countdown under the title in the theme's colors.
+        if (io.github.michealsizemore1.beyondstride.Theme.xmas && this !is AllRunsActivity) Seasons.countdown()?.let { t ->
             col.addView(RunUi.text(ctx, t, RunUi.ACCENT, 15f, true).apply {
-                background = RunUi.rounded(0x33E5484D, dp(14).toFloat()); setPadding(dp(14), dp(8), dp(14), dp(8))
+                background = RunUi.rounded((io.github.michealsizemore1.beyondstride.Theme.season?.edge ?: 0) and 0x00FFFFFF or 0x40000000, dp(14).toFloat()); setPadding(dp(14), dp(8), dp(14), dp(8))
                 layoutParams = LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { topMargin = dp(10); bottomMargin = dp(4) } }) }
         // 🩺 Something important stopped working (Settings → System health; can be turned off there).
         try { SysHealth.todayBanner(this)?.let { col.addView(it) } } catch (e: Exception) { }
