@@ -40,7 +40,14 @@ object RunUi {
         if (bold) typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
     }
 
-    fun rounded(color: Int, r: Float) = GradientDrawable().apply { setColor(color); cornerRadius = r }
+    fun rounded(color: Int, r: Float) = GradientDrawable().apply {
+        setColor(color); cornerRadius = r
+        // 🎄 Christmas theme: tiles get a thin cranberry-red edge.
+        if (io.github.michealsizemore1.beyondstride.Theme.xmas && color == CARD) setStroke(Math.max(2, (r / 9f).toInt()), XMAS_EDGE)
+    }
+    /** Christmas theme reds: the tiles' edge and the bottom bar. */
+    const val XMAS_EDGE = 0xB3B3262E.toInt()
+    const val XMAS_BAR = 0xFF3B0F15.toInt()
 
     fun card(ctx: Context) = LinearLayout(ctx).apply {
         orientation = LinearLayout.VERTICAL
@@ -208,7 +215,7 @@ object RunUi {
         )
         val bar = LinearLayout(act).apply {
             orientation = LinearLayout.HORIZONTAL
-            setBackgroundColor(0xFF0E1412.toInt())
+            setBackgroundColor(if (io.github.michealsizemore1.beyondstride.Theme.xmas) XMAS_BAR else 0xFF0E1412.toInt())   // cranberry bar with the Christmas theme
             setPadding(dp(act, 6), dp(act, 6), dp(act, 6), dp(act, 6))
             tabs.forEachIndexed { i, (name, glyph, cls) ->
                 val on = ids[i] == selected || (ids[i] == TAB_FITNESS && fitnessSide)
@@ -234,7 +241,7 @@ object RunUi {
                 v.setPadding(dp(act, 6), dp(act, 6), dp(act, 6), dp(act, 6) + b); insets
             }
         }
-        val line = View(act).apply { setBackgroundColor(0x22FFFFFF) }
+        val line = View(act).apply { setBackgroundColor(if (io.github.michealsizemore1.beyondstride.Theme.xmas) 0xFFB3262E.toInt() else 0x22FFFFFF) }
         return LinearLayout(act).apply {
             orientation = LinearLayout.VERTICAL; setBackgroundColor(BG)
             if (fitnessSide) {
