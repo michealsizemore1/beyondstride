@@ -60,6 +60,7 @@
         <package android:name="com.sizemore.dates" />
         <package android:name="com.sizemore.upkeep" />
         <package android:name="com.sizemore.range" />
+        <package android:name="com.sizemore.pets" />
     </queries>
 
     <application

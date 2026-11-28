@@ -103,7 +103,7 @@ class AppsActivity : Activity() {
         "💰 Money & Business" to listOf("com.sizemore.mcmoney", "com.sizemore.retirement", "com.sizemore.msiz", "com.sizemore.ebay"),
         "❤️ Health" to listOf("com.sizemore.health"),
         "🗂 Life Admin" to listOf("com.sizemore.dates", "com.sizemore.upkeep"),
-        "🏠 Home & Hobbies" to listOf("com.sizemore.benefits", "com.sizemore.cookbook", "com.sizemore.books", "com.sizemore.records", "com.sizemore.spanish", "com.sizemore.range"),
+        "🏠 Home & Hobbies" to listOf("com.sizemore.benefits", "com.sizemore.cookbook", "com.sizemore.books", "com.sizemore.records", "com.sizemore.spanish", "com.sizemore.range", "com.sizemore.pets"),
         "🏟️ Sports" to listOf("com.sizemore.top25", "com.sizemore.nfl", "com.sizemore.nhl", "com.sizemore.thew"),
         "🏃 Running & Athletics" to listOf("com.sizemore.trackfield", "com.sizemore.ncaatf", "com.sizemore.xc"))
     /** Your other apps (package, name, fallback icon). Listed in the manifest's <queries> so Android lets us open them. */
@@ -127,5 +127,6 @@ class AppsActivity : Activity() {
         Triple("com.sizemore.health", "Health Records", "❤️"),
         Triple("com.sizemore.dates", "Dates & Docs", "📅"),
         Triple("com.sizemore.upkeep", "Vehicle Upkeep", "🔧"),
-        Triple("com.sizemore.range", "Range Log", "🎯"))
+        Triple("com.sizemore.range", "Range Log", "🎯"),
+        Triple("com.sizemore.pets", "Pet Care", "🐾"))
 }
