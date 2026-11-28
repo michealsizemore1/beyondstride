@@ -72,6 +72,8 @@ object CcEngine {
                     // 🔔 Calendar events, kept on the phone for reminders (the Life tab no longer syncs through the cloud).
                     @JavascriptInterface fun calendar(json: String) { val app = context.applicationContext
                         if (CalendarReminders.saveEvents(app, json)) Thread { try { CalendarReminders.refresh(app) } catch (e: Exception) { } }.start() }
+                    // 📅 The next two weeks of the calendar for Today's Calendar card.
+                    @JavascriptInterface fun upcoming(json: String) { val app = context.applicationContext; TodayCalendar.save(app, json) }
                 }, "BSNative")
             }.also { web = it }
         }

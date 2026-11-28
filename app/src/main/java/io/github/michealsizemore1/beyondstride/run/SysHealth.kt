@@ -208,7 +208,7 @@ class SystemHealthActivity : Activity() {
         })
         sw("Warn me when something stops", "A red line on Today and at most one notification a day (phone only)", SysHealth.warnOn(this)) { SysHealth.setWarn(this, it) }
         sw("Track which screens I use", "Stays on this phone; only used for the list above", SysHealth.trackOn(this)) { SysHealth.setTrack(this, it) }
-        if (TodayHealth.installed(this)) sw("Health card on Today", "From the Health Records app", TodayHealth.shown(this)) { TodayHealth.setShown(this, it) }
+        sw("Calendar card on Today", "Coming up on the Life tab's calendar (not workouts)", TodayCalendar.shown(this)) { TodayCalendar.setShown(this, it) }
 
         setContentView(ScrollView(this).apply { setBackgroundColor(RunUi.BG); addView(col) })
     }

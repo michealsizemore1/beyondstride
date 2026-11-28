@@ -732,8 +732,16 @@
     localStorage.setItem('sunWeeks1','1');}catch(e){}})();
   // 🔔 Calendar events go to the phone (for reminders), since the Life tab no longer syncs through the cloud.
   function sendCal(v){try{if(window.BSNative&&BSNative.calendar)BSNative.calendar(v==null?(localStorage.getItem('journal_calendar_events')||'[]'):String(v));}catch(e){}}
-  (function(){var si=Storage.prototype.setItem;Storage.prototype.setItem=function(k,v){var r=si.apply(this,arguments);if(k==='journal_calendar_events'&&this===window.localStorage)sendCal(v);return r;};})();
+  (function(){var si=Storage.prototype.setItem;Storage.prototype.setItem=function(k,v){var r=si.apply(this,arguments);if(k==='journal_calendar_events'&&this===window.localStorage){sendCal(v);setTimeout(sendUpcoming,50);}if(k==='meridian_money_data_v5'&&this===window.localStorage)setTimeout(sendUpcoming,50);return r;};})();
   setTimeout(function(){sendCal();},2000);
+  // 📅 The next two weeks of the calendar (your events, money dates…; not the training plan) for BeyondStride's
+  // Today "Calendar" card (Nov 27 2026). Sent on load and whenever calendar events are saved.
+  function sendUpcoming(){try{if(!window.BSNative||!BSNative.upcoming)return;var t=new Date(),from=dk(t),e2=new Date(t);e2.setDate(e2.getDate()+14);var to=dk(e2);
+    var list=journalCalendarCombinedEvents().filter(function(e){return e&&!e.trainingPlan&&e.date>=from&&e.date<=to;})
+      .map(function(e){return {date:e.date,time:e.time||'',title:e.title||'Untitled event',note:e.note||'',kind:e.habitGrowth?'habit':e.moneyEvent?'money':'mine'};})
+      .sort(function(a,b){return (a.date+(a.time||'99:99')).localeCompare(b.date+(b.time||'99:99'));});
+    BSNative.upcoming(JSON.stringify({at:Date.now(),from:from,events:list.slice(0,60)}));}catch(e){}}
+  setTimeout(sendUpcoming,2500);setInterval(sendUpcoming,30*60*1000);
   // Tell BeyondStride when the Command Center saves, so its screens update (auto-checks, carry-over, edits here).
   function hook(){
     if(typeof window.save!=='function'||window.save.__native)return;

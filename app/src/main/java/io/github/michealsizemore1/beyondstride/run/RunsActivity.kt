@@ -322,10 +322,11 @@ open class RunsActivity : Activity() {
             TodayRetirement.fill(this@RunsActivity, this)
         })
         // ❤️ Health from the Health Records app: next appointment, refills due, labs to watch (only when installed).
-        if (TodayHealth.installed(this) && TodayHealth.shown(this)) col.addView(RunUi.card(this).apply {
+        // 📅 Calendar from the Life tab's Daily calendar (not the training plan). Took the Health card's place, Nov 27 2026.
+        if (TodayCalendar.shown(this)) col.addView(RunUi.card(this).apply {
             orientation = LinearLayout.VERTICAL
             layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { bottomMargin = dp(8) }
-            TodayHealth.fill(this@RunsActivity, this)
+            TodayCalendar.fill(this@RunsActivity, this)
         })
         // (📅 Coming up card removed from Today at the owner's request, Nov 27 2026. TodayComingUp.kt is kept unused.)
         // 🌤 Weather.
