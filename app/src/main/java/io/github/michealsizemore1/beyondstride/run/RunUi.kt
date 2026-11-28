@@ -21,8 +21,10 @@ import io.github.michealsizemore1.beyondstride.RunMath
 /** Look and building blocks for the phone's Running screens. */
 object RunUi {
     val BG: Int get() = io.github.michealsizemore1.beyondstride.Theme.bg
-    const val CARD = 0xFF1C2421.toInt()
-    const val ACCENT = 0xFFD4E635.toInt()
+    // Usual colors, or the Christmas theme's (Theme.xmas): evergreen tiles and a gold accent.
+    val CARD: Int get() = io.github.michealsizemore1.beyondstride.Theme.card
+    val ACCENT: Int get() = io.github.michealsizemore1.beyondstride.Theme.accent
+    val XRED: Int get() = io.github.michealsizemore1.beyondstride.Theme.XMAS_RED
     // Secondary text is brighter on the lighter background so it doesn't blend in.
     val MUTED: Int get() = if (io.github.michealsizemore1.beyondstride.Theme.light) 0xFFD3DAD7.toInt() else 0xFF9AA3A0.toInt()
     val DIM: Int get() = if (io.github.michealsizemore1.beyondstride.Theme.light) 0xFFBCC5C1.toInt() else 0xFF5E6663.toInt()

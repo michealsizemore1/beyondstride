@@ -299,7 +299,7 @@ class RunDetailActivity : Activity() {
             col.addView(RunUi.text(this, "Tap ▶ Play to watch the run. Drag the slider to jump; tap a mile marker for its split.", RunUi.DIM, 11f).apply { setPadding(dp(4), dp(6), dp(4), 0) })
             val courseId = "run${run.optLong("start")}"
             col.addView(RunUi.text(this, if (io.github.michealsizemore1.beyondstride.Courses.isSaved(this, courseId)) "★ Saved as a course" else "☆ Save this route as a course",
-                0xFFD4E635.toInt(), 14f, true).apply {
+                RunUi.ACCENT, 14f, true).apply {
                 gravity = Gravity.CENTER; setPadding(0, dp(14), 0, 0)
                 setOnClickListener {
                     if (io.github.michealsizemore1.beyondstride.Courses.isSaved(ctx, courseId)) return@setOnClickListener

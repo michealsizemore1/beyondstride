@@ -422,6 +422,10 @@ class RunSettingsActivity : Activity() {
                 L.setEnabled(ctx, !L.enabled(ctx)); render() } }
         row("ⓘ", "About", "Phone app " + packageManager.getPackageInfo(packageName, 0).versionName) { page = "about"; render() }
         row("☰", "Menu style", "Cards · tap to switch back to classic (phone and watch)") { setMenuStyle("classic") }
+        run { val T = io.github.michealsizemore1.beyondstride.Theme
+            row("🎄", "Christmas theme", if (T.xmas) "On · evergreen, gold and snow on phone and watch · tap to turn off" else "Off · tap for evergreen, gold and falling snow (phone and watch)") {
+                Christmas.setOn(ctx, !T.xmas); recreate() }
+            if (T.xmas) row("❄️", "Falling snow", if (T.snow) "On · tap to turn off (phone only)" else "Off · tap to turn on") { Christmas.setSnow(ctx, !T.snow); Christmas.apply(this@RunSettingsActivity); render() } }
         row("◐", "Background", if (io.github.michealsizemore1.beyondstride.Theme.light) "Lighter · tap for dark" else "Dark · tap for lighter") { toggleBg() }
         show(col)
     }

@@ -28,6 +28,7 @@ object SettingsSync {
         "cp" to (T.INT to 333),
         "cpAuto" to (T.STRING to "ask"),
         "menuStyle" to (T.STRING to "cards"),
+        "xmas" to (T.BOOL to false),          // 🎄 Christmas theme (phone and watch)
         "bgStyle" to (T.STRING to "light"),   // screen background: light (tiles stand out) or dark // settings menus: cards (icon · value · ›) or classic      // critical power from your runs: ask | auto (raises only) | off
         "cal" to (T.FLOAT to 1f),
         "screens" to (T.STRING to ""),

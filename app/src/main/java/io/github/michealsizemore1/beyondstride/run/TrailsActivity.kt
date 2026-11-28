@@ -341,7 +341,7 @@ class TrailsActivity : Activity() {
         // Save / remove.
         val isSaved = io.github.michealsizemore1.beyondstride.Courses.isSaved(this, t.id)
         col.addView(RunUi.button(this, if (isSaved) "★ Saved course — tap to remove" else "☆ Save course", if (isSaved) RunUi.CARD else 0xFFD4E635.toInt(),
-            if (isSaved) 0xFFD4E635.toInt() else Color.BLACK) {
+            if (isSaved) RunUi.ACCENT else Color.BLACK) {
             if (isSaved) io.github.michealsizemore1.beyondstride.Courses.remove(ctx, t.id, "phone") else io.github.michealsizemore1.beyondstride.Courses.save(ctx, t, "phone")
             Toast.makeText(ctx, if (isSaved) "Removed from saved courses" else "Saved — on your watch too", Toast.LENGTH_SHORT).show()
             render()

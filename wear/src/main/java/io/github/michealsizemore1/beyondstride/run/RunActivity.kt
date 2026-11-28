@@ -34,10 +34,10 @@ class RunActivity : Activity() {
     private var wrongDevice = false
 
     private object C {
-        const val ACCENT = 0xFFD4E635.toInt()
+        val ACCENT: Int get() = io.github.michealsizemore1.beyondstride.Theme.accent   // gold with the Christmas theme
         val MUTED: Int get() = if (io.github.michealsizemore1.beyondstride.Theme.light) 0xFFC9D1CE.toInt() else 0xFF9AA3A0.toInt()
         val DIM: Int get() = if (io.github.michealsizemore1.beyondstride.Theme.light) 0xFFB4BDB9.toInt() else 0xFF6B7370.toInt()
-        const val CARD = 0xFF1C2421.toInt()
+        val CARD: Int get() = io.github.michealsizemore1.beyondstride.Theme.card
         const val PAUSE = 0xFFFFB547.toInt()
         const val STOP = 0xFFE5484D.toInt()
         const val OK = 0xFF46C46E.toInt()

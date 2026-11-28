@@ -83,9 +83,9 @@ class RunHistoryActivity : Activity() {
 
 /** Shared view helpers for the run screens. */
 object RunViews {
-    const val ACCENT = 0xFFD4E635.toInt()
+    val ACCENT: Int get() = io.github.michealsizemore1.beyondstride.Theme.accent
     const val MUTED = 0xFF9AA3A0.toInt()
-    const val CARD = 0xFF1C2421.toInt()
+    val CARD: Int get() = io.github.michealsizemore1.beyondstride.Theme.card
     const val PAUSE_COLOR = 0xFFFFB547.toInt()
     const val STOP = 0xFFE5484D.toInt()
 
