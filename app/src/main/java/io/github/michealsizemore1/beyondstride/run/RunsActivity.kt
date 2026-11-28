@@ -327,12 +327,7 @@ open class RunsActivity : Activity() {
             layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { bottomMargin = dp(8) }
             TodayHealth.fill(this@RunsActivity, this)
         })
-        // 📅 Coming up from Dates & Docs and Vehicle Upkeep (only when one is installed).
-        if (TodayComingUp.anyInstalled(this) && TodayComingUp.shown(this)) col.addView(RunUi.card(this).apply {
-            orientation = LinearLayout.VERTICAL
-            layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { bottomMargin = dp(8) }
-            TodayComingUp.fill(this@RunsActivity, this)
-        })
+        // (📅 Coming up card removed from Today at the owner's request, Nov 27 2026. TodayComingUp.kt is kept unused.)
         // 🌤 Weather.
         col.addView(RunUi.card(this).apply {
             orientation = LinearLayout.VERTICAL
