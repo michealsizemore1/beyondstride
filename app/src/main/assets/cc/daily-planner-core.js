@@ -2110,7 +2110,7 @@ function saveDayReview(quiet){
     if(btn){btn.textContent=ok?'Saved!':'Not saved';btn.style.background=ok?'#27ae60':'#dc2626';setTimeout(function(){btn.textContent='Save Review';btn.style.background='#667eea';},2500);}
     if(!ok)alert(msg);
   }
-  try{localStorage.setItem(key,JSON.stringify(d));done(true);}
+  try{localStorage.setItem(key,JSON.stringify(d));try{localStorage.setItem('dayreviewAt_'+dk(today),String(Date.now()));}catch(eT){}done(true);}
   catch(err){
     // Device storage full: keep it in the larger on-device store instead so it isn't lost.
     if(typeof journalLargeStoreSet==='function')journalLargeStoreSet(key,d).then(function(){done(true);if(!quiet&&typeof v26Toast==='function')v26Toast('Saved (device storage is nearly full — consider a backup and cleanup)');})

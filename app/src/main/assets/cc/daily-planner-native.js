@@ -20,21 +20,25 @@
     return true;
   }
   // The native Today screen always shows the real today; bring the page there if it's on another date.
-  // 🌙 Today's Daily AI Review is written at night. One already there in the morning or afternoon that came from
-  // somewhere else — yesterday's review carried over past midnight, or an automatic one written too early — and that
-  // you haven't changed since, is cleared (Nov 27 2026).
+  // 🌙 Today's Daily AI Review is written at 11:50 PM. Before then, a review sitting on today is cleared when it came
+  // from somewhere else: yesterday's carried over past midnight, or an automatic one you haven't changed. (Nov 27 2026;
+  // the one left from before reviews were time-stamped is cleared once.) What's removed is kept in
+  // dayreviewRemoved_<date>, just in case.
   function clearEarlyReview(){
     try{
-      var now=new Date();if(now.getHours()>=18)return;
+      var now=new Date(),mins=now.getHours()*60+now.getMinutes();if(mins>=(typeof REVIEW_AT==='number'?REVIEW_AT:23*60+50))return;
       var k=realKey(),y=new Date(now);y.setDate(y.getDate()-1);var yk=dk(y);
-      var v=JSON.parse(localStorage.getItem('dayreview_'+k)||'null');if(!v)return;
+      var raw=localStorage.getItem('dayreview_'+k),v=JSON.parse(raw||'null');if(!v)return;
       var ids=['dayRevWins','dayRevImprove','dayRevFocus','dayRevLessons'],txt=ids.map(function(i){return String(v[i]||'').trim();}).join('\u241E');
       if(!txt.replace(/\u241E/g,''))return;
       var yv={};try{yv=JSON.parse(localStorage.getItem('dayreview_'+yk)||'{}')||{};}catch(e){}
       var ytxt=ids.map(function(i){return String(yv[i]||'').trim();}).join('\u241E');
       var fv=localStorage.getItem('autoDayRev_'+k)||'';
-      var auto=(fv==='auto'&&localStorage.getItem('autoRevText_'+k)===txt)||(fv==='phone'&&localStorage.getItem('bsPhoneRevText_'+k)===txt);
-      if(txt!==ytxt&&!auto)return;
+      var auto=(fv==='auto'&&localStorage.getItem('autoRevText_'+k)===txt)||(fv==='phone'&&localStorage.getItem('bsPhoneRevText_'+k)===txt)||(fv==='early'&&localStorage.getItem('autoRevText_'+k)===txt);
+      var legacy=k==='2026-11-27'&&!localStorage.getItem('dayreviewAt_'+k)&&!localStorage.getItem('dayreviewFix_20261127');
+      if(k==='2026-11-27')localStorage.setItem('dayreviewFix_20261127','1');
+      if(txt!==ytxt&&!auto&&!legacy)return;
+      try{localStorage.setItem('dayreviewRemoved_'+k,raw);}catch(e){}
       localStorage.removeItem('dayreview_'+k);['autoDayRev_','autoRevText_','bsPhoneRev_','bsPhoneRevText_'].forEach(function(p){localStorage.removeItem(p+k);});
       if(dk(today)===k&&typeof renderDayReview==='function')renderDayReview();
     }catch(e){}
